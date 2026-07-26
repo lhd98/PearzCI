@@ -5,8 +5,11 @@ Pearz CI pipelines.
 
 ## Requirements
 
-- Unity 6000.3 or newer
+- Unity 6000.3 or newer on Windows or macOS
 - Android Build Support when building Android players
+- Jenkins with Pipeline, Git, Credentials, and Shared Library support
+- rclone with a configured Google Drive remote
+- `curl` on macOS for Telegram notifications
 
 ## Installation
 
@@ -17,7 +20,7 @@ Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.2.2
+ssh://git@github.com/lhd98/PearzCI.git#v0.3.0
 ```
 
 4. Select **Install**.
@@ -34,7 +37,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.2"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.3.0"
   }
 }
 ```
@@ -77,7 +80,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.2.2`
+- Default version: `v0.3.0`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -149,8 +152,46 @@ Unity validation and Android build, artifact verification and archiving,
 Google Drive upload and verification, public-link creation, Telegram
 notification, and build-output cleanup.
 
+### Build machine setup
+
+PearzCI detects the operating system of the Jenkins agent automatically.
+Windows and macOS use the following defaults:
+
+| Setting | Windows | macOS |
+| --- | --- | --- |
+| Unity Hub editors | `C:\Program Files\Unity\Hub\Editor` | `/Applications/Unity/Hub/Editor` |
+| rclone command | `D:\Tools\rclone\rclone.exe` | `rclone` from `PATH` |
+| Telegram client | Windows PowerShell | POSIX shell and `curl` |
+
+The Jenkins agent user must have:
+
+- Git and SSH access to both the Unity project and private PearzCI repository.
+- Unity Hub, the configured Unity version, Android Build Support, and a valid
+  Unity license.
+- An rclone remote matching `DRIVE_REMOTE` (`gdrive` by default).
+- Network access to GitHub, Google Drive, and Telegram when those stages are
+  enabled.
+
+Platform paths can be overridden when calling the pipeline:
+
+```groovy
+pearzUnityAndroidPipeline(
+    windowsUnityHubRoot: 'C:\\Program Files\\Unity\\Hub\\Editor',
+    windowsRcloneExe: 'D:\\Tools\\rclone\\rclone.exe',
+    macUnityHubRoot: '/Applications/Unity/Hub/Editor',
+    macRcloneExe: 'rclone'
+)
+```
+
+For a single Mac Mini Jenkins installation, the standard one-line call remains
+enough:
+
+```groovy
+pearzUnityAndroidPipeline()
+```
+
 ## Versioning
 
-Projects should pin a release tag such as `v0.2.2` for the UPM package.
+Projects should pin a release tag such as `v0.3.0` for the UPM package.
 The Jenkins administrator should pin the same tag as the Global Pipeline
 Library's default version. Avoid depending directly on `main` in builds.

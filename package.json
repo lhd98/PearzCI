@@ -1,9 +1,9 @@
 {
   "name": "com.pearz.ci",
   "displayName": "Pearz CI",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "unity": "6000.3",
-  "description": "Reusable Unity Editor build entry points for Pearz CI pipelines.",
+  "description": "Cross-platform Unity build entry points and Jenkins pipelines for Windows and macOS.",
   "keywords": [
     "ci",
     "jenkins",

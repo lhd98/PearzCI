@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.3.0] - 2026-07-26
+
+### Added
+
+- Native Jenkins pipeline support for Windows and macOS agents.
+- macOS Unity Hub discovery using the standard
+  `/Applications/Unity/Hub/Editor` location.
+- POSIX shell Telegram notifications using the built-in macOS `curl`.
+- Configurable platform-specific Unity Hub and rclone paths.
+
+### Changed
+
+- Build paths now use portable separators accepted by Unity and Jenkins.
+- Git, Unity, rclone, upload, verification, public-link, and cleanup stages
+  automatically select Windows Batch or macOS shell commands.
+- Unity command-line builds explicitly select the Android build target.
+- Artifact verification and build-directory cleanup use Jenkins
+  cross-platform steps.
+
 ## [0.2.2] - 2026-07-26
 
 ### Changed
