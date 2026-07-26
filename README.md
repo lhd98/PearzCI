@@ -17,7 +17,7 @@ Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.2.1
+ssh://git@github.com/lhd98/PearzCI.git#v0.2.2
 ```
 
 4. Select **Install**.
@@ -34,7 +34,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.1"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.2"
   }
 }
 ```
@@ -77,7 +77,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.2.1`
+- Default version: `v0.2.2`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -90,23 +90,43 @@ Create one Jenkins **Pipeline** job for each Unity project. Select
 the Jenkins job:
 
 ```groovy
-@Library('pearz-ci@v0.2.1') _
+@Library('pearz-ci@v0.2.2') _
 
-pearzUnityAndroidPipeline(
-    repositoryUrl: 'git@github.com:PearzGame/MyGame.git',
-    repositoryCredentialsId: 'github-ssh',
-    gitBranch: 'main',
-    unityVersion: '6000.3.14f1',
-    productName: 'MyGame',
-    bundleIdentifier: 'com.pearz.mygame',
-    telegramCredentialsId: 'mygame-telegram'
-)
+pearzUnityAndroidPipeline()
 ```
 
-`telegramCredentialsId` is optional. When used, create a Jenkins **Secret
-text** credential whose value uses
-`botToken|chatId|messageThreadId`; separate multiple targets with semicolons.
-Do not store the token in the Pipeline script.
+This script is identical for every project. PearzCI is already the Global
+Pipeline Library, so there is no second CI repository or project-specific
+pipeline to maintain.
+
+Enable **This project is parameterized** in the Jenkins job, then create and
+save the project values under **Configure**. PearzCI reads them but never
+creates, resets, or overwrites them.
+
+Required parameters:
+
+- String `PROJECT_REPOSITORY_URL`, for example
+  `git@github.com:PearzGame/MyGame.git`
+- String `GIT_CREDENTIALS_ID`, for example `github-ssh`
+- String `GIT_BRANCH`, for example `main`
+- String `UNITY_VERSION`, for example `6000.3.14f1`
+- String `PRODUCT_NAME`, for example `MyGame`
+- Choice `BUILD_CONFIGURATION`: `Development` or `Release`
+
+Common optional parameters:
+
+- Password `TELEGRAM_CHANNEL` using
+  `botToken|chatId|messageThreadId`; separate targets with semicolons
+- String `BUNDLE_IDENTIFIER`
+- Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
+- Choice `TARGET_ARCHITECTURES`: `ARM64` or `ARMV7_ARM64`
+- Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
+- Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
+- Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
+  `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
+- String `APP_VERSION`, `ANDROID_VERSION_CODE`, `KEYSTORE_PATH`, and
+  `KEY_ALIAS_NAME`
+- Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 
 Choose one automatic trigger:
 
@@ -116,10 +136,9 @@ Choose one automatic trigger:
   `H/5 * * * *` checks for pushed commits approximately every five minutes
   without exposing Jenkins to the internet.
 
-The first manual build registers the repository checkout and creates the
-remaining build parameters. After that, developers only push game code; the
-configured trigger starts the job, PearzCI checks out the game repository, and
-Jenkins builds it.
+After **Configure > Save**, run one manual build to register the repository
+checkout. After that, developers only push game code; the configured trigger
+starts the job, PearzCI checks out the game repository, and Jenkins builds it.
 
 The game repository does not need a `Jenkinsfile`. It only needs the PearzCI
 UPM dependency committed in `Packages/manifest.json` and
@@ -132,5 +151,5 @@ notification, and build-output cleanup.
 
 ## Versioning
 
-Projects should pin a release tag such as `v0.2.1` for both the UPM package and
+Projects should pin a release tag such as `v0.2.2` for both the UPM package and
 the Jenkins Shared Library. Avoid depending directly on `main` in builds.

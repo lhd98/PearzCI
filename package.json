@@ -1,7 +1,7 @@
 {
   "name": "com.pearz.ci",
   "displayName": "Pearz CI",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "unity": "6000.3",
   "description": "Reusable Unity Editor build entry points for Pearz CI pipelines.",
   "keywords": [

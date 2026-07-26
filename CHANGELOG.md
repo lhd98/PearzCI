@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.2.2] - 2026-07-26
+
+### Changed
+
+- Jenkins job parameters are now owned entirely by **Configure > Save**.
+- PearzCI no longer creates or overwrites job parameters during a build.
+- Every project can use the same two-line Pipeline script and provide its
+  repository, branch, Unity version, Telegram targets, and other build values
+  through Jenkins parameters.
+
 ## [0.2.1] - 2026-07-26
 
 ### Changed

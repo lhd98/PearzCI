@@ -1,18 +1,17 @@
 def call(Map config = [:]) {
-    def repositoryUrl = config.get('repositoryUrl', '').toString().trim()
+    def repositoryUrl = config.get(
+        'repositoryUrl',
+        params.PROJECT_REPOSITORY_URL ?: ''
+    ).toString().trim()
     def repositoryCredentialsId = config.get(
         'repositoryCredentialsId',
-        'github-ssh'
+        params.GIT_CREDENTIALS_ID ?: 'github-ssh'
     ).toString().trim()
     def telegramCredentialsId = config.get(
         'telegramCredentialsId',
         ''
     ).toString().trim()
-    def defaultUnityVersion = config.get('unityVersion', '6000.3.14f1')
     def defaultGitBranch = config.get('gitBranch', 'master')
-    def defaultDefines = config.get('scriptingDefineSymbols', '')
-    def defaultProductName = config.get('productName', '')
-    def defaultBundleIdentifier = config.get('bundleIdentifier', '')
     def rcloneExe = config.get('rcloneExe', 'D:\\Tools\\rclone\\rclone.exe')
     def driveRemote = config.get('driveRemote', 'gdrive')
     def driveRoot = config.get('driveRoot', 'JenkinsBuild')
@@ -28,114 +27,6 @@ def call(Map config = [:]) {
             timestamps()
             disableConcurrentBuilds()
             skipDefaultCheckout(true)
-        }
-
-        parameters {
-            string(
-                name: 'PRODUCT_NAME',
-                defaultValue: defaultProductName,
-                description: 'Optional product and artifact name override.'
-            )
-            choice(
-                name: 'BUILD_CONFIGURATION',
-                choices: ['Development', 'Release'],
-                description: 'Build configuration.'
-            )
-            string(
-                name: 'GIT_BRANCH',
-                defaultValue: defaultGitBranch,
-                description: 'Branch name included in build notifications.'
-            )
-            string(
-                name: 'UNITY_VERSION',
-                defaultValue: defaultUnityVersion,
-                description: 'Unity version installed through Unity Hub.'
-            )
-            text(
-                name: 'SCRIPTING_DEFINE_SYMBOLS',
-                defaultValue: defaultDefines,
-                description: 'Optional Android scripting define symbols.'
-            )
-            string(
-                name: 'BUNDLE_IDENTIFIER',
-                defaultValue: defaultBundleIdentifier,
-                description: 'Optional Android application identifier override.'
-            )
-            password(
-                name: 'TELEGRAM_CHANNEL',
-                defaultValue: '',
-                description: 'botToken|chatId|messageThreadId; separate targets with semicolons.'
-            )
-            choice(
-                name: 'TARGET_ARCHITECTURES',
-                choices: ['ARM64', 'ARMV7_ARM64'],
-                description: 'Android target architectures.'
-            )
-            choice(
-                name: 'IL2CPP_CODE_GENERATION',
-                choices: ['OptimizeSize', 'OptimizeSpeed'],
-                description: 'IL2CPP code generation mode.'
-            )
-            choice(
-                name: 'MANAGED_STRIPPING_LEVEL',
-                choices: ['Low', 'Medium', 'High'],
-                description: 'Managed code stripping level.'
-            )
-            booleanParam(
-                name: 'STRIP_ENGINE_CODE',
-                defaultValue: true,
-                description: 'Strip unused Unity engine code.'
-            )
-            booleanParam(
-                name: 'MINIFY_RELEASE',
-                defaultValue: false,
-                description: 'Run Android minification for release builds.'
-            )
-            booleanParam(
-                name: 'SCRIPT_DEBUGGING',
-                defaultValue: false,
-                description: 'Enable script debugging.'
-            )
-            booleanParam(
-                name: 'UNITY_DEVELOPMENT_BUILD',
-                defaultValue: false,
-                description: 'Enable the Unity Development Build option.'
-            )
-            booleanParam(
-                name: 'BUILD_APP_BUNDLE',
-                defaultValue: false,
-                description: 'Build an Android App Bundle instead of an APK.'
-            )
-            string(
-                name: 'APP_VERSION',
-                defaultValue: '',
-                description: 'Optional bundle version override.'
-            )
-            string(
-                name: 'ANDROID_VERSION_CODE',
-                defaultValue: '',
-                description: 'Optional Android version code override.'
-            )
-            string(
-                name: 'KEYSTORE_PATH',
-                defaultValue: '',
-                description: 'Optional keystore path on the Jenkins machine.'
-            )
-            password(
-                name: 'KEYSTORE_PASSWORD',
-                defaultValue: '',
-                description: 'Optional keystore password.'
-            )
-            string(
-                name: 'KEY_ALIAS_NAME',
-                defaultValue: '',
-                description: 'Optional key alias.'
-            )
-            password(
-                name: 'KEY_ALIAS_PASSWORD',
-                defaultValue: '',
-                description: 'Optional key alias password.'
-            )
         }
 
         environment {
