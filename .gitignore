@@ -1,0 +1,6 @@
+.idea/
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user

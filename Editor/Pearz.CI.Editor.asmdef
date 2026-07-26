@@ -1,0 +1,8 @@
+{
+  "name": "Pearz.CI.Editor",
+  "rootNamespace": "Pearz.CI",
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

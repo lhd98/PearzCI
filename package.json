@@ -1,0 +1,20 @@
+{
+  "name": "com.pearz.ci",
+  "displayName": "Pearz CI",
+  "version": "0.1.0",
+  "unity": "6000.3",
+  "description": "Reusable Unity Editor build entry points for Pearz CI pipelines.",
+  "keywords": [
+    "ci",
+    "jenkins",
+    "build",
+    "android"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lhd98/PearzCI.git"
+  },
+  "author": {
+    "name": "Pearz"
+  }
+}
