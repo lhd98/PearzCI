@@ -9,18 +9,39 @@ Reusable Unity Editor build entry points for Pearz CI pipelines.
 
 ## Installation
 
-Add the package to `Packages/manifest.json`:
+### Unity Package Manager
+
+1. Open **Window > Package Management > Package Manager**.
+2. Select **+ > Install package from git URL...**.
+3. Enter:
+
+```text
+ssh://git@github.com/lhd98/PearzCI.git#v0.1.0
+```
+
+4. Select **Install**.
+
+Unity automatically adds the dependency to `Packages/manifest.json` and locks
+the resolved commit in `Packages/packages-lock.json`. Commit both files with
+the project.
+
+### Manual installation
+
+For CI setup or troubleshooting, add the package directly to
+`Packages/manifest.json`:
 
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "https://github.com/lhd98/PearzCI.git#v0.1.0"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.1.0"
   }
 }
 ```
 
-For private repositories, every developer and CI agent must have Git
-credentials that can read `lhd98/PearzCI`.
+Because this is a private repository, each computer that installs or restores
+the package must use a GitHub account or SSH key with read access to
+`lhd98/PearzCI`. A computer that only pushes project code without opening the
+Unity project does not need package access.
 
 ## Android
 
