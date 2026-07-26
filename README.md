@@ -83,6 +83,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 - Project repository:
   `ssh://git@github.com/lhd98/PearzCI.git`
 - Credentials: an SSH credential with read access to this repository
+- Load implicitly: enabled
 - Allow default version to be overridden: enabled
 
 Create one Jenkins **Pipeline** job for each Unity project. Select
@@ -90,14 +91,13 @@ Create one Jenkins **Pipeline** job for each Unity project. Select
 the Jenkins job:
 
 ```groovy
-@Library('pearz-ci@v0.2.2') _
-
 pearzUnityAndroidPipeline()
 ```
 
-This script is identical for every project. PearzCI is already the Global
-Pipeline Library, so there is no second CI repository or project-specific
-pipeline to maintain.
+This one-line script is identical for every project. Jenkins loads PearzCI
+implicitly at the globally configured version, so project jobs do not need an
+`@Library` declaration, a second CI repository, or a project-specific
+pipeline.
 
 Enable **This project is parameterized** in the Jenkins job, then create and
 save the project values under **Configure**. PearzCI reads them but never
@@ -151,5 +151,6 @@ notification, and build-output cleanup.
 
 ## Versioning
 
-Projects should pin a release tag such as `v0.2.2` for both the UPM package and
-the Jenkins Shared Library. Avoid depending directly on `main` in builds.
+Projects should pin a release tag such as `v0.2.2` for the UPM package.
+The Jenkins administrator should pin the same tag as the Global Pipeline
+Library's default version. Avoid depending directly on `main` in builds.
