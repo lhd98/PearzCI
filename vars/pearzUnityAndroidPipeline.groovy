@@ -410,7 +410,7 @@ def call(Map config = [:]) {
                 when {
                     expression {
                         return telegramCredentialsId ||
-                            params.TELEGRAM_CHANNEL?.trim()
+                            "${params.TELEGRAM_CHANNEL ?: ''}".trim()
                     }
                 }
 
