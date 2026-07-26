@@ -108,10 +108,18 @@ text** credential whose value uses
 `botToken|chatId|messageThreadId`; separate multiple targets with semicolons.
 Do not store the token in the Pipeline script.
 
-Enable the project's GitHub webhook trigger in the job. The first manual build
-registers the repository checkout and creates the remaining build parameters.
-After that, developers only push game code; the webhook starts the job,
-PearzCI checks out the configured game repository, and Jenkins builds it.
+Choose one automatic trigger:
+
+- If Jenkins is reachable from GitHub, enable **GitHub hook trigger for
+  GITScm polling** and add the Jenkins webhook URL to the GitHub repository.
+- If Jenkins only runs on a local PC, enable **Poll SCM** instead. For example,
+  `H/5 * * * *` checks for pushed commits approximately every five minutes
+  without exposing Jenkins to the internet.
+
+The first manual build registers the repository checkout and creates the
+remaining build parameters. After that, developers only push game code; the
+configured trigger starts the job, PearzCI checks out the game repository, and
+Jenkins builds it.
 
 The game repository does not need a `Jenkinsfile`. It only needs the PearzCI
 UPM dependency committed in `Packages/manifest.json` and
