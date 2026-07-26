@@ -1,6 +1,7 @@
 # Pearz CI
 
-Reusable Unity Editor build entry points for Pearz CI pipelines.
+Reusable Unity Editor build entry points and a Jenkins Shared Library for
+Pearz CI pipelines.
 
 ## Requirements
 
@@ -16,7 +17,7 @@ Reusable Unity Editor build entry points for Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.1.0
+ssh://git@github.com/lhd98/PearzCI.git#v0.2.0
 ```
 
 4. Select **Install**.
@@ -33,7 +34,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.1.0"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.0"
   }
 }
 ```
@@ -69,7 +70,52 @@ are:
 
 See `BuildEntry.cs` for the complete list and accepted values.
 
+## Jenkins Shared Library
+
+The package contains the Unity build entry point, while this repository also
+provides the reusable Jenkins pipeline. Configure this repository once in
+**Manage Jenkins > System > Global Pipeline Libraries**:
+
+- Name: `pearz-ci`
+- Default version: `v0.2.0`
+- Retrieval method: Modern SCM
+- Source Code Management: Git
+- Project repository:
+  `ssh://git@github.com/lhd98/PearzCI.git`
+- Credentials: an SSH credential with read access to this repository
+- Allow default version to be overridden: enabled
+
+Each Unity project then needs only this `Jenkinsfile` at its repository root:
+
+```groovy
+@Library('pearz-ci@v0.2.0') _
+
+pearzUnityAndroidPipeline()
+```
+
+Project-specific defaults can be supplied without copying the pipeline:
+
+```groovy
+@Library('pearz-ci@v0.2.0') _
+
+pearzUnityAndroidPipeline(
+    unityVersion: '6000.3.14f1',
+    gitBranch: 'master',
+    productName: 'MyGame',
+    bundleIdentifier: 'com.pearz.mygame'
+)
+```
+
+The first run creates the build parameters. Secrets such as Telegram bot
+tokens and keystore passwords are password parameters and must never be
+committed to a project repository.
+
+The reusable pipeline performs checkout, recursive submodule initialization,
+Unity validation and Android build, artifact verification and archiving,
+Google Drive upload and verification, public-link creation, Telegram
+notification, and build-output cleanup.
+
 ## Versioning
 
-Projects should pin a release tag such as `v0.1.0`. Avoid depending directly
-on `main` in Jenkins builds.
+Projects should pin a release tag such as `v0.2.0` for both the UPM package and
+the Jenkins Shared Library. Avoid depending directly on `main` in builds.
