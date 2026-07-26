@@ -20,6 +20,8 @@ All notable changes to this package are documented in this file.
 - Unity command-line builds explicitly select the Android build target.
 - Artifact verification and build-directory cleanup use Jenkins
   cross-platform steps.
+- Shared Library setup now excludes PearzCI changes from job changesets so
+  Poll SCM only triggers for game repository changes.
 
 ## [0.2.2] - 2026-07-26
 

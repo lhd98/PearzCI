@@ -88,6 +88,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 - Credentials: an SSH credential with read access to this repository
 - Load implicitly: enabled
 - Allow default version to be overridden: enabled
+- Include `@Library` changes in job recent changes: disabled
 
 Create one Jenkins **Pipeline** job for each Unity project. Select
 **Pipeline script** (not **Pipeline script from SCM**) and store this script in
@@ -101,6 +102,12 @@ This one-line script is identical for every project. Jenkins loads PearzCI
 implicitly at the globally configured version, so project jobs do not need an
 `@Library` declaration, a second CI repository, or a project-specific
 pipeline.
+
+Keep **Include `@Library` changes in job recent changes** disabled. Jenkins
+Poll SCM otherwise also polls the PearzCI repository and can repeatedly start
+game builds when the library's `main` branch is ahead of the pinned release
+tag. With this option disabled, Poll SCM reacts only to changes in the game
+repository.
 
 Enable **This project is parameterized** in the Jenkins job, then create and
 save the project values under **Configure**. PearzCI reads them but never
