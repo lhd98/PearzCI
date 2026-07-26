@@ -2,6 +2,8 @@ def call(Map config = [:]) {
     def defaultUnityVersion = config.get('unityVersion', '6000.3.14f1')
     def defaultGitBranch = config.get('gitBranch', 'master')
     def defaultDefines = config.get('scriptingDefineSymbols', '')
+    def defaultProductName = config.get('productName', '')
+    def defaultBundleIdentifier = config.get('bundleIdentifier', '')
     def rcloneExe = config.get('rcloneExe', 'D:\\Tools\\rclone\\rclone.exe')
     def driveRemote = config.get('driveRemote', 'gdrive')
     def driveRoot = config.get('driveRoot', 'JenkinsBuild')
@@ -22,7 +24,7 @@ def call(Map config = [:]) {
         parameters {
             string(
                 name: 'PRODUCT_NAME',
-                defaultValue: config.get('productName', ''),
+                defaultValue: defaultProductName,
                 description: 'Optional product and artifact name override.'
             )
             choice(
@@ -47,7 +49,7 @@ def call(Map config = [:]) {
             )
             string(
                 name: 'BUNDLE_IDENTIFIER',
-                defaultValue: config.get('bundleIdentifier', ''),
+                defaultValue: defaultBundleIdentifier,
                 description: 'Optional Android application identifier override.'
             )
             password(
@@ -154,7 +156,7 @@ def call(Map config = [:]) {
                             : env.JOB_BASE_NAME
 
                         outputName = outputName.replaceAll(
-                            /[<>:"\\\/|?*]/,
+                            '[<>:"\\\\/|?*]',
                             '_'
                         )
 
