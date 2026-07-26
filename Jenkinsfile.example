@@ -1,3 +1,10 @@
-@Library('pearz-ci@v0.2.0') _
+@Library('pearz-ci@v0.2.1') _
 
-pearzUnityAndroidPipeline()
+pearzUnityAndroidPipeline(
+    repositoryUrl: 'git@github.com:PearzGame/MyGame.git',
+    repositoryCredentialsId: 'github-ssh',
+    gitBranch: 'main',
+    unityVersion: '6000.3.14f1',
+    productName: 'MyGame',
+    telegramCredentialsId: 'mygame-telegram'
+)

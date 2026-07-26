@@ -17,7 +17,7 @@ Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.2.0
+ssh://git@github.com/lhd98/PearzCI.git#v0.2.1
 ```
 
 4. Select **Install**.
@@ -34,7 +34,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.0"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.2.1"
   }
 }
 ```
@@ -77,7 +77,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.2.0`
+- Default version: `v0.2.1`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -85,30 +85,37 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 - Credentials: an SSH credential with read access to this repository
 - Allow default version to be overridden: enabled
 
-Each Unity project then needs only this `Jenkinsfile` at its repository root:
+Create one Jenkins **Pipeline** job for each Unity project. Select
+**Pipeline script** (not **Pipeline script from SCM**) and store this script in
+the Jenkins job:
 
 ```groovy
-@Library('pearz-ci@v0.2.0') _
-
-pearzUnityAndroidPipeline()
-```
-
-Project-specific defaults can be supplied without copying the pipeline:
-
-```groovy
-@Library('pearz-ci@v0.2.0') _
+@Library('pearz-ci@v0.2.1') _
 
 pearzUnityAndroidPipeline(
+    repositoryUrl: 'git@github.com:PearzGame/MyGame.git',
+    repositoryCredentialsId: 'github-ssh',
+    gitBranch: 'main',
     unityVersion: '6000.3.14f1',
-    gitBranch: 'master',
     productName: 'MyGame',
-    bundleIdentifier: 'com.pearz.mygame'
+    bundleIdentifier: 'com.pearz.mygame',
+    telegramCredentialsId: 'mygame-telegram'
 )
 ```
 
-The first run creates the build parameters. Secrets such as Telegram bot
-tokens and keystore passwords are password parameters and must never be
-committed to a project repository.
+`telegramCredentialsId` is optional. When used, create a Jenkins **Secret
+text** credential whose value uses
+`botToken|chatId|messageThreadId`; separate multiple targets with semicolons.
+Do not store the token in the Pipeline script.
+
+Enable the project's GitHub webhook trigger in the job. The first manual build
+registers the repository checkout and creates the remaining build parameters.
+After that, developers only push game code; the webhook starts the job,
+PearzCI checks out the configured game repository, and Jenkins builds it.
+
+The game repository does not need a `Jenkinsfile`. It only needs the PearzCI
+UPM dependency committed in `Packages/manifest.json` and
+`Packages/packages-lock.json`, so Unity can compile the build entry point.
 
 The reusable pipeline performs checkout, recursive submodule initialization,
 Unity validation and Android build, artifact verification and archiving,
@@ -117,5 +124,5 @@ notification, and build-output cleanup.
 
 ## Versioning
 
-Projects should pin a release tag such as `v0.2.0` for both the UPM package and
+Projects should pin a release tag such as `v0.2.1` for both the UPM package and
 the Jenkins Shared Library. Avoid depending directly on `main` in builds.

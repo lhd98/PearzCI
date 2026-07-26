@@ -1,4 +1,13 @@
 def call(Map config = [:]) {
+    def repositoryUrl = config.get('repositoryUrl', '').toString().trim()
+    def repositoryCredentialsId = config.get(
+        'repositoryCredentialsId',
+        'github-ssh'
+    ).toString().trim()
+    def telegramCredentialsId = config.get(
+        'telegramCredentialsId',
+        ''
+    ).toString().trim()
     def defaultUnityVersion = config.get('unityVersion', '6000.3.14f1')
     def defaultGitBranch = config.get('gitBranch', 'master')
     def defaultDefines = config.get('scriptingDefineSymbols', '')
@@ -139,7 +148,37 @@ def call(Map config = [:]) {
         stages {
             stage('Checkout') {
                 steps {
-                    checkout scm
+                    script {
+                        if (!repositoryUrl) {
+                            error(
+                                'repositoryUrl is required. Configure it in the Jenkins job.'
+                            )
+                        }
+
+                        def branchSpec = params.GIT_BRANCH?.trim()
+                            ? params.GIT_BRANCH.trim()
+                            : defaultGitBranch
+
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: branchSpec]],
+                            doGenerateSubmoduleConfigurations: false,
+                            extensions: [[
+                                $class: 'SubmoduleOption',
+                                disableSubmodules: false,
+                                parentCredentials: true,
+                                recursiveSubmodules: true,
+                                reference: '',
+                                shallow: false,
+                                trackingSubmodules: false
+                            ]],
+                            submoduleCfg: [],
+                            userRemoteConfigs: [[
+                                credentialsId: repositoryCredentialsId,
+                                url: repositoryUrl
+                            ]]
+                        ])
+                    }
 
                     bat '''
                         git submodule sync --recursive
@@ -370,24 +409,46 @@ def call(Map config = [:]) {
             stage('Send Telegram') {
                 when {
                     expression {
-                        return env.TELEGRAM_CHANNEL?.trim()
+                        return telegramCredentialsId ||
+                            params.TELEGRAM_CHANNEL?.trim()
                     }
                 }
 
                 steps {
-                    writeFile(
-                        file: 'send-telegram.ps1',
-                        encoding: 'UTF-8',
-                        text: libraryResource(
-                            'com/pearz/ci/send-telegram.ps1'
+                    script {
+                        writeFile(
+                            file: 'send-telegram.ps1',
+                            encoding: 'UTF-8',
+                            text: libraryResource(
+                                'com/pearz/ci/send-telegram.ps1'
+                            )
                         )
-                    )
 
-                    bat '''
-                        powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                            -ExecutionPolicy Bypass ^
-                            -File "%WORKSPACE%\\send-telegram.ps1"
-                    '''
+                        def sendTelegram = {
+                            bat '''
+                                powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                                    -ExecutionPolicy Bypass ^
+                                    -File "%WORKSPACE%\\send-telegram.ps1"
+                            '''
+                        }
+
+                        if (telegramCredentialsId) {
+                            withCredentials([
+                                string(
+                                    credentialsId: telegramCredentialsId,
+                                    variable: 'TELEGRAM_CHANNEL'
+                                )
+                            ]) {
+                                sendTelegram()
+                            }
+                        } else {
+                            withEnv([
+                                "TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"
+                            ]) {
+                                sendTelegram()
+                            }
+                        }
+                    }
                 }
             }
         }
