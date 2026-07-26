@@ -115,7 +115,7 @@ Required parameters:
 
 Common optional parameters:
 
-- Password `TELEGRAM_CHANNEL` using
+- String `TELEGRAM_CHANNEL` using
   `botToken|chatId|messageThreadId`; separate targets with semicolons
 - String `BUNDLE_IDENTIFIER`
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
