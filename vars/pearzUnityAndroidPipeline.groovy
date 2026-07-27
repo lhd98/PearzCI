@@ -61,6 +61,9 @@ def call(Map config = [:]) {
             stage('Checkout') {
                 steps {
                     script {
+                        env.PIPELINE_START_MILLIS =
+                            System.currentTimeMillis().toString()
+
                         if (!repositoryUrl) {
                             error(
                                 'repositoryUrl is required. Configure it in the Jenkins job.'
@@ -147,10 +150,20 @@ def call(Map config = [:]) {
                             "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
                         env.OUTPUT_PATH =
                             "${env.WORKSPACE}/Builds/Android/${env.OUTPUT_FILE_NAME}"
+                        env.METADATA_PATH =
+                            "${env.WORKSPACE}/Builds/Android/build-metadata.json"
+                        env.MAPPING_PATH =
+                            "${env.WORKSPACE}/Builds/Android/mapping.txt"
+                        env.BUILD_LOG_PATH =
+                            "${env.WORKSPACE}/Builds/Android/unity-build.log"
+                        env.UPLOAD_LOG_PATH =
+                            "${env.WORKSPACE}/Builds/Android/upload.log"
                         env.DRIVE_DIRECTORY =
                             "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.OUTPUT_FILE_NAME}"
+                        env.DRIVE_MAPPING_PATH =
+                            "${env.DRIVE_DIRECTORY}/mapping-${env.BUILD_NUMBER}.txt"
 
                         if (isUnix()) {
                             env.GIT_COMMIT_SHORT = sh(
@@ -161,6 +174,10 @@ def call(Map config = [:]) {
                                 script: 'git log -1 --pretty=%s',
                                 returnStdout: true
                             ).trim()
+                            env.GIT_COMMIT_AUTHOR = sh(
+                                script: 'git log -1 --pretty=%an',
+                                returnStdout: true
+                            ).trim()
                         } else {
                             env.GIT_COMMIT_SHORT = bat(
                                 script: '@git rev-parse --short HEAD',
@@ -168,6 +185,10 @@ def call(Map config = [:]) {
                             ).trim()
                             env.GIT_COMMIT_MESSAGE = bat(
                                 script: '@git log -1 --pretty=%%s',
+                                returnStdout: true
+                            ).trim()
+                            env.GIT_COMMIT_AUTHOR = bat(
+                                script: '@git log -1 --pretty=%%an',
                                 returnStdout: true
                             ).trim()
                         }
@@ -234,29 +255,56 @@ def call(Map config = [:]) {
 
                 steps {
                     script {
-                        withEnv(["OUTPUT_PATH=${env.OUTPUT_PATH}"]) {
-                            if (isUnix()) {
-                                sh """
-                                    "${env.UNITY_EXE}" \\
-                                    -batchmode \\
-                                    -quit \\
-                                    -projectPath "${env.WORKSPACE}" \\
-                                    -buildTarget Android \\
-                                    -executeMethod Pearz.CI.BuildEntry.BuildAndroid \\
-                                    -logFile -
-                                """
-                            } else {
-                                bat """
-                                    "${env.UNITY_EXE}" ^
-                                    -batchmode ^
-                                    -nographics ^
-                                    -quit ^
-                                    -projectPath "${env.WORKSPACE}" ^
-                                    -buildTarget Android ^
-                                    -executeMethod Pearz.CI.BuildEntry.BuildAndroid ^
-                                    -logFile -
-                                """
+                        def buildStartedAt = System.currentTimeMillis()
+
+                        try {
+                            withEnv(["OUTPUT_PATH=${env.OUTPUT_PATH}"]) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set +e
+
+                                        "$UNITY_EXE" \
+                                            -batchmode \
+                                            -quit \
+                                            -projectPath "$WORKSPACE" \
+                                            -buildTarget Android \
+                                            -executeMethod Pearz.CI.BuildEntry.BuildAndroid \
+                                            -logFile "$BUILD_LOG_PATH"
+
+                                        unity_exit_code=$?
+
+                                        if [ -f "$BUILD_LOG_PATH" ]; then
+                                            cat "$BUILD_LOG_PATH"
+                                        fi
+
+                                        exit "$unity_exit_code"
+                                    '''
+                                } else {
+                                    bat '''
+                                        @echo off
+                                        "%UNITY_EXE%" ^
+                                            -batchmode ^
+                                            -nographics ^
+                                            -quit ^
+                                            -projectPath "%WORKSPACE%" ^
+                                            -buildTarget Android ^
+                                            -executeMethod Pearz.CI.BuildEntry.BuildAndroid ^
+                                            -logFile "%BUILD_LOG_PATH%"
+
+                                        set UNITY_EXIT_CODE=%ERRORLEVEL%
+
+                                        if exist "%BUILD_LOG_PATH%" (
+                                            type "%BUILD_LOG_PATH%"
+                                        )
+
+                                        exit /b %UNITY_EXIT_CODE%
+                                    '''
+                                }
                             }
+                        } finally {
+                            env.BUILD_TIME_MILLIS = (
+                                System.currentTimeMillis() - buildStartedAt
+                            ).toString()
                         }
                     }
                 }
@@ -276,10 +324,120 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Read Build Metadata') {
+                steps {
+                    script {
+                        def metadata = [:]
+                        def symbols = []
+
+                        if (fileExists(env.METADATA_PATH)) {
+                            try {
+                                def metadataOutput
+
+                                if (isUnix()) {
+                                    writeFile(
+                                        file: 'read-build-metadata.sh',
+                                        encoding: 'UTF-8',
+                                        text: libraryResource(
+                                            'com/pearz/ci/read-build-metadata.sh'
+                                        )
+                                    )
+                                    metadataOutput = sh(
+                                        script:
+                                            'sh ./read-build-metadata.sh ' +
+                                            '"$METADATA_PATH"',
+                                        returnStdout: true
+                                    )
+                                } else {
+                                    writeFile(
+                                        file: 'read-build-metadata.ps1',
+                                        encoding: 'UTF-8',
+                                        text: libraryResource(
+                                            'com/pearz/ci/read-build-metadata.ps1'
+                                        )
+                                    )
+                                    metadataOutput = bat(
+                                        script: '''@powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                                            -ExecutionPolicy Bypass ^
+                                            -File "%WORKSPACE%\\read-build-metadata.ps1" ^
+                                            -MetadataPath "%METADATA_PATH%"
+                                        ''',
+                                        returnStdout: true
+                                    )
+                                }
+
+                                metadataOutput.readLines().each { line ->
+                                    def separatorIndex = line.indexOf('=')
+
+                                    if (separatorIndex > 0) {
+                                        def key = line.substring(
+                                            0,
+                                            separatorIndex
+                                        )
+                                        def value = line.substring(
+                                            separatorIndex + 1
+                                        )
+
+                                        if (key == 'DEFINE_SYMBOL') {
+                                            symbols << value
+                                        } else {
+                                            metadata[key] = value
+                                        }
+                                    }
+                                }
+                            } catch (Exception exception) {
+                                echo(
+                                    'Optional build metadata could not be read: ' +
+                                    exception.message
+                                )
+                            }
+                        } else {
+                            echo(
+                                'Optional build metadata not found; ' +
+                                'notification will use Jenkins values.'
+                            )
+                        }
+
+                        env.META_RESULT =
+                            metadata.RESULT?.toString() ?: ''
+                        env.META_PRODUCT_NAME =
+                            metadata.PRODUCT_NAME?.toString() ?: ''
+                        env.META_BUNDLE_IDENTIFIER =
+                            metadata.BUNDLE_IDENTIFIER?.toString() ?: ''
+                        env.META_VERSION_NAME =
+                            metadata.VERSION_NAME?.toString() ?: ''
+                        env.META_VERSION_CODE =
+                            metadata.VERSION_CODE?.toString() ?: ''
+                        env.META_UNITY_VERSION =
+                            metadata.UNITY_VERSION?.toString() ?: ''
+                        env.META_SCRIPTING_BACKEND =
+                            metadata.SCRIPTING_BACKEND?.toString() ?: ''
+                        env.META_STRIPPING_LEVEL =
+                            metadata.STRIPPING_LEVEL?.toString() ?: ''
+                        env.META_ORIENTATION =
+                            metadata.ORIENTATION?.toString() ?: ''
+                        env.META_OUTPUT_SIZE_BYTES =
+                            metadata.OUTPUT_SIZE_BYTES?.toString() ?: ''
+                        env.META_MAPPING_SIZE_BYTES =
+                            metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
+                        env.META_DEFINE_SYMBOLS =
+                            symbols
+                                .collect { it?.toString()?.trim() }
+                                .findAll { it }
+                                .join('\n')
+                    }
+                }
+            }
+
             stage('Archive Artifact') {
                 steps {
                     archiveArtifacts(
-                        artifacts: "Builds/Android/${env.OUTPUT_FILE_NAME}",
+                        artifacts:
+                            "Builds/Android/${env.OUTPUT_FILE_NAME}," +
+                            'Builds/Android/build-metadata.json,' +
+                            'Builds/Android/mapping.txt,' +
+                            'Builds/Android/unity-build.log',
+                        allowEmptyArchive: true,
                         fingerprint: true,
                         onlyIfSuccessful: true
                     )
@@ -334,34 +492,83 @@ def call(Map config = [:]) {
                 }
 
                 steps {
-                    retry(2) {
-                        script {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
+                    script {
+                        def uploadStartedAt = System.currentTimeMillis()
 
-                                    "$RCLONE_EXE" copyto \
-                                        "$OUTPUT_PATH" \
-                                        "$DRIVE_FILE_PATH" \
-                                        --progress \
-                                        --stats 10s \
-                                        --retries 3 \
-                                        --low-level-retries 10
-                                '''
-                            } else {
-                                bat '''
-                                    "%RCLONE_EXE%" copyto "%OUTPUT_PATH%" "%DRIVE_FILE_PATH%" ^
-                                        --progress ^
-                                        --stats 10s ^
-                                        --retries 3 ^
-                                        --low-level-retries 10
+                        try {
+                            retry(2) {
+                                if (isUnix()) {
+                                    sh '''
+                                        set -eu
 
-                                    if errorlevel 1 (
-                                        echo ERROR: Google Drive upload failed.
-                                        exit /b 1
-                                    )
-                                '''
+                                        "$RCLONE_EXE" copyto \
+                                            "$OUTPUT_PATH" \
+                                            "$DRIVE_FILE_PATH" \
+                                            --progress \
+                                            --stats 10s \
+                                            --retries 3 \
+                                            --low-level-retries 10 \
+                                            --log-file "$UPLOAD_LOG_PATH" \
+                                            --log-level INFO
+                                    '''
+                                } else {
+                                    bat '''
+                                        "%RCLONE_EXE%" copyto "%OUTPUT_PATH%" "%DRIVE_FILE_PATH%" ^
+                                            --progress ^
+                                            --stats 10s ^
+                                            --retries 3 ^
+                                            --low-level-retries 10 ^
+                                            --log-file "%UPLOAD_LOG_PATH%" ^
+                                            --log-level INFO
+
+                                        if errorlevel 1 (
+                                            echo ERROR: Google Drive upload failed.
+                                            exit /b 1
+                                        )
+                                    '''
+                                }
                             }
+
+                            if (fileExists(env.MAPPING_PATH)) {
+                                def mappingUploadStatus
+
+                                if (isUnix()) {
+                                    mappingUploadStatus = sh(
+                                        script: '''
+                                            "$RCLONE_EXE" copyto \
+                                                "$MAPPING_PATH" \
+                                                "$DRIVE_MAPPING_PATH" \
+                                                --retries 3 \
+                                                --low-level-retries 10 \
+                                                --log-file "$UPLOAD_LOG_PATH" \
+                                                --log-level INFO
+                                        ''',
+                                        returnStatus: true
+                                    )
+                                } else {
+                                    mappingUploadStatus = bat(
+                                        script: '''
+                                            @"%RCLONE_EXE%" copyto "%MAPPING_PATH%" "%DRIVE_MAPPING_PATH%" ^
+                                                --retries 3 ^
+                                                --low-level-retries 10 ^
+                                                --log-file "%UPLOAD_LOG_PATH%" ^
+                                                --log-level INFO
+                                        ''',
+                                        returnStatus: true
+                                    )
+                                }
+
+                                if (mappingUploadStatus != 0) {
+                                    echo(
+                                        'Optional mapping.txt upload failed; ' +
+                                        'the main artifact remains valid.'
+                                    )
+                                }
+                            }
+                        } finally {
+                            env.UPLOAD_TIME_MILLIS = (
+                                System.currentTimeMillis() - uploadStartedAt
+                            ).toString()
                         }
                     }
                 }
@@ -390,6 +597,34 @@ def call(Map config = [:]) {
                                 echo Build artifact verified successfully on Google Drive.
                             '''
                         }
+
+                        env.MAPPING_UPLOADED = 'false'
+
+                        if (fileExists(env.MAPPING_PATH)) {
+                            def mappingStatus = isUnix()
+                                ? sh(
+                                    script:
+                                        '"$RCLONE_EXE" lsjson ' +
+                                        '"$DRIVE_MAPPING_PATH" --files-only',
+                                    returnStatus: true
+                                )
+                                : bat(
+                                    script:
+                                        '@"%RCLONE_EXE%" lsjson ' +
+                                        '"%DRIVE_MAPPING_PATH%" --files-only',
+                                    returnStatus: true
+                                )
+
+                            if (mappingStatus == 0) {
+                                env.MAPPING_UPLOADED = 'true'
+                                echo 'mapping.txt verified on Google Drive.'
+                            } else {
+                                echo(
+                                    'Optional mapping.txt could not be ' +
+                                    'verified; its link will be omitted.'
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -397,41 +632,43 @@ def call(Map config = [:]) {
             stage('Create Public Link') {
                 steps {
                     script {
-                        def publicLink
+                        env.DOWNLOAD_URL =
+                            createRcloneLink(env.DRIVE_FILE_PATH)
 
-                        if (isUnix()) {
-                            publicLink = sh(
-                                script:
-                                    '"$RCLONE_EXE" link "$DRIVE_FILE_PATH"',
-                                returnStdout: true
-                            ).trim()
-                        } else {
-                            publicLink = bat(
-                                script: '''@echo off
-                                    "%RCLONE_EXE%" link "%DRIVE_FILE_PATH%"
-                                ''',
-                                returnStdout: true
-                            ).trim()
-                        }
-
-                        if (!publicLink) {
+                        if (!env.DOWNLOAD_URL) {
                             error(
                                 'ERROR: rclone did not return a public link.'
                             )
                         }
 
-                        def linkLines = publicLink.readLines()
-                        env.DOWNLOAD_URL =
-                            linkLines[linkLines.size() - 1].trim()
-
-                        if (!(env.DOWNLOAD_URL ==~ /^https?:\\/\\/.+/)) {
-                            error(
-                                "ERROR: Invalid public link: ${env.DOWNLOAD_URL}"
-                            )
+                        if (env.MAPPING_UPLOADED == 'true') {
+                            env.MAPPING_URL =
+                                createRcloneLink(env.DRIVE_MAPPING_PATH)
                         }
+
+                        env.DRIVE_FOLDER_URL =
+                            createRcloneLink(env.DRIVE_DIRECTORY)
+                        env.DRIVE_ROOT_URL =
+                            createRcloneLink(
+                                "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}"
+                            )
 
                         echo "Public download link: ${env.DOWNLOAD_URL}"
                     }
+                }
+            }
+
+            stage('Archive Notification Artifacts') {
+                steps {
+                    archiveArtifacts(
+                        artifacts:
+                            'Builds/Android/build-metadata.json,' +
+                            'Builds/Android/mapping.txt,' +
+                            'Builds/Android/unity-build.log,' +
+                            'Builds/Android/upload.log',
+                        allowEmptyArchive: true,
+                        fingerprint: true
+                    )
                 }
             }
 
@@ -445,6 +682,28 @@ def call(Map config = [:]) {
 
                 steps {
                     script {
+                        env.TOTAL_TIME_MILLIS = (
+                            System.currentTimeMillis() -
+                            (env.PIPELINE_START_MILLIS ?: '0').toLong()
+                        ).toString()
+
+                        env.JENKINS_BUILD_LOG_URL =
+                            fileExists(env.BUILD_LOG_PATH)
+                                ? "${env.BUILD_URL}artifact/" +
+                                    'Builds/Android/unity-build.log'
+                                : ''
+                        env.JENKINS_UPLOAD_LOG_URL =
+                            fileExists(env.UPLOAD_LOG_PATH)
+                                ? "${env.BUILD_URL}artifact/" +
+                                    'Builds/Android/upload.log'
+                                : ''
+
+                        writeFile(
+                            file: 'telegram-message.txt',
+                            encoding: 'UTF-8',
+                            text: buildTelegramMessage()
+                        )
+
                         def sendTelegram = {
                             if (isUnix()) {
                                 writeFile(
@@ -454,7 +713,11 @@ def call(Map config = [:]) {
                                         'com/pearz/ci/send-telegram.sh'
                                     )
                                 )
-                                sh 'sh ./send-telegram.sh'
+                                withEnv([
+                                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                                ]) {
+                                    sh 'sh ./send-telegram.sh'
+                                }
                             } else {
                                 writeFile(
                                     file: 'send-telegram.ps1',
@@ -463,11 +726,15 @@ def call(Map config = [:]) {
                                         'com/pearz/ci/send-telegram.ps1'
                                     )
                                 )
-                                bat '''
-                                    powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                                        -ExecutionPolicy Bypass ^
-                                        -File "%WORKSPACE%\\send-telegram.ps1"
-                                '''
+                                withEnv([
+                                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                                ]) {
+                                    bat '''
+                                        powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                                            -ExecutionPolicy Bypass ^
+                                            -File "%WORKSPACE%\\send-telegram.ps1"
+                                    '''
+                                }
                             }
                         }
 
@@ -510,13 +777,18 @@ def call(Map config = [:]) {
 
             always {
                 archiveArtifacts(
-                    artifacts: 'Builds/Android/*.apk,Builds/Android/*.aab',
+                    artifacts: 'Builds/Android/**',
                     allowEmptyArchive: true
                 )
 
                 script {
                     if (isUnix()) {
-                        sh 'rm -f send-telegram.sh send-telegram.ps1'
+                        sh(
+                            'rm -f send-telegram.sh send-telegram.ps1 ' +
+                            'read-build-metadata.sh ' +
+                            'read-build-metadata.ps1 ' +
+                            'telegram-message.txt'
+                        )
                     } else {
                         bat '''
                             if exist "%WORKSPACE%\\send-telegram.ps1" (
@@ -525,6 +797,18 @@ def call(Map config = [:]) {
 
                             if exist "%WORKSPACE%\\send-telegram.sh" (
                                 del /F /Q "%WORKSPACE%\\send-telegram.sh"
+                            )
+
+                            if exist "%WORKSPACE%\\read-build-metadata.ps1" (
+                                del /F /Q "%WORKSPACE%\\read-build-metadata.ps1"
+                            )
+
+                            if exist "%WORKSPACE%\\read-build-metadata.sh" (
+                                del /F /Q "%WORKSPACE%\\read-build-metadata.sh"
+                            )
+
+                            if exist "%WORKSPACE%\\telegram-message.txt" (
+                                del /F /Q "%WORKSPACE%\\telegram-message.txt"
                             )
                         '''
                     }
@@ -538,5 +822,249 @@ def call(Map config = [:]) {
                 }
             }
         }
+    }
+}
+
+def createRcloneLink(String remotePath) {
+    if (!remotePath?.trim()) {
+        return ''
+    }
+
+    try {
+        def output
+
+        withEnv(["RCLONE_LINK_TARGET=${remotePath.trim()}"]) {
+            output = isUnix()
+                ? sh(
+                    script:
+                        '"$RCLONE_EXE" link "$RCLONE_LINK_TARGET"',
+                    returnStdout: true
+                )
+                : bat(
+                    script: '''@echo off
+                        "%RCLONE_EXE%" link "%RCLONE_LINK_TARGET%"
+                    ''',
+                    returnStdout: true
+                )
+        }
+
+        def urls = output
+            .readLines()
+            .collect { it.trim() }
+            .findAll { it ==~ /^https?:\/\/.+/ }
+
+        return urls ? urls[urls.size() - 1] : ''
+    } catch (Exception exception) {
+        echo(
+            "Optional public link unavailable for ${remotePath}: " +
+            exception.message
+        )
+        return ''
+    }
+}
+
+def buildTelegramMessage() {
+    def lines = []
+    def addValue = { String label, Object value ->
+        def text = value?.toString()?.trim()
+
+        if (text) {
+            lines << "${label}: ${text}"
+        }
+    }
+
+    def result = normalizeBuildResult(env.META_RESULT)
+    lines << "BUILD ${result}"
+    lines << ''
+    addValue('Job', "${env.JOB_NAME} #${env.BUILD_NUMBER}")
+    addValue('Build URL', env.BUILD_URL)
+    addValue('Result', result)
+
+    def versionParts = []
+
+    if (env.META_VERSION_NAME?.trim()) {
+        versionParts << env.META_VERSION_NAME.trim()
+    }
+
+    if (env.META_VERSION_CODE?.trim()) {
+        versionParts << "code ${env.META_VERSION_CODE.trim()}"
+    }
+
+    addValue('Version', versionParts.join(' / '))
+    addValue('Product Name', env.META_PRODUCT_NAME ?: params.PRODUCT_NAME)
+    addValue('Bundle ID', env.META_BUNDLE_IDENTIFIER)
+
+    if (env.META_BUNDLE_IDENTIFIER?.trim()) {
+        addValue(
+            'Google Play',
+            'https://play.google.com/store/apps/details?id=' +
+                env.META_BUNDLE_IDENTIFIER.trim()
+        )
+    }
+
+    addValue('Branch', params.GIT_BRANCH)
+    addValue('Configuration', params.BUILD_CONFIGURATION)
+    addValue('Scripting Backend', env.META_SCRIPTING_BACKEND)
+    addValue('Stripping Level', env.META_STRIPPING_LEVEL)
+    addValue('Orientation', env.META_ORIENTATION)
+    addValue('Unity', env.META_UNITY_VERSION ?: params.UNITY_VERSION)
+    addValue('Build Time', formatDurationMillis(env.BUILD_TIME_MILLIS))
+    addValue('Upload Time', formatDurationMillis(env.UPLOAD_TIME_MILLIS))
+    addValue('Total Time', formatDurationMillis(env.TOTAL_TIME_MILLIS))
+    addValue('Drive Folder', env.DRIVE_FOLDER_URL)
+    addValue('Drive Root', env.DRIVE_ROOT_URL)
+
+    def outputSize = formatBytes(env.META_OUTPUT_SIZE_BYTES)
+    def artifactDescription = env.DOWNLOAD_URL?.trim()
+
+    if (artifactDescription && outputSize) {
+        artifactDescription += " (${outputSize})"
+    }
+
+    if (env.OUTPUT_EXTENSION == 'aab') {
+        addValue(
+            'AAB',
+            artifactDescription
+                ? "Built - ${artifactDescription}"
+                : 'Built'
+        )
+    } else {
+        addValue('APK', artifactDescription)
+    }
+
+    if (env.MAPPING_URL?.trim()) {
+        def mappingDescription = env.MAPPING_URL.trim()
+        def mappingSize = formatBytes(env.META_MAPPING_SIZE_BYTES)
+
+        if (mappingSize) {
+            mappingDescription += " (${mappingSize})"
+        }
+
+        addValue('mapping.txt', mappingDescription)
+    }
+
+    def symbols = env.META_DEFINE_SYMBOLS
+        ?.readLines()
+        ?.collect { it.trim() }
+        ?.findAll { it }
+
+    if (symbols) {
+        lines << ''
+        lines << 'Scripting Define Symbols:'
+        symbols.each { lines << "- ${it}" }
+    }
+
+    if (
+        env.GIT_COMMIT_SHORT?.trim() ||
+        env.GIT_COMMIT_AUTHOR?.trim() ||
+        env.GIT_COMMIT_MESSAGE?.trim()
+    ) {
+        lines << ''
+        lines << 'Changes:'
+
+        def change = env.GIT_COMMIT_SHORT?.trim() ?: ''
+
+        if (env.GIT_COMMIT_AUTHOR?.trim()) {
+            change += change
+                ? " - ${env.GIT_COMMIT_AUTHOR.trim()}"
+                : env.GIT_COMMIT_AUTHOR.trim()
+        }
+
+        if (env.GIT_COMMIT_MESSAGE?.trim()) {
+            change += change
+                ? ": ${env.GIT_COMMIT_MESSAGE.trim()}"
+                : env.GIT_COMMIT_MESSAGE.trim()
+        }
+
+        lines << change
+    }
+
+    def logLines = []
+
+    if (env.JENKINS_BUILD_LOG_URL?.trim()) {
+        logLines << "Build: ${env.JENKINS_BUILD_LOG_URL.trim()}"
+    }
+
+    if (env.JENKINS_UPLOAD_LOG_URL?.trim()) {
+        logLines << "Upload: ${env.JENKINS_UPLOAD_LOG_URL.trim()}"
+    }
+
+    if (logLines) {
+        lines << ''
+        lines << 'Jenkins Logs:'
+        lines.addAll(logLines)
+    }
+
+    return lines.join('\n')
+}
+
+def normalizeBuildResult(Object value) {
+    def result = value?.toString()?.trim()?.toUpperCase()
+
+    switch (result) {
+        case 'SUCCEEDED':
+            return 'SUCCESS'
+        case 'FAILED':
+            return 'FAILURE'
+        case 'CANCELLED':
+            return 'ABORTED'
+        default:
+            return result ?: 'SUCCESS'
+    }
+}
+
+def formatDurationMillis(Object value) {
+    if (!value?.toString()?.trim()) {
+        return ''
+    }
+
+    try {
+        long totalSeconds = Math.max(
+            0L,
+            Math.round(value.toString().toLong() / 1000.0d)
+        )
+        long hours = totalSeconds.intdiv(3600)
+        long minutes = totalSeconds.intdiv(60) % 60
+        long seconds = totalSeconds % 60
+        def parts = []
+
+        if (hours > 0) {
+            parts << "${hours}h"
+        }
+
+        if (minutes > 0 || hours > 0) {
+            parts << "${minutes}m"
+        }
+
+        parts << "${seconds}s"
+        return parts.join(' ')
+    } catch (Exception ignored) {
+        return ''
+    }
+}
+
+def formatBytes(Object value) {
+    if (!value?.toString()?.trim()) {
+        return ''
+    }
+
+    try {
+        double size = value.toString().toLong()
+        def units = ['B', 'KB', 'MB', 'GB', 'TB']
+        int unitIndex = 0
+
+        while (size >= 1024.0d && unitIndex < units.size() - 1) {
+            size /= 1024.0d
+            unitIndex++
+        }
+
+        return String.format(
+            java.util.Locale.US,
+            unitIndex == 0 ? '%.0f %s' : '%.2f %s',
+            size,
+            units[unitIndex]
+        )
+    } catch (Exception ignored) {
+        return ''
     }
 }

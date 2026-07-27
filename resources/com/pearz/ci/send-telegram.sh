@@ -20,22 +20,31 @@ trim_value() {
         sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-message=$(
-    printf '%s\n' \
-        "BUILD SUCCESS" \
-        "" \
-        "Project: ${JOB_BASE_NAME:-}" \
-        "Artifact: ${OUTPUT_FILE_NAME:-}" \
-        "Build: #${BUILD_NUMBER:-}" \
-        "Branch: ${GIT_BRANCH:-}" \
-        "Configuration: ${BUILD_CONFIGURATION:-}" \
-        "Unity: ${UNITY_VERSION:-}" \
-        "Commit: ${GIT_COMMIT_SHORT:-}" \
-        "Message: ${GIT_COMMIT_MESSAGE:-}" \
-        "" \
-        "Download:" \
-        "${DOWNLOAD_URL:-}"
-)
+message_file=${TELEGRAM_MESSAGE_FILE:-}
+message=''
+
+if [ -n "$message_file" ] && [ -f "$message_file" ]; then
+    message=$(cat "$message_file")
+fi
+
+if [ -z "$message" ]; then
+    message=$(
+        printf '%s\n' \
+            "BUILD SUCCESS" \
+            "" \
+            "Project: ${JOB_BASE_NAME:-}" \
+            "Artifact: ${OUTPUT_FILE_NAME:-}" \
+            "Build: #${BUILD_NUMBER:-}" \
+            "Branch: ${GIT_BRANCH:-}" \
+            "Configuration: ${BUILD_CONFIGURATION:-}" \
+            "Unity: ${UNITY_VERSION:-}" \
+            "Commit: ${GIT_COMMIT_SHORT:-}" \
+            "Message: ${GIT_COMMIT_MESSAGE:-}" \
+            "" \
+            "Download:" \
+            "${DOWNLOAD_URL:-}"
+    )
+fi
 
 success_count=0
 target_count=0
