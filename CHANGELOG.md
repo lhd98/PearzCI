@@ -4,6 +4,20 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-27
+
+### Added
+
+- A permanent `upm` release branch for one-click Git package updates from the
+  Unity Package Manager.
+
+### Changed
+
+- UPM installation documentation now follows `#upm`, while immutable release
+  tags remain available for rollback and Jenkins Shared Library pinning.
+- The legacy `codex/telegram-build-metadata` branch is advanced to this release
+  so existing test installations can update without being removed.
+
 ## [0.4.1] - 2026-07-27
 
 ### Added
