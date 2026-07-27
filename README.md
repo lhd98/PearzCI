@@ -20,7 +20,7 @@ Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.3.0
+ssh://git@github.com/lhd98/PearzCI.git#v0.4.0
 ```
 
 4. Select **Install**.
@@ -37,7 +37,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.3.0"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.4.0"
   }
 }
 ```
@@ -80,7 +80,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.3.0`
+- Default version: `v0.4.0`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -225,6 +225,6 @@ pearzUnityAndroidPipeline()
 
 ## Versioning
 
-Projects should pin a release tag such as `v0.3.0` for the UPM package.
+Projects should pin a release tag such as `v0.4.0` for the UPM package.
 The Jenkins administrator should pin the same tag as the Global Pipeline
 Library's default version. Avoid depending directly on `main` in builds.
