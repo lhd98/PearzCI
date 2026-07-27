@@ -4,6 +4,20 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-27
+
+### Added
+
+- A shared `telegram-message-template.txt` resource controls the Telegram
+  notification layout for every Jenkins job using PearzCI.
+- Template placeholders support moving fields, changing labels, and inserting
+  literal separators without adding files to individual Unity projects.
+
+### Changed
+
+- Lines containing unavailable placeholder values are omitted automatically,
+  preserving optional build metadata behavior.
+
 ## [0.4.0] - 2026-07-27
 
 ### Added
