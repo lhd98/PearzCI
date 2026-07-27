@@ -18,6 +18,8 @@ All notable changes to this package are documented in this file.
 
 - Jenkins constructs the Telegram message from Unity metadata instead of
   relying on environment variables written by the Unity child process.
+- Metadata parsing now works without Jenkins Script Approval or an additional
+  Pipeline utility plugin.
 - Optional metadata, mapping files, folder links, and log files no longer
   prevent a successful main artifact build or notification.
 

@@ -328,17 +328,63 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def metadata = [:]
+                        def symbols = []
 
                         if (fileExists(env.METADATA_PATH)) {
                             try {
-                                metadata =
-                                    new groovy.json.JsonSlurperClassic()
-                                        .parseText(
-                                            readFile(
-                                                file: env.METADATA_PATH,
-                                                encoding: 'UTF-8'
-                                            )
-                                        ) as Map
+                                def metadataOutput
+
+                                if (isUnix()) {
+                                    writeFile(
+                                        file: 'read-build-metadata.sh',
+                                        encoding: 'UTF-8',
+                                        text: libraryResource(
+                                            'com/pearz/ci/read-build-metadata.sh'
+                                        )
+                                    )
+                                    metadataOutput = sh(
+                                        script:
+                                            'sh ./read-build-metadata.sh ' +
+                                            '"$METADATA_PATH"',
+                                        returnStdout: true
+                                    )
+                                } else {
+                                    writeFile(
+                                        file: 'read-build-metadata.ps1',
+                                        encoding: 'UTF-8',
+                                        text: libraryResource(
+                                            'com/pearz/ci/read-build-metadata.ps1'
+                                        )
+                                    )
+                                    metadataOutput = bat(
+                                        script: '''@powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                                            -ExecutionPolicy Bypass ^
+                                            -File "%WORKSPACE%\\read-build-metadata.ps1" ^
+                                            -MetadataPath "%METADATA_PATH%"
+                                        ''',
+                                        returnStdout: true
+                                    )
+                                }
+
+                                metadataOutput.readLines().each { line ->
+                                    def separatorIndex = line.indexOf('=')
+
+                                    if (separatorIndex > 0) {
+                                        def key = line.substring(
+                                            0,
+                                            separatorIndex
+                                        )
+                                        def value = line.substring(
+                                            separatorIndex + 1
+                                        )
+
+                                        if (key == 'DEFINE_SYMBOL') {
+                                            symbols << value
+                                        } else {
+                                            metadata[key] = value
+                                        }
+                                    }
+                                }
                             } catch (Exception exception) {
                                 echo(
                                     'Optional build metadata could not be read: ' +
@@ -353,36 +399,32 @@ def call(Map config = [:]) {
                         }
 
                         env.META_RESULT =
-                            metadata.result?.toString() ?: ''
+                            metadata.RESULT?.toString() ?: ''
                         env.META_PRODUCT_NAME =
-                            metadata.productName?.toString() ?: ''
+                            metadata.PRODUCT_NAME?.toString() ?: ''
                         env.META_BUNDLE_IDENTIFIER =
-                            metadata.bundleIdentifier?.toString() ?: ''
+                            metadata.BUNDLE_IDENTIFIER?.toString() ?: ''
                         env.META_VERSION_NAME =
-                            metadata.versionName?.toString() ?: ''
+                            metadata.VERSION_NAME?.toString() ?: ''
                         env.META_VERSION_CODE =
-                            metadata.androidVersionCode?.toString() ?: ''
+                            metadata.VERSION_CODE?.toString() ?: ''
                         env.META_UNITY_VERSION =
-                            metadata.unityVersion?.toString() ?: ''
+                            metadata.UNITY_VERSION?.toString() ?: ''
                         env.META_SCRIPTING_BACKEND =
-                            metadata.scriptingBackend?.toString() ?: ''
+                            metadata.SCRIPTING_BACKEND?.toString() ?: ''
                         env.META_STRIPPING_LEVEL =
-                            metadata.managedStrippingLevel?.toString() ?: ''
+                            metadata.STRIPPING_LEVEL?.toString() ?: ''
                         env.META_ORIENTATION =
-                            metadata.orientation?.toString() ?: ''
+                            metadata.ORIENTATION?.toString() ?: ''
                         env.META_OUTPUT_SIZE_BYTES =
-                            metadata.outputSizeBytes?.toString() ?: ''
+                            metadata.OUTPUT_SIZE_BYTES?.toString() ?: ''
                         env.META_MAPPING_SIZE_BYTES =
-                            metadata.mappingSizeBytes?.toString() ?: ''
-
-                        def symbols = metadata.scriptingDefineSymbols
+                            metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
                         env.META_DEFINE_SYMBOLS =
-                            symbols instanceof Collection
-                                ? symbols
-                                    .collect { it?.toString()?.trim() }
-                                    .findAll { it }
-                                    .join('\n')
-                                : ''
+                            symbols
+                                .collect { it?.toString()?.trim() }
+                                .findAll { it }
+                                .join('\n')
                     }
                 }
             }
@@ -743,6 +785,8 @@ def call(Map config = [:]) {
                     if (isUnix()) {
                         sh(
                             'rm -f send-telegram.sh send-telegram.ps1 ' +
+                            'read-build-metadata.sh ' +
+                            'read-build-metadata.ps1 ' +
                             'telegram-message.txt'
                         )
                     } else {
@@ -753,6 +797,14 @@ def call(Map config = [:]) {
 
                             if exist "%WORKSPACE%\\send-telegram.sh" (
                                 del /F /Q "%WORKSPACE%\\send-telegram.sh"
+                            )
+
+                            if exist "%WORKSPACE%\\read-build-metadata.ps1" (
+                                del /F /Q "%WORKSPACE%\\read-build-metadata.ps1"
+                            )
+
+                            if exist "%WORKSPACE%\\read-build-metadata.sh" (
+                                del /F /Q "%WORKSPACE%\\read-build-metadata.sh"
                             )
 
                             if exist "%WORKSPACE%\\telegram-message.txt" (
