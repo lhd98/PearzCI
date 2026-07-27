@@ -159,6 +159,32 @@ Unity validation and Android build, artifact verification and archiving,
 Google Drive upload and verification, public-link creation, Telegram
 notification, and build-output cleanup.
 
+### Build metadata and Telegram notification
+
+After a successful Android build, Unity writes
+`Builds/Android/build-metadata.json`. Jenkins reads this file without trying
+to modify the parent process environment. Missing or invalid optional metadata
+is reported as a warning and omitted from the notification.
+
+Telegram only displays values that really exist. Depending on the build, the
+message can contain:
+
+- Full Jenkins job name, build number, result, and `BUILD_URL`.
+- Version name, Android version code, product name, bundle ID, and generated
+  Google Play URL.
+- Scripting backend, managed stripping level, orientation, Unity version, and
+  scripting define symbols.
+- Jenkins build, upload, and total durations.
+- APK or AAB public link and size.
+- Google Drive build-folder and root links when rclone can create them.
+- `mapping.txt` public link and size when Unity reports a mapping file.
+- Current short commit, author, and subject.
+- Jenkins artifact links for `unity-build.log` and `upload.log` when present.
+
+The notification keeps the existing `TELEGRAM_CHANNEL` format and supports
+multiple semicolon-separated targets. Build metadata and notification helper
+files are archived before the `Builds` directory is cleaned.
+
 ### Build machine setup
 
 PearzCI detects the operating system of the Jenkins agent automatically.

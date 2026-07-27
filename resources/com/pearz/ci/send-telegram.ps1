@@ -7,23 +7,38 @@ if ([string]::IsNullOrWhiteSpace($channelConfig)) {
     exit 0
 }
 
-$messageLines = @(
-    "BUILD SUCCESS"
-    ""
-    "Project: $env:JOB_BASE_NAME"
-    "Artifact: $env:OUTPUT_FILE_NAME"
-    "Build: #$env:BUILD_NUMBER"
-    "Branch: $env:GIT_BRANCH"
-    "Configuration: $env:BUILD_CONFIGURATION"
-    "Unity: $env:UNITY_VERSION"
-    "Commit: $env:GIT_COMMIT_SHORT"
-    "Message: $env:GIT_COMMIT_MESSAGE"
-    ""
-    "Download:"
-    "$env:DOWNLOAD_URL"
-)
+$messageFile = $env:TELEGRAM_MESSAGE_FILE
+$message = ""
 
-$message = $messageLines -join "`n"
+if (
+    -not [string]::IsNullOrWhiteSpace($messageFile) -and
+    (Test-Path -LiteralPath $messageFile -PathType Leaf)
+) {
+    $message = Get-Content `
+        -LiteralPath $messageFile `
+        -Raw `
+        -Encoding UTF8
+}
+
+if ([string]::IsNullOrWhiteSpace($message)) {
+    $messageLines = @(
+        "BUILD SUCCESS"
+        ""
+        "Project: $env:JOB_BASE_NAME"
+        "Artifact: $env:OUTPUT_FILE_NAME"
+        "Build: #$env:BUILD_NUMBER"
+        "Branch: $env:GIT_BRANCH"
+        "Configuration: $env:BUILD_CONFIGURATION"
+        "Unity: $env:UNITY_VERSION"
+        "Commit: $env:GIT_COMMIT_SHORT"
+        "Message: $env:GIT_COMMIT_MESSAGE"
+        ""
+        "Download:"
+        "$env:DOWNLOAD_URL"
+    )
+
+    $message = $messageLines -join "`n"
+}
 $targets = @(
     $channelConfig.Split(
         @(";"),

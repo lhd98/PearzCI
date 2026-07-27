@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Unity now writes optional Android build metadata to
+  `Builds/Android/build-metadata.json`.
+- Telegram notifications include real build settings, stage timings, file
+  sizes, Drive links, Google Play URL, changes, and Jenkins log links when
+  those values exist.
+- `mapping.txt`, Unity build logs, and rclone upload logs are collected and
+  archived when available.
+
+### Changed
+
+- Jenkins constructs the Telegram message from Unity metadata instead of
+  relying on environment variables written by the Unity child process.
+- Optional metadata, mapping files, folder links, and log files no longer
+  prevent a successful main artifact build or notification.
+
 ## [0.3.0] - 2026-07-26
 
 ### Added

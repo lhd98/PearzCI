@@ -78,6 +78,8 @@ public static class BuildEntry
                     configuration.OutputPath);
             }
 
+            TryWriteBuildMetadata(report, configuration);
+
             Log("========================================");
             Log("ANDROID BUILD SUCCEEDED");
             Log($"Output: {configuration.OutputPath}");
@@ -560,6 +562,150 @@ public static class BuildEntry
         Log("========================================");
     }
 
+    private static void TryWriteBuildMetadata(
+        BuildReport report,
+        BuildConfiguration configuration)
+    {
+        try
+        {
+            BuildSummary summary = report.summary;
+            FileInfo outputFile = new FileInfo(configuration.OutputPath);
+            string outputDirectory = outputFile.DirectoryName;
+
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                Warning("Cannot determine the build metadata directory.");
+                return;
+            }
+
+            string mappingPath = TryCopyMappingFile(report, outputDirectory);
+
+            BuildMetadata metadata = new BuildMetadata
+            {
+                schemaVersion = 1,
+                result = summary.result.ToString(),
+                productName = PlayerSettings.productName,
+                bundleIdentifier = GetAndroidApplicationIdentifier(),
+                versionName = PlayerSettings.bundleVersion,
+                androidVersionCode =
+                    PlayerSettings.Android.bundleVersionCode,
+                unityVersion = Application.unityVersion,
+                scriptingBackend = GetAndroidScriptingBackend(),
+                managedStrippingLevel =
+                    PlayerSettings
+                        .GetManagedStrippingLevel(NamedBuildTarget.Android)
+                        .ToString(),
+                orientation =
+                    PlayerSettings.defaultInterfaceOrientation.ToString(),
+                targetArchitectures =
+                    PlayerSettings.Android.targetArchitectures.ToString(),
+                scriptingDefineSymbols =
+                    SplitScriptingDefineSymbols(
+                        GetAndroidScriptingDefineSymbols()),
+                buildConfiguration = configuration.ConfigurationName,
+                buildAppBundle = configuration.BuildAppBundle,
+                outputFileName = outputFile.Name,
+                outputSizeBytes = outputFile.Length,
+                buildDurationSeconds = summary.totalTime.TotalSeconds,
+                warningCount = (int)summary.totalWarnings,
+                errorCount = (int)summary.totalErrors,
+                mappingFileName = string.IsNullOrWhiteSpace(mappingPath)
+                    ? string.Empty
+                    : Path.GetFileName(mappingPath),
+                mappingSizeBytes = string.IsNullOrWhiteSpace(mappingPath)
+                    ? 0
+                    : new FileInfo(mappingPath).Length,
+                generatedAtUtc = DateTime.UtcNow.ToString("o")
+            };
+
+            string metadataPath = Path.Combine(
+                outputDirectory,
+                "build-metadata.json");
+
+            File.WriteAllText(
+                metadataPath,
+                JsonUtility.ToJson(metadata, true));
+
+            Log($"Build metadata: {metadataPath}");
+        }
+        catch (Exception exception)
+        {
+            Warning(
+                "Could not write optional build metadata: " +
+                exception.Message);
+        }
+    }
+
+    private static string TryCopyMappingFile(
+        BuildReport report,
+        string outputDirectory)
+    {
+        try
+        {
+            string sourcePath = report.GetFiles()
+                .Select(file => file.path)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .FirstOrDefault(path =>
+                    string.Equals(
+                        Path.GetFileName(path),
+                        "mapping.txt",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    File.Exists(path));
+
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                return string.Empty;
+            }
+
+            string destinationPath = Path.Combine(
+                outputDirectory,
+                "mapping.txt");
+
+            if (!string.Equals(
+                    Path.GetFullPath(sourcePath),
+                    Path.GetFullPath(destinationPath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(sourcePath, destinationPath, true);
+            }
+
+            Log($"Mapping file: {destinationPath}");
+            return destinationPath;
+        }
+        catch (Exception exception)
+        {
+            Warning(
+                "Could not collect optional mapping.txt: " +
+                exception.Message);
+            return string.Empty;
+        }
+    }
+
+    private static string GetAndroidScriptingBackend()
+    {
+        ScriptingImplementation backend =
+            PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android);
+
+        return backend == ScriptingImplementation.IL2CPP
+            ? "IL2CPP"
+            : "Mono";
+    }
+
+    private static string[] SplitScriptingDefineSymbols(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value
+            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(symbol => symbol.Trim())
+            .Where(symbol => !string.IsNullOrWhiteSpace(symbol))
+            .Distinct()
+            .ToArray();
+    }
+
     private static string GetProjectPath()
     {
         return Path.GetFullPath(
@@ -720,7 +866,39 @@ public static class BuildEntry
 
     private static void Log(string message) { Debug.Log($"{LogPrefix} {message}"); }
 
+    private static void Warning(string message)
+    {
+        Debug.LogWarning($"{LogPrefix} {message}");
+    }
+
     private static void Error(string message) { Debug.LogError($"{LogPrefix} {message}"); }
+
+    [Serializable]
+    private sealed class BuildMetadata
+    {
+        public int      schemaVersion;
+        public string   result;
+        public string   productName;
+        public string   bundleIdentifier;
+        public string   versionName;
+        public int      androidVersionCode;
+        public string   unityVersion;
+        public string   scriptingBackend;
+        public string   managedStrippingLevel;
+        public string   orientation;
+        public string   targetArchitectures;
+        public string[] scriptingDefineSymbols;
+        public string   buildConfiguration;
+        public bool     buildAppBundle;
+        public string   outputFileName;
+        public long     outputSizeBytes;
+        public double   buildDurationSeconds;
+        public int      warningCount;
+        public int      errorCount;
+        public string   mappingFileName;
+        public long     mappingSizeBytes;
+        public string   generatedAtUtc;
+    }
 
     private sealed class BuildConfiguration
     {
