@@ -1,0 +1,30 @@
+BUILD {{RESULT}}
+--------------------
+Job: {{JOB}}
+Build URL: {{BUILD_URL}}
+Result: {{RESULT}}
+--------------------
+Version: {{VERSION}}
+Product Name: {{PRODUCT_NAME}}
+Bundle ID: {{BUNDLE_ID}}
+Google Play: {{GOOGLE_PLAY_URL}}
+Branch: {{BRANCH}}
+--------------------
+Configuration: {{CONFIGURATION}}
+Scripting Backend: {{SCRIPTING_BACKEND}}
+Stripping Level: {{STRIPPING_LEVEL}}
+Orientation: {{ORIENTATION}}
+Unity: {{UNITY_VERSION}}
+--------------------
+Build Time: {{BUILD_TIME}}
+Upload Time: {{UPLOAD_TIME}}
+Total Time: {{TOTAL_TIME}}
+--------------------
+Drive Folder: {{DRIVE_FOLDER_URL}}
+Drive Root: {{DRIVE_ROOT_URL}}
+APK: {{APK}}
+AAB: {{AAB}}
+mapping.txt: {{MAPPING}}
+{{DEFINE_SYMBOLS_SECTION}}
+{{CHANGES_SECTION}}
+{{JENKINS_LOGS_SECTION}}

@@ -20,7 +20,7 @@ Pearz CI pipelines.
 3. Enter:
 
 ```text
-ssh://git@github.com/lhd98/PearzCI.git#v0.4.0
+ssh://git@github.com/lhd98/PearzCI.git#v0.4.1
 ```
 
 4. Select **Install**.
@@ -37,7 +37,7 @@ For CI setup or troubleshooting, add the package directly to
 ```json
 {
   "dependencies": {
-    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.4.0"
+    "com.pearz.ci": "ssh://git@github.com/lhd98/PearzCI.git#v0.4.1"
   }
 }
 ```
@@ -80,7 +80,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.4.0`
+- Default version: `v0.4.1`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -185,6 +185,36 @@ The notification keeps the existing `TELEGRAM_CHANNEL` format and supports
 multiple semicolon-separated targets. Build metadata and notification helper
 files are archived before the `Builds` directory is cleaned.
 
+#### Shared Telegram template
+
+The Telegram layout is stored in the PearzCI shared-library resource:
+
+```text
+resources/com/pearz/ci/telegram-message-template.txt
+```
+
+Edit this file to change labels, move fields, or add literal separator lines
+such as `--------------------`. No file is added to a Unity project's `Assets`
+folder. Release a new PearzCI tag and update the Jenkins Global Pipeline
+Library version to apply the layout to all jobs.
+
+Available placeholders are:
+
+```text
+{{RESULT}} {{JOB}} {{JOB_NAME}} {{BUILD_NUMBER}} {{BUILD_URL}}
+{{VERSION}} {{VERSION_NAME}} {{VERSION_CODE}}
+{{PRODUCT_NAME}} {{BUNDLE_ID}} {{GOOGLE_PLAY_URL}} {{BRANCH}}
+{{CONFIGURATION}} {{SCRIPTING_BACKEND}} {{STRIPPING_LEVEL}}
+{{ORIENTATION}} {{UNITY_VERSION}}
+{{BUILD_TIME}} {{UPLOAD_TIME}} {{TOTAL_TIME}}
+{{DRIVE_FOLDER_URL}} {{DRIVE_ROOT_URL}}
+{{APK}} {{AAB}} {{MAPPING}}
+{{DEFINE_SYMBOLS_SECTION}} {{CHANGES_SECTION}} {{JENKINS_LOGS_SECTION}}
+```
+
+A line containing a placeholder with no value is removed automatically.
+Multi-line section placeholders include their own heading and content.
+
 ### Build machine setup
 
 PearzCI detects the operating system of the Jenkins agent automatically.
@@ -225,6 +255,6 @@ pearzUnityAndroidPipeline()
 
 ## Versioning
 
-Projects should pin a release tag such as `v0.4.0` for the UPM package.
+Projects should pin a release tag such as `v0.4.1` for the UPM package.
 The Jenkins administrator should pin the same tag as the Global Pipeline
 Library's default version. Avoid depending directly on `main` in builds.

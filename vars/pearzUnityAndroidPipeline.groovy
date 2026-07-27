@@ -864,22 +864,7 @@ def createRcloneLink(String remotePath) {
 }
 
 def buildTelegramMessage() {
-    def lines = []
-    def addValue = { String label, Object value ->
-        def text = value?.toString()?.trim()
-
-        if (text) {
-            lines << "${label}: ${text}"
-        }
-    }
-
     def result = normalizeBuildResult(env.META_RESULT)
-    lines << "BUILD ${result}"
-    lines << ''
-    addValue('Job', "${env.JOB_NAME} #${env.BUILD_NUMBER}")
-    addValue('Build URL', env.BUILD_URL)
-    addValue('Result', result)
-
     def versionParts = []
 
     if (env.META_VERSION_NAME?.trim()) {
@@ -890,29 +875,12 @@ def buildTelegramMessage() {
         versionParts << "code ${env.META_VERSION_CODE.trim()}"
     }
 
-    addValue('Version', versionParts.join(' / '))
-    addValue('Product Name', env.META_PRODUCT_NAME ?: params.PRODUCT_NAME)
-    addValue('Bundle ID', env.META_BUNDLE_IDENTIFIER)
-
+    def googlePlayUrl = ''
     if (env.META_BUNDLE_IDENTIFIER?.trim()) {
-        addValue(
-            'Google Play',
+        googlePlayUrl =
             'https://play.google.com/store/apps/details?id=' +
-                env.META_BUNDLE_IDENTIFIER.trim()
-        )
+            env.META_BUNDLE_IDENTIFIER.trim()
     }
-
-    addValue('Branch', params.GIT_BRANCH)
-    addValue('Configuration', params.BUILD_CONFIGURATION)
-    addValue('Scripting Backend', env.META_SCRIPTING_BACKEND)
-    addValue('Stripping Level', env.META_STRIPPING_LEVEL)
-    addValue('Orientation', env.META_ORIENTATION)
-    addValue('Unity', env.META_UNITY_VERSION ?: params.UNITY_VERSION)
-    addValue('Build Time', formatDurationMillis(env.BUILD_TIME_MILLIS))
-    addValue('Upload Time', formatDurationMillis(env.UPLOAD_TIME_MILLIS))
-    addValue('Total Time', formatDurationMillis(env.TOTAL_TIME_MILLIS))
-    addValue('Drive Folder', env.DRIVE_FOLDER_URL)
-    addValue('Drive Root', env.DRIVE_ROOT_URL)
 
     def outputSize = formatBytes(env.META_OUTPUT_SIZE_BYTES)
     def artifactDescription = env.DOWNLOAD_URL?.trim()
@@ -921,26 +889,23 @@ def buildTelegramMessage() {
         artifactDescription += " (${outputSize})"
     }
 
+    def apkDescription =
+        env.OUTPUT_EXTENSION == 'aab' ? '' : artifactDescription
+    def aabDescription = ''
     if (env.OUTPUT_EXTENSION == 'aab') {
-        addValue(
-            'AAB',
-            artifactDescription
-                ? "Built - ${artifactDescription}"
-                : 'Built'
-        )
-    } else {
-        addValue('APK', artifactDescription)
+        aabDescription = artifactDescription
+            ? "Built - ${artifactDescription}"
+            : 'Built'
     }
 
+    def mappingDescription = ''
     if (env.MAPPING_URL?.trim()) {
-        def mappingDescription = env.MAPPING_URL.trim()
+        mappingDescription = env.MAPPING_URL.trim()
         def mappingSize = formatBytes(env.META_MAPPING_SIZE_BYTES)
 
         if (mappingSize) {
             mappingDescription += " (${mappingSize})"
         }
-
-        addValue('mapping.txt', mappingDescription)
     }
 
     def symbols = env.META_DEFINE_SYMBOLS
@@ -948,35 +913,29 @@ def buildTelegramMessage() {
         ?.collect { it.trim() }
         ?.findAll { it }
 
-    if (symbols) {
-        lines << ''
-        lines << 'Scripting Define Symbols:'
-        symbols.each { lines << "- ${it}" }
-    }
-
+    def symbolsSection = symbols
+        ? 'Scripting Define Symbols:\n' +
+            symbols.collect { "- ${it}" }.join('\n')
+        : ''
+    def changeDescription = ''
     if (
         env.GIT_COMMIT_SHORT?.trim() ||
         env.GIT_COMMIT_AUTHOR?.trim() ||
         env.GIT_COMMIT_MESSAGE?.trim()
     ) {
-        lines << ''
-        lines << 'Changes:'
-
-        def change = env.GIT_COMMIT_SHORT?.trim() ?: ''
+        changeDescription = env.GIT_COMMIT_SHORT?.trim() ?: ''
 
         if (env.GIT_COMMIT_AUTHOR?.trim()) {
-            change += change
+            changeDescription += changeDescription
                 ? " - ${env.GIT_COMMIT_AUTHOR.trim()}"
                 : env.GIT_COMMIT_AUTHOR.trim()
         }
 
         if (env.GIT_COMMIT_MESSAGE?.trim()) {
-            change += change
+            changeDescription += changeDescription
                 ? ": ${env.GIT_COMMIT_MESSAGE.trim()}"
                 : env.GIT_COMMIT_MESSAGE.trim()
         }
-
-        lines << change
     }
 
     def logLines = []
@@ -989,13 +948,97 @@ def buildTelegramMessage() {
         logLines << "Upload: ${env.JENKINS_UPLOAD_LOG_URL.trim()}"
     }
 
-    if (logLines) {
-        lines << ''
-        lines << 'Jenkins Logs:'
-        lines.addAll(logLines)
+    def values = [
+        RESULT: result,
+        JOB: "${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        JOB_NAME: env.JOB_NAME,
+        BUILD_NUMBER: env.BUILD_NUMBER,
+        BUILD_URL: env.BUILD_URL,
+        VERSION: versionParts.join(' / '),
+        VERSION_NAME: env.META_VERSION_NAME,
+        VERSION_CODE: env.META_VERSION_CODE,
+        PRODUCT_NAME: env.META_PRODUCT_NAME ?: params.PRODUCT_NAME,
+        BUNDLE_ID: env.META_BUNDLE_IDENTIFIER,
+        GOOGLE_PLAY_URL: googlePlayUrl,
+        BRANCH: params.GIT_BRANCH,
+        CONFIGURATION: params.BUILD_CONFIGURATION,
+        SCRIPTING_BACKEND: env.META_SCRIPTING_BACKEND,
+        STRIPPING_LEVEL: env.META_STRIPPING_LEVEL,
+        ORIENTATION: env.META_ORIENTATION,
+        UNITY_VERSION: env.META_UNITY_VERSION ?: params.UNITY_VERSION,
+        BUILD_TIME: formatDurationMillis(env.BUILD_TIME_MILLIS),
+        UPLOAD_TIME: formatDurationMillis(env.UPLOAD_TIME_MILLIS),
+        TOTAL_TIME: formatDurationMillis(env.TOTAL_TIME_MILLIS),
+        DRIVE_FOLDER_URL: env.DRIVE_FOLDER_URL,
+        DRIVE_ROOT_URL: env.DRIVE_ROOT_URL,
+        APK: apkDescription,
+        AAB: aabDescription,
+        MAPPING: mappingDescription,
+        DEFINE_SYMBOLS_SECTION: symbolsSection,
+        CHANGES_SECTION: changeDescription
+            ? "Changes:\n${changeDescription}"
+            : '',
+        JENKINS_LOGS_SECTION: logLines
+            ? 'Jenkins Logs:\n' + logLines.join('\n')
+            : ''
+    ]
+
+    return renderTelegramTemplate(values)
+}
+
+def renderTelegramTemplate(Map values) {
+    def template = libraryResource(
+        'com/pearz/ci/telegram-message-template.txt'
+    )
+    def outputLines = []
+
+    template.readLines().each { sourceLine ->
+        def renderedLine = sourceLine
+        def omitLine = false
+
+        values.each { placeholder, value ->
+            def token = "{{${placeholder}}}"
+
+            if (sourceLine.contains(token)) {
+                def replacement = value?.toString()?.trim()
+
+                if (!replacement) {
+                    omitLine = true
+                } else {
+                    renderedLine = renderedLine.replace(token, replacement)
+                }
+            }
+        }
+
+        if (
+            renderedLine.contains('{{') &&
+            renderedLine.contains('}}')
+        ) {
+            omitLine = true
+        }
+
+        if (!omitLine) {
+            if (renderedLine.contains('\n')) {
+                outputLines.addAll(renderedLine.readLines())
+            } else {
+                outputLines << renderedLine
+            }
+        }
     }
 
-    return lines.join('\n')
+    def compactLines = []
+
+    outputLines.each { line ->
+        if (line || !compactLines || compactLines[-1]) {
+            compactLines << line
+        }
+    }
+
+    while (compactLines && !compactLines[-1]) {
+        compactLines.remove(compactLines.size() - 1)
+    }
+
+    return compactLines.join('\n')
 }
 
 def normalizeBuildResult(Object value) {
