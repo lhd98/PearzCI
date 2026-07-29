@@ -44,8 +44,13 @@ def call(Map config = [:]) {
 
         options {
             timestamps()
-            disableConcurrentBuilds()
+            disableConcurrentBuilds(abortPrevious: true)
+            quietPeriod(5)
             skipDefaultCheckout(true)
+        }
+
+        triggers {
+            githubPush()
         }
 
         environment {
