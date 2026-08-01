@@ -197,6 +197,8 @@ def call(Map config = [:]) {
                                 returnStdout: true
                             ).trim()
                         }
+
+                        env.GIT_CHANGES = collectGitChanges()
                     }
                 }
             }
@@ -922,26 +924,7 @@ def buildTelegramMessage() {
         ? 'Scripting Define Symbols:\n' +
             symbols.collect { "- ${it}" }.join('\n')
         : ''
-    def changeDescription = ''
-    if (
-        env.GIT_COMMIT_SHORT?.trim() ||
-        env.GIT_COMMIT_AUTHOR?.trim() ||
-        env.GIT_COMMIT_MESSAGE?.trim()
-    ) {
-        changeDescription = env.GIT_COMMIT_SHORT?.trim() ?: ''
-
-        if (env.GIT_COMMIT_AUTHOR?.trim()) {
-            changeDescription += changeDescription
-                ? " - ${env.GIT_COMMIT_AUTHOR.trim()}"
-                : env.GIT_COMMIT_AUTHOR.trim()
-        }
-
-        if (env.GIT_COMMIT_MESSAGE?.trim()) {
-            changeDescription += changeDescription
-                ? ": ${env.GIT_COMMIT_MESSAGE.trim()}"
-                : env.GIT_COMMIT_MESSAGE.trim()
-        }
-    }
+    def changeDescription = env.GIT_CHANGES?.trim()
 
     def logLines = []
 
@@ -989,6 +972,101 @@ def buildTelegramMessage() {
     ]
 
     return renderTelegramTemplate(values)
+}
+
+def collectGitChanges() {
+    def previousBuildCommit = (
+        env.GIT_PREVIOUS_COMMIT?.trim() ?:
+        env.GIT_PREVIOUS_SUCCESSFUL_COMMIT?.trim()
+    )
+    def logOutput = ''
+    def hasValidPreviousCommit = false
+
+    if (previousBuildCommit) {
+        if (isUnix()) {
+            withEnv([
+                "PREVIOUS_BUILD_COMMIT=${previousBuildCommit}"
+            ]) {
+                hasValidPreviousCommit = sh(
+                    script: '''
+                        git rev-parse --verify \
+                            "$PREVIOUS_BUILD_COMMIT^{commit}" >/dev/null 2>&1 &&
+                        git merge-base --is-ancestor \
+                            "$PREVIOUS_BUILD_COMMIT" HEAD
+                    ''',
+                    returnStatus: true
+                ) == 0
+            }
+        } else {
+            withEnv([
+                "PREVIOUS_BUILD_COMMIT=${previousBuildCommit}"
+            ]) {
+                hasValidPreviousCommit = bat(
+                    script: '''
+                        @echo off
+                        git rev-parse --verify "%PREVIOUS_BUILD_COMMIT%^{commit}" >nul 2>&1
+                        if errorlevel 1 exit /b 1
+                        git merge-base --is-ancestor "%PREVIOUS_BUILD_COMMIT%" HEAD
+                    ''',
+                    returnStatus: true
+                ) == 0
+            }
+        }
+    }
+
+    if (isUnix()) {
+        withEnv([
+            "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
+            "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
+        ]) {
+            logOutput = sh(
+                script: '''
+                    if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
+                        git log --pretty=format:'%h%x09%an%x09%s' \
+                            "$PREVIOUS_BUILD_COMMIT..HEAD"
+                    else
+                        git log -1 --pretty=format:'%h%x09%an%x09%s'
+                    fi
+                ''',
+                returnStdout: true
+            ).trim()
+        }
+    } else {
+        withEnv([
+            "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
+            "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
+        ]) {
+            logOutput = bat(
+                script: '''
+                    @echo off
+                    if "%HAS_VALID_PREVIOUS_COMMIT%"=="true" (
+                        git log --pretty=format:%%h%%x09%%an%%x09%%s "%PREVIOUS_BUILD_COMMIT%..HEAD"
+                    ) else (
+                        git log -1 --pretty=format:%%h%%x09%%an%%x09%%s
+                    )
+                ''',
+                returnStdout: true
+            ).trim()
+        }
+    }
+
+    def changes = logOutput
+        .readLines()
+        .collect { line ->
+            def fields = line.split('\t', 3)
+            if (fields.size() == 3) {
+                "- ${fields[0]} - ${fields[1]}: ${fields[2]}"
+            } else {
+                ''
+            }
+        }
+        .findAll { it }
+
+    if (hasValidPreviousCommit && !changes) {
+        return '- No new commits since the previous build.'
+    }
+
+    return changes.join('\n')
 }
 
 def renderTelegramTemplate(Map values) {

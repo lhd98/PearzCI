@@ -4,6 +4,21 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-08-01
+
+### Changed
+
+- Telegram build notifications now list every commit since the previous
+  Jenkins build instead of only the current commit.
+
+## [0.4.3] - 2026-08-01
+
+### Changed
+
+- New GitHub pushes abort an in-progress build and use a short debounce period
+  before Jenkins starts the replacement build.
+- The reusable pipeline registers a GitHub push trigger directly.
+
 ## [0.4.2] - 2026-07-27
 
 ### Added

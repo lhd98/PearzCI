@@ -80,7 +80,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.4.2`
+- Default version: `v0.4.4`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -178,7 +178,8 @@ message can contain:
 - APK or AAB public link and size.
 - Google Drive build-folder and root links when rclone can create them.
 - `mapping.txt` public link and size when Unity reports a mapping file.
-- Current short commit, author, and subject.
+- Every commit (short hash, author, and subject) since the previous Jenkins
+  build. The first build falls back to the current commit.
 - Jenkins artifact links for `unity-build.log` and `upload.log` when present.
 
 The notification keeps the existing `TELEGRAM_CHANNEL` format and supports
@@ -267,6 +268,6 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.2` remain available for rollback or projects that
+Immutable tags such as `v0.4.4` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.2` as the Global Pipeline Library's default version.
+such as `v0.4.4` as the Global Pipeline Library's default version.
