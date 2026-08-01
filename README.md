@@ -80,7 +80,7 @@ provides the reusable Jenkins pipeline. Configure this repository once in
 **Manage Jenkins > System > Global Pipeline Libraries**:
 
 - Name: `pearz-ci`
-- Default version: `v0.4.4`
+- Default version: `upm`
 - Retrieval method: Modern SCM
 - Source Code Management: Git
 - Project repository:
@@ -203,6 +203,7 @@ Available placeholders are:
 
 ```text
 {{RESULT}} {{JOB}} {{JOB_NAME}} {{BUILD_NUMBER}} {{BUILD_URL}}
+{{PEARZ_CI_VERSION}}
 {{VERSION}} {{VERSION_NAME}} {{VERSION_CODE}}
 {{PRODUCT_NAME}} {{BUNDLE_ID}} {{GOOGLE_PLAY_URL}} {{BRANCH}}
 {{CONFIGURATION}} {{SCRIPTING_BACKEND}} {{STRIPPING_LEVEL}}
@@ -268,6 +269,7 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.4` remain available for rollback or projects that
+Immutable tags such as `v0.4.5` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.4` as the Global Pipeline Library's default version.
+such as `v0.4.5` when automatic updates through the `upm` branch are not
+desired.

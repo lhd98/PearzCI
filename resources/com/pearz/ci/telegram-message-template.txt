@@ -3,6 +3,7 @@ BUILD {{RESULT}}
 Job: {{JOB}}
 Build URL: {{BUILD_URL}}
 Result: {{RESULT}}
+PearzCI: {{PEARZ_CI_VERSION}}
 --------------------
 Version: {{VERSION}}
 Product Name: {{PRODUCT_NAME}}

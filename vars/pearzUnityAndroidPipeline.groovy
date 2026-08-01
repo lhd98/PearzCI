@@ -1,4 +1,5 @@
 def call(Map config = [:]) {
+    def pearzCiVersion = 'v0.4.5'
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''
@@ -54,6 +55,7 @@ def call(Map config = [:]) {
         }
 
         environment {
+            PEARZ_CI_VERSION = "${pearzCiVersion}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
             WINDOWS_RCLONE_EXE = "${windowsRcloneExe}"
@@ -942,6 +944,7 @@ def buildTelegramMessage() {
         JOB_NAME: env.JOB_NAME,
         BUILD_NUMBER: env.BUILD_NUMBER,
         BUILD_URL: env.BUILD_URL,
+        PEARZ_CI_VERSION: env.PEARZ_CI_VERSION,
         VERSION: versionParts.join(' / '),
         VERSION_NAME: env.META_VERSION_NAME,
         VERSION_CODE: env.META_VERSION_CODE,

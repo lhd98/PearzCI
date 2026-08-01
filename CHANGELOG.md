@@ -4,6 +4,12 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-08-01
+
+### Added
+
+- Telegram build notifications now display the PearzCI shared-library version.
+
 ## [0.4.4] - 2026-08-01
 
 ### Changed
