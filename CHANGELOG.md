@@ -4,6 +4,13 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-08-03
+
+### Fixed
+
+- Corrected Groovy URL regex escaping so the shared pipeline compiles on Jenkins
+  when loading the `upm` library.
+
 ## [0.4.8] - 2026-08-03
 
 ### Changed

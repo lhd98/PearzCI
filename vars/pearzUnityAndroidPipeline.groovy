@@ -1,5 +1,5 @@
 def call(Map config = [:]) {
-    def pearzCiVersion = 'v0.4.8'
+    def pearzCiVersion = 'v0.4.9'
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''
@@ -1235,8 +1235,8 @@ def normalizeGitBranch(Object branchValue) {
 
 def extractGitHubRepository(String repositoryUrl) {
     def repository = repositoryUrl?.trim() ?: ''
-    repository = repository.replaceFirst(/^ssh:\/\/[^/]+\//, '')
-    repository = repository.replaceFirst(/^https?:\/\/[^/]+\//, '')
+    repository = repository.replaceFirst(/^ssh:\/\/[^\/]+\//, '')
+    repository = repository.replaceFirst(/^https?:\/\/[^\/]+\//, '')
     repository = repository.replaceFirst(/^git@[^:]+:/, '')
     repository = repository.replaceFirst(/\.git$/, '')
     return repository.replaceAll(/^\/+|\/+$/, '')

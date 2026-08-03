@@ -296,7 +296,7 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.8` remain available for rollback or projects that
+Immutable tags such as `v0.4.9` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.8` when automatic updates through the `upm` branch are not
+such as `v0.4.9` when automatic updates through the `upm` branch are not
 desired.
