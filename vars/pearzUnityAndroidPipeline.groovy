@@ -1,5 +1,5 @@
 def call(Map config = [:]) {
-    def pearzCiVersion = 'v0.4.7'
+    def pearzCiVersion = 'v0.4.8'
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''
@@ -73,6 +73,7 @@ def call(Map config = [:]) {
                 causeString:
                     'Triggered by GitHub push: ' +
                     '$PEARZ_WEBHOOK_REPOSITORY $PEARZ_WEBHOOK_REF',
+                tokenCredentialId: 'pearz-github-webhook',
                 printContributedVariables: false,
                 printPostContent: false,
                 regexpFilterText:

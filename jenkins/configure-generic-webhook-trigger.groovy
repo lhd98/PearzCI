@@ -6,6 +6,8 @@
  * with dryRun=false to persist the changes.
  *
  * Prerequisite: Generic Webhook Trigger and Pipeline plugins are installed.
+ * Create the Jenkins Secret text credential pearz-github-webhook before
+ * applying this script.
  */
 
 import hudson.model.ParametersDefinitionProperty
@@ -18,6 +20,9 @@ import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 
 // Change only this value between the review and apply runs.
 def dryRun = true
+
+@groovy.transform.Field
+final String webhookTokenCredentialId = 'pearz-github-webhook'
 
 final String repositoryVariable = 'PEARZ_WEBHOOK_REPOSITORY'
 final String refVariable = 'PEARZ_WEBHOOK_REF'
@@ -124,7 +129,7 @@ GenericTrigger createGenericTrigger(String repository, String branch) {
     trigger.setPrintContributedVariables(false)
     trigger.setPrintPostContent(false)
     trigger.setToken('')
-    trigger.setTokenCredentialId('')
+    trigger.setTokenCredentialId(webhookTokenCredentialId)
     trigger.setRegexpFilterText(filterText)
     trigger.setRegexpFilterExpression(
         webhookFilterExpression(repository, branch)

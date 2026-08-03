@@ -140,14 +140,22 @@ Common optional parameters:
 
 ### Configure the shared GitHub webhook
 
-For existing Pipeline jobs, an administrator can bootstrap the Generic Webhook
-Trigger configuration with [jenkins/configure-generic-webhook-trigger.groovy](jenkins/configure-generic-webhook-trigger.groovy):
+For existing Pipeline jobs, first create a Jenkins **Secret text** credential:
+
+- ID: `pearz-github-webhook`
+- Secret: a long random value, stored only in Jenkins and the webhook URL
+
+Then bootstrap the Generic Webhook Trigger configuration with [jenkins/configure-generic-webhook-trigger.groovy](jenkins/configure-generic-webhook-trigger.groovy):
 
 1. Paste the script into **Manage Jenkins > Script Console** with `dryRun = true`
    and review the repository, branch, and skipped-job output.
 2. Run it again with `dryRun = false` to save the configuration.
 3. Add one GitHub push webhook for all repositories:
-   `https://<JENKINS_URL>/generic-webhook-trigger/invoke`
+   `https://<JENKINS_URL>/generic-webhook-trigger/invoke?token=<SECRET_VALUE>`
+
+The `token` query value must be the secret value from the Jenkins credential.
+Leave GitHub's separate **Secret** field empty; this setup authenticates with
+the Generic Webhook Trigger token credential.
 
 The script configures only Pipeline jobs with default `PROJECT_REPOSITORY_URL`
 and `GIT_BRANCH` values. Each job filters the shared webhook by its own
@@ -288,7 +296,7 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.7` remain available for rollback or projects that
+Immutable tags such as `v0.4.8` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.7` when automatic updates through the `upm` branch are not
+such as `v0.4.8` when automatic updates through the `upm` branch are not
 desired.

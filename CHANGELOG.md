@@ -4,6 +4,16 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-08-03
+
+### Changed
+
+- Generic Webhook Trigger authentication now uses the Jenkins Secret text
+  credential `pearz-github-webhook`, allowing GitHub webhooks to reach secured
+  Jenkins controllers without anonymous access.
+- Jenkins pipeline and bootstrap configuration stay synchronized with the
+  credential-backed webhook token.
+
 ## [0.4.7] - 2026-08-03
 
 ### Added
