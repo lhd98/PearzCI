@@ -4,6 +4,18 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-08-03
+
+### Added
+
+- GitHub webhook filtering by repository and configured job branch.
+- Manual parameterized builds cancel an in-progress build and restart with the
+  latest parameters.
+
+### Changed
+
+- GitHub push triggers now use Generic Webhook Trigger instead of unconditional
+  `githubPush()` triggering.
 ## [0.4.5] - 2026-08-01
 
 ### Added

@@ -1,5 +1,5 @@
 def call(Map config = [:]) {
-    def pearzCiVersion = 'v0.4.5'
+    def pearzCiVersion = 'v0.4.6'
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''
@@ -39,6 +39,14 @@ def call(Map config = [:]) {
         'macUnityHubRoot',
         configuredUnityHubRoot ?: '/Applications/Unity/Hub/Editor'
     )
+    def webhookBranch = normalizeGitBranch(
+        params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch
+    )
+    def webhookRepository = extractGitHubRepository(repositoryUrl)
+    def webhookFilterExpression = webhookRepository
+        ? '^' + regexEscape(webhookRepository) +
+            ' refs/heads/' + regexEscape(webhookBranch) + '$'
+        : '^refs/heads/' + regexEscape(webhookBranch) + '$'
 
     pipeline {
         agent any
@@ -51,7 +59,26 @@ def call(Map config = [:]) {
         }
 
         triggers {
-            githubPush()
+            GenericTrigger(
+                genericVariables: [
+                    [
+                        key: 'PEARZ_WEBHOOK_REPOSITORY',
+                        value: '$.repository.full_name'
+                    ],
+                    [
+                        key: 'PEARZ_WEBHOOK_REF',
+                        value: '$.ref'
+                    ]
+                ],
+                causeString:
+                    'Triggered by GitHub push: ' +
+                    '$PEARZ_WEBHOOK_REPOSITORY $PEARZ_WEBHOOK_REF',
+                printContributedVariables: false,
+                printPostContent: false,
+                regexpFilterText:
+                    '$PEARZ_WEBHOOK_REPOSITORY $PEARZ_WEBHOOK_REF',
+                regexpFilterExpression: webhookFilterExpression
+            )
         }
 
         environment {
@@ -1196,4 +1223,29 @@ def formatBytes(Object value) {
     } catch (Exception ignored) {
         return ''
     }
+}
+def normalizeGitBranch(Object branchValue) {
+    def branch = branchValue?.toString()?.trim() ?: 'master'
+    branch = branch.replaceFirst(/^refs\/heads\//, '')
+    branch = branch.replaceFirst(/^origin\//, '')
+    branch = branch.replaceFirst(/^\*\//, '')
+    return branch
+}
+
+def extractGitHubRepository(String repositoryUrl) {
+    def repository = repositoryUrl?.trim() ?: ''
+    repository = repository.replaceFirst(/^ssh:\/\/[^/]+\//, '')
+    repository = repository.replaceFirst(/^https?:\/\/[^/]+\//, '')
+    repository = repository.replaceFirst(/^git@[^:]+:/, '')
+    repository = repository.replaceFirst(/\.git$/, '')
+    return repository.replaceAll(/^\/+|\/+$/, '')
+}
+
+def regexEscape(String value) {
+    def specialCharacters = '\\.^$|()[]{}*+?'
+    return value.collect { character ->
+        specialCharacters.indexOf(character as String) >= 0
+            ? "\\${character}"
+            : character
+    }.join('')
 }
