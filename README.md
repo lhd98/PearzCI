@@ -138,17 +138,36 @@ Common optional parameters:
   `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 
-Choose one automatic trigger:
+### Configure the shared GitHub webhook
 
-- If Jenkins is reachable from GitHub, enable **GitHub hook trigger for
-  GITScm polling** and add the Jenkins webhook URL to the GitHub repository.
-- If Jenkins only runs on a local PC, enable **Poll SCM** instead. For example,
-  `H/5 * * * *` checks for pushed commits approximately every five minutes
-  without exposing Jenkins to the internet.
+For existing Pipeline jobs, an administrator can bootstrap the Generic Webhook
+Trigger configuration with [jenkins/configure-generic-webhook-trigger.groovy](jenkins/configure-generic-webhook-trigger.groovy):
 
-After **Configure > Save**, run one manual build to register the repository
-checkout. After that, developers only push game code; the configured trigger
-starts the job, PearzCI checks out the game repository, and Jenkins builds it.
+1. Paste the script into **Manage Jenkins > Script Console** with `dryRun = true`
+   and review the repository, branch, and skipped-job output.
+2. Run it again with `dryRun = false` to save the configuration.
+3. Add one GitHub push webhook for all repositories:
+   `https://<JENKINS_URL>/generic-webhook-trigger/invoke`
+
+The script configures only Pipeline jobs with default `PROJECT_REPOSITORY_URL`
+and `GIT_BRANCH` values. Each job filters the shared webhook by its own
+`owner/repository` and `refs/heads/branch`. Existing Generic Webhook Trigger
+and **GitHub hook trigger for GITScm polling** entries are replaced/removed;
+other trigger types are preserved. Jobs missing either required value are
+reported for separate handling. The Generic Webhook Trigger plugin must be
+installed before running the script.
+
+New jobs keep the `GenericTrigger(...)` declaration in the PearzCI pipeline, so
+their trigger is synchronized automatically on the first pipeline run. A
+manual build is not required for the bootstrap script.
+
+**Poll SCM** may still be kept as a separate fallback when Jenkins cannot be
+reached by GitHub; for example, `H/5 * * * *` checks approximately every five
+minutes.
+
+After the trigger is configured, developers only push game code; the webhook
+starts the matching job, PearzCI checks out the game repository, and Jenkins
+builds it.
 
 The game repository does not need a `Jenkinsfile`. It only needs the PearzCI
 UPM dependency committed in `Packages/manifest.json` and
@@ -269,7 +288,7 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.6` remain available for rollback or projects that
+Immutable tags such as `v0.4.7` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.6` when automatic updates through the `upm` branch are not
+such as `v0.4.7` when automatic updates through the `upm` branch are not
 desired.

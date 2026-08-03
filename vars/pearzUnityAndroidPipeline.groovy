@@ -1,5 +1,5 @@
 def call(Map config = [:]) {
-    def pearzCiVersion = 'v0.4.6'
+    def pearzCiVersion = 'v0.4.7'
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''

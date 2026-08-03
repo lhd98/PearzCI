@@ -4,6 +4,21 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-08-03
+
+### Added
+
+- One-time Jenkins Script Console bootstrap configures Generic Webhook
+  Triggers for all matching Pipeline jobs and filters shared GitHub webhooks
+  by repository and branch.
+- Jenkins jobs missing repository or branch defaults are reported for separate
+  handling instead of being modified.
+
+### Changed
+
+- The Jenkins setup documentation now uses the shared Generic Webhook Trigger
+  endpoint and preserves unrelated job triggers during bootstrap.
+
 ## [0.4.6] - 2026-08-03
 
 ### Added
