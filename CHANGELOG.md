@@ -4,6 +4,34 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-08-04
+
+### Added
+
+- `tools/bump-version.ps1` sets `package.json` and the new
+  `resources/com/pearz/ci/version.txt` together, so the version reported in
+  Telegram can no longer drift from the released package version.
+- Configurable `buildsToKeep` and `artifactBuildsToKeep` pipeline options.
+
+### Changed
+
+- The pipeline reads its version from a shared-library resource instead of a
+  hard-coded string.
+- Jenkins now discards builds beyond the last 30, and artifacts beyond the
+  last 10 builds. Previously every archived APK or AAB was kept forever.
+- The Telegram commit list is capped at the 20 most recent commits followed by
+  a count of the remaining ones.
+- Build artifacts are no longer archived more than once. The post-build step
+  archives only `build-metadata.json`, `unity-build.log`, and `upload.log`,
+  which still captures diagnostics when a build fails without re-transferring
+  the APK or AAB from the agent.
+
+### Fixed
+
+- Telegram notifications are truncated to the 4096-character API limit. A long
+  gap between builds could previously produce an oversized message that
+  Telegram rejected, losing the whole notification.
+
 ## [0.4.9] - 2026-08-03
 
 ### Fixed
@@ -48,6 +76,7 @@ All notable changes to this package are documented in this file.
 
 - GitHub push triggers now use Generic Webhook Trigger instead of unconditional
   `githubPush()` triggering.
+
 ## [0.4.5] - 2026-08-01
 
 ### Added

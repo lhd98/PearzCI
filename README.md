@@ -206,8 +206,13 @@ message can contain:
 - Google Drive build-folder and root links when rclone can create them.
 - `mapping.txt` public link and size when Unity reports a mapping file.
 - Every commit (short hash, author, and subject) since the previous Jenkins
-  build. The first build falls back to the current commit.
+  build, up to the 20 most recent, followed by a count of the remaining
+  commits. The first build falls back to the current commit.
 - Jenkins artifact links for `unity-build.log` and `upload.log` when present.
+
+Telegram rejects a message longer than 4096 characters, so the rendered
+message is truncated at that limit and marked with `... (message truncated)`.
+The commit list is capped first because it is the only unbounded section.
 
 The notification keeps the existing `TELEGRAM_CHANNEL` format and supports
 multiple semicolon-separated targets. Build metadata and notification helper
@@ -282,6 +287,20 @@ enough:
 pearzUnityAndroidPipeline()
 ```
 
+### Build retention
+
+PearzCI keeps the last 30 build records and the artifacts of the last 10
+builds. Without this limit, every archived APK or AAB stays on the Jenkins
+controller permanently. Override the limits per job when a project needs a
+longer history:
+
+```groovy
+pearzUnityAndroidPipeline(
+    buildsToKeep: 30,
+    artifactBuildsToKeep: 10
+)
+```
+
 ## Versioning
 
 Unity projects should use the stable UPM update channel:
@@ -296,7 +315,21 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.9` remain available for rollback or projects that
+Immutable tags such as `v0.4.10` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.9` when automatic updates through the `upm` branch are not
+such as `v0.4.10` when automatic updates through the `upm` branch are not
 desired.
+
+### Releasing a new version
+
+The version appears in `package.json` and in
+`resources/com/pearz/ci/version.txt`, the string the pipeline reports as
+`{{PEARZ_CI_VERSION}}` in Telegram. Set both with one command instead of
+editing them by hand:
+
+```powershell
+pwsh ./tools/bump-version.ps1 -Version 0.4.10
+```
+
+Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
+(`git tag -a v0.4.10 -m "Release v0.4.10"`), and advance the `upm` branch.

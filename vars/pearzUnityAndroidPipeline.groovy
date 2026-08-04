@@ -1,5 +1,5 @@
 def call(Map config = [:]) {
-    def pearzCiVersion = 'v0.4.9'
+    def pearzCiVersion = readPearzCiVersion()
     def repositoryUrl = config.get(
         'repositoryUrl',
         params.PROJECT_REPOSITORY_URL ?: ''
@@ -31,6 +31,8 @@ def call(Map config = [:]) {
     )
     def driveRemote = config.get('driveRemote', 'gdrive')
     def driveRoot = config.get('driveRoot', 'JenkinsBuild')
+    def buildsToKeep = config.get('buildsToKeep', 30).toString()
+    def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
     def windowsUnityHubRoot = config.get(
         'windowsUnityHubRoot',
         configuredUnityHubRoot ?: 'C:\\Program Files\\Unity\\Hub\\Editor'
@@ -56,6 +58,12 @@ def call(Map config = [:]) {
             disableConcurrentBuilds(abortPrevious: true)
             quietPeriod(5)
             skipDefaultCheckout(true)
+            buildDiscarder(
+                logRotator(
+                    numToKeepStr: buildsToKeep,
+                    artifactNumToKeepStr: artifactBuildsToKeep
+                )
+            )
         }
 
         triggers {
@@ -697,12 +705,10 @@ def call(Map config = [:]) {
 
             stage('Archive Notification Artifacts') {
                 steps {
+                    // Chỉ upload.log là file mới kể từ stage 'Archive Artifact'.
+                    // Các file còn lại đã được archive ở đó.
                     archiveArtifacts(
-                        artifacts:
-                            'Builds/Android/build-metadata.json,' +
-                            'Builds/Android/mapping.txt,' +
-                            'Builds/Android/unity-build.log,' +
-                            'Builds/Android/upload.log',
+                        artifacts: 'Builds/Android/upload.log',
                         allowEmptyArchive: true,
                         fingerprint: true
                     )
@@ -813,8 +819,14 @@ def call(Map config = [:]) {
             }
 
             always {
+                // Bắt log chẩn đoán cho build thất bại, khi các stage
+                // archive phía trên không kịp chạy. Không archive lại
+                // artifact chính vì stage 'Archive Artifact' đã làm.
                 archiveArtifacts(
-                    artifacts: 'Builds/Android/**',
+                    artifacts:
+                        'Builds/Android/build-metadata.json,' +
+                        'Builds/Android/unity-build.log,' +
+                        'Builds/Android/upload.log',
                     allowEmptyArchive: true
                 )
 
@@ -1002,7 +1014,39 @@ def buildTelegramMessage() {
             : ''
     ]
 
-    return renderTelegramTemplate(values)
+    return truncateTelegramMessage(renderTelegramTemplate(values))
+}
+
+// Telegram sendMessage từ chối text dài hơn 4096 ký tự. Cắt bớt để một
+// khoảng cách commit lớn không làm hỏng toàn bộ thông báo.
+def truncateTelegramMessage(String message) {
+    int maximumLength = 4096
+
+    if (!message || message.length() <= maximumLength) {
+        return message
+    }
+
+    def notice = '\n... (message truncated)'
+    return message.substring(0, maximumLength - notice.length()) + notice
+}
+
+def readPearzCiVersion() {
+    try {
+        def version = libraryResource(
+            'com/pearz/ci/version.txt'
+        )?.trim()
+
+        if (version) {
+            return version
+        }
+    } catch (Exception exception) {
+        echo(
+            'Could not read the PearzCI version resource: ' +
+            exception.message
+        )
+    }
+
+    return 'unknown'
 }
 
 def collectGitChanges() {
@@ -1095,6 +1139,17 @@ def collectGitChanges() {
 
     if (hasValidPreviousCommit && !changes) {
         return '- No new commits since the previous build.'
+    }
+
+    int maximumChanges = 20
+
+    if (changes.size() > maximumChanges) {
+        int hiddenCount = changes.size() - maximumChanges
+        def limitedChanges = []
+
+        limitedChanges.addAll(changes[0..(maximumChanges - 1)])
+        limitedChanges << "- ... and ${hiddenCount} more commit(s)."
+        changes = limitedChanges
     }
 
     return changes.join('\n')
