@@ -20,6 +20,11 @@ public static class BuildEntry
     /// </summary>
     public static void BuildAndroid()
     {
+        // Giữ ngoài try để khối catch còn ghi được metadata thất bại,
+        // kể cả khi lỗi xảy ra trước lúc Unity bắt đầu build.
+        BuildConfiguration configuration = null;
+        BuildReport         report        = null;
+
         try
         {
             Log("========================================");
@@ -41,7 +46,7 @@ public static class BuildEntry
                 Log($"Scene: {scene}");
             }
 
-            BuildConfiguration configuration = ReadConfiguration();
+            configuration = ReadConfiguration();
 
             PrintConfiguration(configuration);
             PrepareOutputDirectory(configuration.OutputPath);
@@ -59,7 +64,7 @@ public static class BuildEntry
 
             Log("Calling BuildPipeline.BuildPlayer...");
 
-            BuildReport  report  = BuildPipeline.BuildPlayer(buildPlayerOptions);
+            report = BuildPipeline.BuildPlayer(buildPlayerOptions);
             BuildSummary summary = report.summary;
 
             PrintBuildSummary(summary);
@@ -78,7 +83,7 @@ public static class BuildEntry
                     configuration.OutputPath);
             }
 
-            TryWriteBuildMetadata(report, configuration);
+            TryWriteBuildMetadata(report, configuration, string.Empty);
 
             Log("========================================");
             Log("ANDROID BUILD SUCCEEDED");
@@ -95,6 +100,12 @@ public static class BuildEntry
             Error("ANDROID BUILD FAILED");
             Error(exception.Message);
             Error("========================================");
+
+            // Phải ghi trước EditorApplication.Exit: lệnh này kết thúc
+            // tiến trình ngay, nên finally không chắc chạy. Không có file
+            // này thì Jenkins không biết lý do build hỏng.
+            TryWriteBuildMetadata(report, configuration, exception.Message);
+
             if (Application.isBatchMode)
             {
                 EditorApplication.Exit(1);
@@ -562,15 +573,36 @@ public static class BuildEntry
         Log("========================================");
     }
 
+    /// <summary>
+    /// Ghi build-metadata.json cho cả build thành công lẫn thất bại.
+    /// <paramref name="report"/> và <paramref name="configuration"/> có thể
+    /// null khi lỗi xảy ra trước lúc Unity kịp build.
+    /// </summary>
     private static void TryWriteBuildMetadata(
         BuildReport report,
-        BuildConfiguration configuration)
+        BuildConfiguration configuration,
+        string errorMessage)
     {
         try
         {
-            BuildSummary summary = report.summary;
-            FileInfo outputFile = new FileInfo(configuration.OutputPath);
-            string outputDirectory = outputFile.DirectoryName;
+            BuildSummary? summary = null;
+
+            if (report != null)
+            {
+                summary = report.summary;
+            }
+
+            FileInfo outputFile = null;
+
+            if (configuration != null &&
+                !string.IsNullOrWhiteSpace(configuration.OutputPath))
+            {
+                outputFile = new FileInfo(configuration.OutputPath);
+            }
+
+            string outputDirectory = outputFile != null
+                ? outputFile.DirectoryName
+                : Path.Combine(GetProjectPath(), "Builds", "Android");
 
             if (string.IsNullOrWhiteSpace(outputDirectory))
             {
@@ -578,12 +610,22 @@ public static class BuildEntry
                 return;
             }
 
-            string mappingPath = TryCopyMappingFile(report, outputDirectory);
+            Directory.CreateDirectory(outputDirectory);
+
+            bool outputExists =
+                outputFile != null && outputFile.Exists;
+
+            string mappingPath = report != null
+                ? TryCopyMappingFile(report, outputDirectory)
+                : string.Empty;
 
             BuildMetadata metadata = new BuildMetadata
             {
-                schemaVersion = 1,
-                result = summary.result.ToString(),
+                schemaVersion = 2,
+                result = summary.HasValue
+                    ? summary.Value.result.ToString()
+                    : BuildResult.Failed.ToString(),
+                errorMessage = errorMessage ?? string.Empty,
                 productName = PlayerSettings.productName,
                 bundleIdentifier = GetAndroidApplicationIdentifier(),
                 versionName = PlayerSettings.bundleVersion,
@@ -602,13 +644,24 @@ public static class BuildEntry
                 scriptingDefineSymbols =
                     SplitScriptingDefineSymbols(
                         GetAndroidScriptingDefineSymbols()),
-                buildConfiguration = configuration.ConfigurationName,
-                buildAppBundle = configuration.BuildAppBundle,
-                outputFileName = outputFile.Name,
-                outputSizeBytes = outputFile.Length,
-                buildDurationSeconds = summary.totalTime.TotalSeconds,
-                warningCount = (int)summary.totalWarnings,
-                errorCount = (int)summary.totalErrors,
+                buildConfiguration = configuration != null
+                    ? configuration.ConfigurationName
+                    : string.Empty,
+                buildAppBundle =
+                    configuration != null && configuration.BuildAppBundle,
+                outputFileName = outputFile != null
+                    ? outputFile.Name
+                    : string.Empty,
+                outputSizeBytes = outputExists ? outputFile.Length : 0,
+                buildDurationSeconds = summary.HasValue
+                    ? summary.Value.totalTime.TotalSeconds
+                    : 0d,
+                warningCount = summary.HasValue
+                    ? (int)summary.Value.totalWarnings
+                    : 0,
+                errorCount = summary.HasValue
+                    ? (int)summary.Value.totalErrors
+                    : 0,
                 mappingFileName = string.IsNullOrWhiteSpace(mappingPath)
                     ? string.Empty
                     : Path.GetFileName(mappingPath),
@@ -878,6 +931,7 @@ public static class BuildEntry
     {
         public int      schemaVersion;
         public string   result;
+        public string   errorMessage;
         public string   productName;
         public string   bundleIdentifier;
         public string   versionName;

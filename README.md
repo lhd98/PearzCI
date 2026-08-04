@@ -188,10 +188,21 @@ notification, and build-output cleanup.
 
 ### Build metadata and Telegram notification
 
-After a successful Android build, Unity writes
-`Builds/Android/build-metadata.json`. Jenkins reads this file without trying
-to modify the parent process environment. Missing or invalid optional metadata
-is reported as a warning and omitted from the notification.
+Unity writes `Builds/Android/build-metadata.json` after every Android build,
+successful or not; a failed build records the Unity error message in
+`errorMessage`. Jenkins reads this file without trying to modify the parent
+process environment. Missing or invalid optional metadata is reported as a
+warning and omitted from the notification.
+
+The notification is sent from the pipeline's `post` block, so a failed,
+aborted, or unstable build is reported as well. `{{RESULT}}` is the Jenkins
+result rather than Unity's, because a build can produce a valid APK and still
+fail while uploading to Google Drive. `{{ERROR_SECTION}}` shows the Unity
+error message when one exists.
+
+A build is never failed because of the notification itself. If sending fails,
+the error is printed to the Jenkins console and an otherwise successful build
+is marked `UNSTABLE`.
 
 Telegram only displays values that really exist. Depending on the build, the
 message can contain:
@@ -243,7 +254,8 @@ Available placeholders are:
 {{BUILD_TIME}} {{UPLOAD_TIME}} {{TOTAL_TIME}}
 {{DRIVE_FOLDER_URL}} {{DRIVE_ROOT_URL}}
 {{APK}} {{AAB}} {{MAPPING}}
-{{DEFINE_SYMBOLS_SECTION}} {{CHANGES_SECTION}} {{JENKINS_LOGS_SECTION}}
+{{ERROR_SECTION}} {{DEFINE_SYMBOLS_SECTION}} {{CHANGES_SECTION}}
+{{JENKINS_LOGS_SECTION}}
 ```
 
 A line containing a placeholder with no value is removed automatically.
@@ -315,9 +327,9 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.4.10` remain available for rollback or projects that
+Immutable tags such as `v0.5.0` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.4.10` when automatic updates through the `upm` branch are not
+such as `v0.5.0` when automatic updates through the `upm` branch are not
 desired.
 
 ### Releasing a new version
@@ -328,8 +340,8 @@ The version appears in `package.json` and in
 editing them by hand:
 
 ```powershell
-pwsh ./tools/bump-version.ps1 -Version 0.4.10
+pwsh ./tools/bump-version.ps1 -Version 0.5.0
 ```
 
 Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
-(`git tag -a v0.4.10 -m "Release v0.4.10"`), and advance the `upm` branch.
+(`git tag -a v0.5.0 -m "Release v0.5.0"`), and advance the `upm` branch.

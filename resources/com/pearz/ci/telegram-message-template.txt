@@ -5,6 +5,7 @@ Build URL: {{BUILD_URL}}
 Result: {{RESULT}}
 PearzCI: {{PEARZ_CI_VERSION}}
 --------------------
+{{ERROR_SECTION}}
 Version: {{VERSION}}
 Product Name: {{PRODUCT_NAME}}
 Bundle ID: {{BUNDLE_ID}}

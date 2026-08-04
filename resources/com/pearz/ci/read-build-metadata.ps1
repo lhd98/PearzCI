@@ -30,6 +30,7 @@ $metadata = Get-Content `
     ConvertFrom-Json
 
 Write-MetadataValue "RESULT" $metadata.result
+Write-MetadataValue "ERROR_MESSAGE" $metadata.errorMessage
 Write-MetadataValue "PRODUCT_NAME" $metadata.productName
 Write-MetadataValue "BUNDLE_IDENTIFIER" $metadata.bundleIdentifier
 Write-MetadataValue "VERSION_NAME" $metadata.versionName

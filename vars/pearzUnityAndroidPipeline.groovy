@@ -372,104 +372,7 @@ def call(Map config = [:]) {
             stage('Read Build Metadata') {
                 steps {
                     script {
-                        def metadata = [:]
-                        def symbols = []
-
-                        if (fileExists(env.METADATA_PATH)) {
-                            try {
-                                def metadataOutput
-
-                                if (isUnix()) {
-                                    writeFile(
-                                        file: 'read-build-metadata.sh',
-                                        encoding: 'UTF-8',
-                                        text: libraryResource(
-                                            'com/pearz/ci/read-build-metadata.sh'
-                                        )
-                                    )
-                                    metadataOutput = sh(
-                                        script:
-                                            'sh ./read-build-metadata.sh ' +
-                                            '"$METADATA_PATH"',
-                                        returnStdout: true
-                                    )
-                                } else {
-                                    writeFile(
-                                        file: 'read-build-metadata.ps1',
-                                        encoding: 'UTF-8',
-                                        text: libraryResource(
-                                            'com/pearz/ci/read-build-metadata.ps1'
-                                        )
-                                    )
-                                    metadataOutput = bat(
-                                        script: '''@powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                                            -ExecutionPolicy Bypass ^
-                                            -File "%WORKSPACE%\\read-build-metadata.ps1" ^
-                                            -MetadataPath "%METADATA_PATH%"
-                                        ''',
-                                        returnStdout: true
-                                    )
-                                }
-
-                                metadataOutput.readLines().each { line ->
-                                    def separatorIndex = line.indexOf('=')
-
-                                    if (separatorIndex > 0) {
-                                        def key = line.substring(
-                                            0,
-                                            separatorIndex
-                                        )
-                                        def value = line.substring(
-                                            separatorIndex + 1
-                                        )
-
-                                        if (key == 'DEFINE_SYMBOL') {
-                                            symbols << value
-                                        } else {
-                                            metadata[key] = value
-                                        }
-                                    }
-                                }
-                            } catch (Exception exception) {
-                                echo(
-                                    'Optional build metadata could not be read: ' +
-                                    exception.message
-                                )
-                            }
-                        } else {
-                            echo(
-                                'Optional build metadata not found; ' +
-                                'notification will use Jenkins values.'
-                            )
-                        }
-
-                        env.META_RESULT =
-                            metadata.RESULT?.toString() ?: ''
-                        env.META_PRODUCT_NAME =
-                            metadata.PRODUCT_NAME?.toString() ?: ''
-                        env.META_BUNDLE_IDENTIFIER =
-                            metadata.BUNDLE_IDENTIFIER?.toString() ?: ''
-                        env.META_VERSION_NAME =
-                            metadata.VERSION_NAME?.toString() ?: ''
-                        env.META_VERSION_CODE =
-                            metadata.VERSION_CODE?.toString() ?: ''
-                        env.META_UNITY_VERSION =
-                            metadata.UNITY_VERSION?.toString() ?: ''
-                        env.META_SCRIPTING_BACKEND =
-                            metadata.SCRIPTING_BACKEND?.toString() ?: ''
-                        env.META_STRIPPING_LEVEL =
-                            metadata.STRIPPING_LEVEL?.toString() ?: ''
-                        env.META_ORIENTATION =
-                            metadata.ORIENTATION?.toString() ?: ''
-                        env.META_OUTPUT_SIZE_BYTES =
-                            metadata.OUTPUT_SIZE_BYTES?.toString() ?: ''
-                        env.META_MAPPING_SIZE_BYTES =
-                            metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
-                        env.META_DEFINE_SYMBOLS =
-                            symbols
-                                .collect { it?.toString()?.trim() }
-                                .findAll { it }
-                                .join('\n')
+                        readBuildMetadata()
                     }
                 }
             }
@@ -714,92 +617,6 @@ def call(Map config = [:]) {
                     )
                 }
             }
-
-            stage('Send Telegram') {
-                when {
-                    expression {
-                        return telegramCredentialsId ||
-                            "${params.TELEGRAM_CHANNEL ?: ''}".trim()
-                    }
-                }
-
-                steps {
-                    script {
-                        env.TOTAL_TIME_MILLIS = (
-                            System.currentTimeMillis() -
-                            (env.PIPELINE_START_MILLIS ?: '0').toLong()
-                        ).toString()
-
-                        env.JENKINS_BUILD_LOG_URL =
-                            fileExists(env.BUILD_LOG_PATH)
-                                ? "${env.BUILD_URL}artifact/" +
-                                    'Builds/Android/unity-build.log'
-                                : ''
-                        env.JENKINS_UPLOAD_LOG_URL =
-                            fileExists(env.UPLOAD_LOG_PATH)
-                                ? "${env.BUILD_URL}artifact/" +
-                                    'Builds/Android/upload.log'
-                                : ''
-
-                        writeFile(
-                            file: 'telegram-message.txt',
-                            encoding: 'UTF-8',
-                            text: buildTelegramMessage()
-                        )
-
-                        def sendTelegram = {
-                            if (isUnix()) {
-                                writeFile(
-                                    file: 'send-telegram.sh',
-                                    encoding: 'UTF-8',
-                                    text: libraryResource(
-                                        'com/pearz/ci/send-telegram.sh'
-                                    )
-                                )
-                                withEnv([
-                                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
-                                ]) {
-                                    sh 'sh ./send-telegram.sh'
-                                }
-                            } else {
-                                writeFile(
-                                    file: 'send-telegram.ps1',
-                                    encoding: 'UTF-8',
-                                    text: libraryResource(
-                                        'com/pearz/ci/send-telegram.ps1'
-                                    )
-                                )
-                                withEnv([
-                                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
-                                ]) {
-                                    bat '''
-                                        powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                                            -ExecutionPolicy Bypass ^
-                                            -File "%WORKSPACE%\\send-telegram.ps1"
-                                    '''
-                                }
-                            }
-                        }
-
-                        if (telegramCredentialsId) {
-                            withCredentials([
-                                string(
-                                    credentialsId: telegramCredentialsId,
-                                    variable: 'TELEGRAM_CHANNEL'
-                                )
-                            ]) {
-                                sendTelegram()
-                            }
-                        } else {
-                            withEnv([
-                                "TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"
-                            ]) {
-                                sendTelegram()
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         post {
@@ -822,6 +639,7 @@ def call(Map config = [:]) {
                 // Bắt log chẩn đoán cho build thất bại, khi các stage
                 // archive phía trên không kịp chạy. Không archive lại
                 // artifact chính vì stage 'Archive Artifact' đã làm.
+                // Phải chạy trước khi gửi Telegram để link log có hiệu lực.
                 archiveArtifacts(
                     artifacts:
                         'Builds/Android/build-metadata.json,' +
@@ -829,6 +647,13 @@ def call(Map config = [:]) {
                         'Builds/Android/upload.log',
                     allowEmptyArchive: true
                 )
+
+                // Gửi ở post chứ không phải ở stage: một stage nằm cuối
+                // pipeline sẽ bị bỏ qua khi build hỏng, đúng lúc cần báo
+                // nhất. Đặt trước bước dọn dẹp vì còn cần đọc metadata.
+                script {
+                    sendTelegramNotification(telegramCredentialsId)
+                }
 
                 script {
                     if (isUnix()) {
@@ -913,7 +738,9 @@ def createRcloneLink(String remotePath) {
 }
 
 def buildTelegramMessage() {
-    def result = normalizeBuildResult(env.META_RESULT)
+    // Kết quả của Jenkins mới là kết quả thật: Unity có thể build xong
+    // nhưng upload lên Drive vẫn hỏng sau đó.
+    def result = currentBuild.currentResult ?: 'SUCCESS'
     def versionParts = []
 
     if (env.META_VERSION_NAME?.trim()) {
@@ -1006,6 +833,9 @@ def buildTelegramMessage() {
         AAB: aabDescription,
         MAPPING: mappingDescription,
         DEFINE_SYMBOLS_SECTION: symbolsSection,
+        ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
+            ? "Error:\n${env.META_ERROR_MESSAGE.trim()}"
+            : '',
         CHANGES_SECTION: changeDescription
             ? "Changes:\n${changeDescription}"
             : '',
@@ -1028,6 +858,203 @@ def truncateTelegramMessage(String message) {
 
     def notice = '\n... (message truncated)'
     return message.substring(0, maximumLength - notice.length()) + notice
+}
+
+// Gọi được từ cả stage lẫn khối post. Lần gọi thứ hai không làm gì, nên
+// build thành công không phải đọc lại metadata.
+def readBuildMetadata() {
+    if (env.METADATA_READ == 'true') {
+        return
+    }
+
+    env.METADATA_READ = 'true'
+
+    def metadata = [:]
+    def symbols = []
+    def metadataPath = env.METADATA_PATH?.trim()
+
+    if (metadataPath && fileExists(metadataPath)) {
+        try {
+            def metadataOutput
+
+            if (isUnix()) {
+                writeFile(
+                    file: 'read-build-metadata.sh',
+                    encoding: 'UTF-8',
+                    text: libraryResource(
+                        'com/pearz/ci/read-build-metadata.sh'
+                    )
+                )
+                metadataOutput = sh(
+                    script:
+                        'sh ./read-build-metadata.sh ' +
+                        '"$METADATA_PATH"',
+                    returnStdout: true
+                )
+            } else {
+                writeFile(
+                    file: 'read-build-metadata.ps1',
+                    encoding: 'UTF-8',
+                    text: libraryResource(
+                        'com/pearz/ci/read-build-metadata.ps1'
+                    )
+                )
+                metadataOutput = bat(
+                    script: '''@powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                        -ExecutionPolicy Bypass ^
+                        -File "%WORKSPACE%\\read-build-metadata.ps1" ^
+                        -MetadataPath "%METADATA_PATH%"
+                    ''',
+                    returnStdout: true
+                )
+            }
+
+            metadataOutput.readLines().each { line ->
+                def separatorIndex = line.indexOf('=')
+
+                if (separatorIndex > 0) {
+                    def key = line.substring(0, separatorIndex)
+                    def value = line.substring(separatorIndex + 1)
+
+                    if (key == 'DEFINE_SYMBOL') {
+                        symbols << value
+                    } else {
+                        metadata[key] = value
+                    }
+                }
+            }
+        } catch (Exception exception) {
+            echo(
+                'Optional build metadata could not be read: ' +
+                exception.message
+            )
+        }
+    } else {
+        echo(
+            'Optional build metadata not found; ' +
+            'notification will use Jenkins values.'
+        )
+    }
+
+    env.META_RESULT = metadata.RESULT?.toString() ?: ''
+    env.META_ERROR_MESSAGE = metadata.ERROR_MESSAGE?.toString() ?: ''
+    env.META_PRODUCT_NAME = metadata.PRODUCT_NAME?.toString() ?: ''
+    env.META_BUNDLE_IDENTIFIER =
+        metadata.BUNDLE_IDENTIFIER?.toString() ?: ''
+    env.META_VERSION_NAME = metadata.VERSION_NAME?.toString() ?: ''
+    env.META_VERSION_CODE = metadata.VERSION_CODE?.toString() ?: ''
+    env.META_UNITY_VERSION = metadata.UNITY_VERSION?.toString() ?: ''
+    env.META_SCRIPTING_BACKEND =
+        metadata.SCRIPTING_BACKEND?.toString() ?: ''
+    env.META_STRIPPING_LEVEL =
+        metadata.STRIPPING_LEVEL?.toString() ?: ''
+    env.META_ORIENTATION = metadata.ORIENTATION?.toString() ?: ''
+    env.META_OUTPUT_SIZE_BYTES =
+        metadata.OUTPUT_SIZE_BYTES?.toString() ?: ''
+    env.META_MAPPING_SIZE_BYTES =
+        metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
+    env.META_DEFINE_SYMBOLS = symbols
+        .collect { it?.toString()?.trim() }
+        .findAll { it }
+        .join('\n')
+}
+
+def sendTelegramNotification(String telegramCredentialsId) {
+    boolean telegramConfigured = telegramCredentialsId ||
+        "${params.TELEGRAM_CHANNEL ?: ''}".trim()
+
+    if (!telegramConfigured) {
+        echo 'No Telegram target configured; notification skipped.'
+        return
+    }
+
+    try {
+        // Build hỏng thì stage 'Read Build Metadata' chưa từng chạy.
+        readBuildMetadata()
+
+        if (env.PIPELINE_START_MILLIS?.trim()) {
+            env.TOTAL_TIME_MILLIS = (
+                System.currentTimeMillis() -
+                env.PIPELINE_START_MILLIS.toLong()
+            ).toString()
+        }
+
+        env.JENKINS_BUILD_LOG_URL =
+            env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
+                ? "${env.BUILD_URL}artifact/" +
+                    'Builds/Android/unity-build.log'
+                : ''
+        env.JENKINS_UPLOAD_LOG_URL =
+            env.UPLOAD_LOG_PATH?.trim() && fileExists(env.UPLOAD_LOG_PATH)
+                ? "${env.BUILD_URL}artifact/" +
+                    'Builds/Android/upload.log'
+                : ''
+
+        writeFile(
+            file: 'telegram-message.txt',
+            encoding: 'UTF-8',
+            text: buildTelegramMessage()
+        )
+
+        def sendTelegram = {
+            if (isUnix()) {
+                writeFile(
+                    file: 'send-telegram.sh',
+                    encoding: 'UTF-8',
+                    text: libraryResource(
+                        'com/pearz/ci/send-telegram.sh'
+                    )
+                )
+                withEnv([
+                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                ]) {
+                    sh 'sh ./send-telegram.sh'
+                }
+            } else {
+                writeFile(
+                    file: 'send-telegram.ps1',
+                    encoding: 'UTF-8',
+                    text: libraryResource(
+                        'com/pearz/ci/send-telegram.ps1'
+                    )
+                )
+                withEnv([
+                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                ]) {
+                    bat '''
+                        powershell.exe -NoLogo -NoProfile -NonInteractive ^
+                            -ExecutionPolicy Bypass ^
+                            -File "%WORKSPACE%\\send-telegram.ps1"
+                    '''
+                }
+            }
+        }
+
+        if (telegramCredentialsId) {
+            withCredentials([
+                string(
+                    credentialsId: telegramCredentialsId,
+                    variable: 'TELEGRAM_CHANNEL'
+                )
+            ]) {
+                sendTelegram()
+            }
+        } else {
+            withEnv([
+                "TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"
+            ]) {
+                sendTelegram()
+            }
+        }
+    } catch (Exception exception) {
+        // Không để lỗi thông báo ghi đè kết quả build thật. Chỉ hạ xuống
+        // UNSTABLE khi build vốn đang thành công, để sự cố không bị chìm.
+        echo("Telegram notification failed: ${exception.message}")
+
+        if (currentBuild.currentResult == 'SUCCESS') {
+            currentBuild.result = 'UNSTABLE'
+        }
+    }
 }
 
 def readPearzCiVersion() {
@@ -1208,21 +1235,6 @@ def renderTelegramTemplate(Map values) {
     }
 
     return compactLines.join('\n')
-}
-
-def normalizeBuildResult(Object value) {
-    def result = value?.toString()?.trim()?.toUpperCase()
-
-    switch (result) {
-        case 'SUCCEEDED':
-            return 'SUCCESS'
-        case 'FAILED':
-            return 'FAILURE'
-        case 'CANCELLED':
-            return 'ABORTED'
-        default:
-            return result ?: 'SUCCESS'
-    }
 }
 
 def formatDurationMillis(Object value) {

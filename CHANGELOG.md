@@ -4,6 +4,34 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-04
+
+### Added
+
+- Failed, aborted, and unstable builds now send a Telegram notification. The
+  message is built in the pipeline's `post` block instead of a final stage,
+  which was skipped precisely when a build broke.
+- Unity writes `build-metadata.json` for failed builds as well, recording the
+  error message in a new `errorMessage` field.
+- `{{ERROR_SECTION}}` template placeholder showing the Unity error message.
+
+### Changed
+
+- `{{RESULT}}` now reports the Jenkins build result instead of Unity's. A
+  build could previously produce a valid APK, fail while uploading to Google
+  Drive, and still be reported as a success.
+- Build metadata is read on demand, so a build that fails before the
+  `Read Build Metadata` stage still reports Unity's own values.
+- `build-metadata.json` uses `schemaVersion` 2.
+
+### Fixed
+
+- A build failing before the `Prepare Build Variables` stage no longer reports
+  a nonsensical total duration derived from an unset start time.
+- A Telegram delivery failure no longer fails the build. The error is printed
+  to the Jenkins console and an otherwise successful build is marked
+  `UNSTABLE`.
+
 ## [0.4.10] - 2026-08-04
 
 ### Added

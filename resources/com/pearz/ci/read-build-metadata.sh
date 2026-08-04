@@ -21,6 +21,7 @@ with open(sys.argv[1], "r", encoding="utf-8-sig") as metadata_file:
     metadata = json.load(metadata_file)
 
 emit("RESULT", metadata.get("result"))
+emit("ERROR_MESSAGE", metadata.get("errorMessage"))
 emit("PRODUCT_NAME", metadata.get("productName"))
 emit("BUNDLE_IDENTIFIER", metadata.get("bundleIdentifier"))
 emit("VERSION_NAME", metadata.get("versionName"))
