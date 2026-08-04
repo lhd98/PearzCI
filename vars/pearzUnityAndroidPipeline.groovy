@@ -41,8 +41,15 @@ def call(Map config = [:]) {
         'macUnityHubRoot',
         configuredUnityHubRoot ?: '/Applications/Unity/Hub/Editor'
     )
+    // Bộ lọc webhook bám giá trị MẶC ĐỊNH của job, không bám giá trị của
+    // lần chạy này. Dùng params.GIT_BRANCH ở đây sẽ khiến một lần
+    // "Build with Parameters" nhập branch khác âm thầm đổi luôn branch mà
+    // webhook lắng nghe, và job bắt đầu phản ứng với sai branch cho tới
+    // lần build webhook kế tiếp. Việc checkout vẫn dùng giá trị lần chạy,
+    // nên build tay một branch khác vẫn hoạt động như cũ.
     def webhookBranch = normalizeGitBranch(
-        params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch
+        readConfiguredBranchDefault() ?:
+        (params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch)
     )
     def webhookRepository = extractGitHubRepository(repositoryUrl)
     def webhookFilterExpression = webhookRepository
@@ -116,6 +123,23 @@ def call(Map config = [:]) {
                         def branchSpec = params.GIT_BRANCH?.trim()
                             ? params.GIT_BRANCH.trim()
                             : defaultGitBranch
+
+                        // Chỉ cảnh báo, không chặn: build tay không có ref
+                        // webhook, và một lần lệch không đáng để huỷ build.
+                        // Nếu dòng này xuất hiện ở một build do webhook kích
+                        // hoạt thì bộ lọc trigger đang trỏ sai branch.
+                        def webhookRef = env.PEARZ_WEBHOOK_REF?.trim()
+
+                        if (
+                            webhookRef &&
+                            normalizeGitBranch(webhookRef) !=
+                                normalizeGitBranch(branchSpec)
+                        ) {
+                            echo(
+                                "WARNING: webhook reported ${webhookRef} " +
+                                "but this build checks out ${branchSpec}."
+                            )
+                        }
 
                         checkout([
                             $class: 'GitSCM',
@@ -1055,6 +1079,35 @@ def sendTelegramNotification(String telegramCredentialsId) {
             currentBuild.result = 'UNSTABLE'
         }
     }
+}
+
+// Đọc giá trị mặc định của GIT_BRANCH khai báo trong Configure, tách biệt
+// với giá trị có thể bị override khi bấm Build with Parameters. Trả về ''
+// nếu không đọc được, để phía gọi tự lùi về hành vi cũ.
+def readConfiguredBranchDefault() {
+    try {
+        def definitionProperty = currentBuild.rawBuild.parent.getProperty(
+            hudson.model.ParametersDefinitionProperty.class
+        )
+        def definition =
+            definitionProperty?.getParameterDefinition('GIT_BRANCH')
+        def branch = definition
+            ?.getDefaultParameterValue()
+            ?.getValue()
+            ?.toString()
+            ?.trim()
+
+        if (branch) {
+            return branch
+        }
+    } catch (Exception exception) {
+        echo(
+            'Could not read the GIT_BRANCH job default; the webhook ' +
+            'filter falls back to this run\'s value: ' + exception.message
+        )
+    }
+
+    return ''
 }
 
 def readPearzCiVersion() {

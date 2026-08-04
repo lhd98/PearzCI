@@ -169,6 +169,14 @@ New jobs keep the `GenericTrigger(...)` declaration in the PearzCI pipeline, so
 their trigger is synchronized automatically on the first pipeline run. A
 manual build is not required for the bootstrap script.
 
+The webhook filter always follows the **default** value of `GIT_BRANCH` saved
+under **Configure**, never the value used by the current run. Building a
+different branch through **Build with Parameters** therefore builds that
+branch without changing which branch the webhook listens to. Changing the
+default in **Configure** takes effect on the next build of the job, because
+that is when the pipeline rewrites the trigger; a single manual build is
+enough to apply it, and the Script Console bootstrap is not needed.
+
 **Poll SCM** may still be kept as a separate fallback when Jenkins cannot be
 reached by GitHub; for example, `H/5 * * * *` checks approximately every five
 minutes.
@@ -330,9 +338,9 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.5.1` remain available for rollback or projects that
+Immutable tags such as `v0.5.2` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.5.1` when automatic updates through the `upm` branch are not
+such as `v0.5.2` when automatic updates through the `upm` branch are not
 desired.
 
 ### Releasing a new version
@@ -343,8 +351,8 @@ The version appears in `package.json` and in
 editing them by hand:
 
 ```powershell
-pwsh ./tools/bump-version.ps1 -Version 0.5.1
+pwsh ./tools/bump-version.ps1 -Version 0.5.2
 ```
 
 Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
-(`git tag -a v0.5.1 -m "Release v0.5.1"`), and advance the `upm` branch.
+(`git tag -a v0.5.2 -m "Release v0.5.2"`), and advance the `upm` branch.

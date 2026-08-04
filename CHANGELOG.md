@@ -4,6 +4,24 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-04
+
+### Fixed
+
+- The webhook branch filter is built from the **default** value of the
+  `GIT_BRANCH` job parameter instead of the value used by the current run.
+  Running **Build with Parameters** with a different branch silently
+  repointed the job's webhook filter at that branch, so the job stopped
+  reacting to its configured branch until the next webhook build changed it
+  back. Checkout still uses the current run's value, so building another
+  branch manually works exactly as before.
+
+### Added
+
+- A warning in the build log when the ref reported by the webhook does not
+  match the branch being checked out. This does not stop the build; it makes a
+  mispointed trigger filter visible.
+
 ## [0.5.1] - 2026-08-04
 
 ### Fixed
