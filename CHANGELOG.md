@@ -4,6 +4,17 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-04
+
+### Fixed
+
+- The Telegram commit list is measured from the previous **successful** build
+  instead of the previous build of any result. Jenkins records a build's
+  commit at checkout, so a build cancelled by `abortPrevious` or one that
+  failed already advanced `GIT_PREVIOUS_COMMIT`. The build that then ran to
+  completion reported "No new commits since the previous build" even though it
+  was the build that produced the artifact.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added

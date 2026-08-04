@@ -1077,9 +1077,14 @@ def readPearzCiVersion() {
 }
 
 def collectGitChanges() {
+    // Mốc là build THÀNH CÔNG gần nhất, không phải build gần nhất. Git
+    // plugin ghi lại commit ngay ở bước checkout, nên một build bị huỷ
+    // (disableConcurrentBuilds abortPrevious) hoặc build hỏng vẫn kịp
+    // đẩy GIT_PREVIOUS_COMMIT lên. Build chạy tới cùng sau đó sẽ tưởng
+    // không có gì mới và báo "No new commits", dù chính nó tạo artifact.
     def previousBuildCommit = (
-        env.GIT_PREVIOUS_COMMIT?.trim() ?:
-        env.GIT_PREVIOUS_SUCCESSFUL_COMMIT?.trim()
+        env.GIT_PREVIOUS_SUCCESSFUL_COMMIT?.trim() ?:
+        env.GIT_PREVIOUS_COMMIT?.trim()
     )
     def logOutput = ''
     def hasValidPreviousCommit = false
@@ -1165,7 +1170,7 @@ def collectGitChanges() {
         .findAll { it }
 
     if (hasValidPreviousCommit && !changes) {
-        return '- No new commits since the previous build.'
+        return '- No new commits since the previous successful build.'
     }
 
     int maximumChanges = 20

@@ -216,9 +216,12 @@ message can contain:
 - APK or AAB public link and size.
 - Google Drive build-folder and root links when rclone can create them.
 - `mapping.txt` public link and size when Unity reports a mapping file.
-- Every commit (short hash, author, and subject) since the previous Jenkins
-  build, up to the 20 most recent, followed by a count of the remaining
-  commits. The first build falls back to the current commit.
+- Every commit (short hash, author, and subject) since the previous
+  **successful** Jenkins build, up to the 20 most recent, followed by a count
+  of the remaining commits. The first build falls back to the current commit.
+  The baseline deliberately skips aborted and failed builds: Jenkins records a
+  build's commit at checkout, so a build that never finished would otherwise
+  consume the changelog and leave the next build reporting no changes.
 - Jenkins artifact links for `unity-build.log` and `upload.log` when present.
 
 Telegram rejects a message longer than 4096 characters, so the rendered
@@ -327,9 +330,9 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.5.0` remain available for rollback or projects that
+Immutable tags such as `v0.5.1` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.5.0` when automatic updates through the `upm` branch are not
+such as `v0.5.1` when automatic updates through the `upm` branch are not
 desired.
 
 ### Releasing a new version
@@ -340,8 +343,8 @@ The version appears in `package.json` and in
 editing them by hand:
 
 ```powershell
-pwsh ./tools/bump-version.ps1 -Version 0.5.0
+pwsh ./tools/bump-version.ps1 -Version 0.5.1
 ```
 
 Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
-(`git tag -a v0.5.0 -m "Release v0.5.0"`), and advance the `upm` branch.
+(`git tag -a v0.5.1 -m "Release v0.5.1"`), and advance the `upm` branch.
