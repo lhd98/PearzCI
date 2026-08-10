@@ -341,9 +341,20 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
+                        def configuredAppVersion = params.APP_VERSION?.trim()
+                        def ciAppVersion = configuredAppVersion
+                            ? "${configuredAppVersion} (CI ${env.BUILD_NUMBER})"
+                            : "CI ${env.BUILD_NUMBER}"
 
                         try {
-                            withEnv(["OUTPUT_PATH=${env.OUTPUT_PATH}"]) {
+                            // BUILD_NUMBER do Jenkins duy trì riêng cho từng Job.
+                            // Luôn truyền vào APK để tester nhận biết bản đang cài,
+                            // đồng thời đảm bảo Android version code tăng khi cài đè.
+                            withEnv([
+                                "OUTPUT_PATH=${env.OUTPUT_PATH}",
+                                "APP_VERSION=${ciAppVersion}",
+                                "ANDROID_VERSION_CODE=${env.BUILD_NUMBER}"
+                            ]) {
                                 if (isUnix()) {
                                     sh '''
                                         set +e

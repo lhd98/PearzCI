@@ -3,6 +3,14 @@
 All notable changes to this package are documented in this file.
 
 ## [Unreleased]
+## [0.6.1] - 2026-08-11
+
+### Added
+
+- Android builds now embed the Jenkins `BUILD_NUMBER` automatically: it is the
+  Android version code and is included in the Unity-visible app version (for
+  example `1.0.0 (CI 67)`).
+
 ## [0.6.0] - 2026-08-10
 
 ### Added

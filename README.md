@@ -134,9 +134,14 @@ Common optional parameters:
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
   `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
-- String `APP_VERSION`, `ANDROID_VERSION_CODE`, `KEYSTORE_PATH`, and
-  `KEY_ALIAS_NAME`
+- String `APP_VERSION`, `KEYSTORE_PATH`, and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
+
+`ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
+`BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
+also gets a visible version for use through Unity `Application.version`:
+`CI <BUILD_NUMBER>`, or `<APP_VERSION> (CI <BUILD_NUMBER>)` when the optional
+`APP_VERSION` parameter is set.
 
 ### Configure the shared GitHub webhook
 
