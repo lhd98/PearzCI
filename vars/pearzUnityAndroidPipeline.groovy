@@ -1152,11 +1152,11 @@ def collectGitChanges(int maximumChanges) {
     // đẩy GIT_PREVIOUS_COMMIT lên. Build chạy tới cùng sau đó sẽ tưởng
     // không có gì mới và báo "No new commits", dù chính nó tạo artifact.
     // GIT_PREVIOUS_SUCCESSFUL_COMMIT không phải lúc nào cũng được expose khi
-    // dùng checkout(...) thủ công. Đọc thêm BuildData của build thành công
+    // dùng checkout(...) thủ công. Đọc thêm metadata của build thành công
     // trước đó để không rơi về git log -1 chỉ vì thiếu biến môi trường.
     def previousBuildCandidates = [
         [
-            source: 'previous successful Jenkins BuildData',
+            source: 'previous successful Jenkins build variables',
             commit: readPreviousSuccessfulBuildCommit()
         ],
         [
@@ -1188,7 +1188,9 @@ def collectGitChanges(int maximumChanges) {
                 ' (source: ' + previousBuildSource + ').'
             : 'Telegram commit baseline unavailable; using HEAD only.'
     )
-    if (isUnix()) {
+    def changes = collectJenkinsChangeSets()
+    if (!changes) {
+        if (isUnix()) {
         withEnv([
             "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
             "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
@@ -1222,20 +1224,28 @@ def collectGitChanges(int maximumChanges) {
                 returnStdout: true
             ).trim()
         }
+        }
     }
 
-    def changes = logOutput
-        .readLines()
-        .collect { line ->
-            def fields = line.split('\t', 3)
-            if (fields.size() == 3) {
-                "- ${fields[0]} - ${fields[1]}: ${fields[2]}"
-            } else {
-                ''
+    if (!changes) {
+        changes = logOutput
+            .readLines()
+            .collect { line ->
+                def fields = line.split('\t', 3)
+                if (fields.size() == 3) {
+                    '- ' + fields[0] + ' - ' + fields[1] + ': ' + fields[2]
+                } else {
+                    ''
+                }
             }
-        }
-        .findAll { it }
+            .findAll { it }
+    }
 
+    if (changes) {
+        previousBuildSource = previousBuildCommit
+            ? previousBuildSource
+            : 'Jenkins checkout changelog'
+    }
     int totalChanges = changes.size()
     int hiddenCount = Math.max(0, totalChanges - maximumChanges)
 
@@ -1260,6 +1270,36 @@ def collectGitChanges(int maximumChanges) {
     }
 
     return changes.join('\n')
+}
+
+def collectJenkinsChangeSets() {
+    def changes = []
+
+    try {
+        currentBuild.changeSets?.each { changeSet ->
+            changeSet.items?.each { entry ->
+                def commit = entry.commitId?.toString()?.trim()
+                def author = entry.author?.fullName?.toString()?.trim()
+                def message = entry.msg
+                    ?.toString()
+                    ?.readLines()
+                    ?.find { it?.trim() }
+                    ?.trim()
+
+                if (commit && message) {
+                    changes << '- ' + commit.take(7) + ' - ' +
+                        (author ?: 'unknown') + ': ' + message
+                }
+            }
+        }
+    } catch (Exception exception) {
+        echo(
+            'Could not read the Jenkins checkout changelog: ' +
+            exception.message
+        )
+    }
+
+    return changes
 }
 
 def readPreviousSuccessfulBuildCommit() {

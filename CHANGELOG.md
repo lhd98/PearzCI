@@ -4,6 +4,12 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-10
+
+### Fixed
+
+- Telegram commit collection now uses the current Jenkins checkout changelog when no previous-build baseline is available, including the first build after an upgrade.
+
 ## [0.5.4] - 2026-08-10
 
 ### Fixed
