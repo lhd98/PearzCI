@@ -364,3 +364,74 @@ pwsh ./tools/bump-version.ps1 -Version 0.5.5
 
 Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
 (`git tag -a v0.5.5 -m "Release v0.5.5"`), and advance the `upm` branch.
+
+## iOS Jenkins pipeline
+
+iOS needs a **macOS** Jenkins agent. The iOS job is separate from Android and
+must run only on a node with the `macos` label (or another label configured in
+the call). Install the same Unity editor version with **iOS Build Support**,
+Xcode Command Line Tools, Git, rclone, and a valid Unity license under the
+Jenkins agent user.
+
+Create a second Pipeline job for the same Unity project. Its Pipeline script
+is:
+
+```groovy
+pearzUnityIosPipeline()
+```
+
+The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
+`GIT_CREDENTIALS_ID`, `GIT_BRANCH`, `UNITY_VERSION`, `PRODUCT_NAME`, and
+`BUILD_CONFIGURATION`. Add these iOS parameters under **This project is
+parameterized**:
+
+- String `IOS_BUILD_NUMBER` (for example `42`)
+- String `IOS_DEVELOPMENT_TEAM` (Apple Developer Team ID)
+- String `IOS_PROVISIONING_PROFILE_SPECIFIER` (profile name; leave empty when
+  the Xcode project is configured for automatic signing)
+- String `IOS_EXPORT_OPTIONS_PLIST_PATH` (absolute, readable path on the Mac)
+- Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+
+The remaining shared optional values are also supported: `BUNDLE_IDENTIFIER`,
+`SCRIPTING_DEFINE_SYMBOLS`, `APP_VERSION`, `IL2CPP_CODE_GENERATION`,
+`MANAGED_STRIPPING_LEVEL`, `STRIP_ENGINE_CODE`, `UNITY_DEVELOPMENT_BUILD`, and
+`SCRIPT_DEBUGGING`.
+
+The pipeline first exports `Unity-iPhone.xcodeproj`, then invokes
+`xcodebuild archive` and `xcodebuild -exportArchive`. The final signed IPA,
+Unity log, and Xcode log are archived in Jenkins and uploaded to the configured
+Google Drive remote just like Android artifacts.
+
+### Signing setup on the Mac agent
+
+Run these commands as the **same macOS account that starts the Jenkins agent**:
+
+```sh
+xcode-select -p
+xcodebuild -version
+security find-identity -v -p codesigning
+```
+
+Install the Apple distribution certificate (with its private key) and the
+matching provisioning profile in that account's Keychain/profile directory.
+Keep `ExportOptions.plist` outside the workspace in a directory readable only
+by the Jenkins user, for example `/Users/jenkins/ci/ExportOptions.plist`.
+Do not commit certificates, `.mobileprovision` files, private keys, or this
+plist to the Unity repository.
+
+For manual signing, the export plist's `provisioningProfiles` dictionary must
+map the configured bundle identifier to `IOS_PROVISIONING_PROFILE_SPECIFIER`.
+For automatic signing, leave that parameter empty and configure the required
+Apple account/team access for the Jenkins macOS user in Xcode. In both cases,
+run the job once manually before enabling its webhook to confirm that the IPA
+is signed by the expected team.
+
+To use another macOS node or nonstandard paths:
+
+```groovy
+pearzUnityIosPipeline(
+    macAgentLabel: 'mac-mini',
+    macUnityHubRoot: '/Applications/Unity/Hub/Editor',
+    macRcloneExe: 'rclone'
+)
+```

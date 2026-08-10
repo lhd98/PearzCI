@@ -3,6 +3,17 @@
 All notable changes to this package are documented in this file.
 
 ## [Unreleased]
+## [0.6.0] - 2026-08-10
+
+### Added
+
+- Added `BuildIOS`, a Unity batch-mode entry point that exports an iOS Xcode project.
+- Added `pearzUnityIosPipeline`, a macOS-only Jenkins pipeline that archives, signs, exports, archives, and uploads IPA artifacts.
+- Added iOS Jenkins, Xcode signing, and macOS agent setup documentation.
+
+### Changed
+
+- Added `ios` to the package keywords.
 
 ## [0.5.5] - 2026-08-10
 

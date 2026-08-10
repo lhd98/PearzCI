@@ -116,6 +116,76 @@ public static class BuildEntry
         }
     }
 
+    /// <summary>
+    /// Jenkins entry point for a macOS agent:
+    /// -executeMethod Pearz.CI.BuildEntry.BuildIOS
+    /// Exports an Xcode project; Jenkins signs and packages the IPA with Xcode.
+    /// </summary>
+    public static void BuildIOS()
+    {
+        IosBuildConfiguration configuration = null;
+
+        try
+        {
+            Log("Starting iOS Xcode project export");
+            string[] scenes = GetEnabledScenes();
+
+            if (scenes.Length == 0)
+                throw new InvalidOperationException(
+                    "Không có scene nào được bật trong Build Profiles / Build Settings.");
+
+            configuration = ReadIosConfiguration();
+            PrepareIosOutputDirectory(configuration.OutputPath);
+            ApplyIosSettings(configuration);
+
+            BuildOptions options = BuildOptions.None;
+            if (configuration.UnityDevelopmentBuild)
+                options |= BuildOptions.Development;
+            if (configuration.ScriptDebugging)
+            {
+                if (!configuration.UnityDevelopmentBuild)
+                    throw new InvalidOperationException(
+                        "SCRIPT_DEBUGGING=true yêu cầu UNITY_DEVELOPMENT_BUILD=true.");
+                options |= BuildOptions.AllowDebugging;
+            }
+
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = configuration.OutputPath,
+                target = BuildTarget.iOS,
+                targetGroup = BuildTargetGroup.iOS,
+                options = options
+            });
+
+            PrintBuildSummary(report.summary);
+
+            if (report.summary.result != BuildResult.Succeeded ||
+                !Directory.Exists(configuration.OutputPath))
+            {
+                throw new Exception(
+                    $"iOS Xcode export failed. Result: {report.summary.result}, " +
+                    $"Errors: {report.summary.totalErrors}");
+            }
+
+            Log("IOS XCODE EXPORT SUCCEEDED");
+            Log($"Output: {configuration.OutputPath}");
+            ExitBatchMode(0);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            Error("IOS XCODE EXPORT FAILED");
+            Error(exception.Message);
+            if (Application.isBatchMode)
+            {
+                EditorApplication.Exit(1);
+                return;
+            }
+            throw;
+        }
+    }
+
     private static BuildConfiguration ReadConfiguration()
     {
         string projectPath = GetProjectPath();
@@ -206,6 +276,66 @@ public static class BuildEntry
             KeyAliasName     = GetEnvironmentVariable("KEY_ALIAS_NAME"),
             KeyAliasPassword = GetEnvironmentVariable("KEY_ALIAS_PASSWORD")
         };
+    }
+
+    private static IosBuildConfiguration ReadIosConfiguration()
+    {
+        string outputPath = Path.GetFullPath(GetEnvironmentVariable(
+            "OUTPUT_PATH",
+            Path.Combine(GetProjectPath(), "Builds", "iOS", "Unity-iPhone")));
+
+        return new IosBuildConfiguration
+        {
+            OutputPath = outputPath,
+            UnityDevelopmentBuild = GetBooleanEnvironmentVariable(
+                "UNITY_DEVELOPMENT_BUILD", false),
+            ScriptDebugging = GetBooleanEnvironmentVariable(
+                "SCRIPT_DEBUGGING", false),
+            ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
+            BundleIdentifier = GetEnvironmentVariable("BUNDLE_IDENTIFIER"),
+            ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
+            AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+            BuildNumber = GetEnvironmentVariable(
+                "IOS_BUILD_NUMBER", PlayerSettings.iOS.buildNumber),
+            Il2CppCodeGeneration = GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
+            ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
+            StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
+        };
+    }
+
+    private static void PrepareIosOutputDirectory(string outputPath)
+    {
+        if (Directory.Exists(outputPath))
+            FileUtil.DeleteFileOrDirectory(outputPath);
+        Directory.CreateDirectory(outputPath);
+    }
+
+    private static void ApplyIosSettings(IosBuildConfiguration configuration)
+    {
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS &&
+            !EditorUserBuildSettings.SwitchActiveBuildTarget(
+                BuildTargetGroup.iOS, BuildTarget.iOS))
+        {
+            throw new Exception("Không thể chuyển active build target sang iOS.");
+        }
+        if (!string.IsNullOrWhiteSpace(configuration.ProductName))
+            PlayerSettings.productName = configuration.ProductName;
+        if (!string.IsNullOrWhiteSpace(configuration.BundleIdentifier))
+            SetIosApplicationIdentifier(configuration.BundleIdentifier);
+        if (!string.IsNullOrWhiteSpace(configuration.ScriptingDefineSymbols))
+            SetIosScriptingDefineSymbols(configuration.ScriptingDefineSymbols);
+        if (!string.IsNullOrWhiteSpace(configuration.AppVersion))
+            PlayerSettings.bundleVersion = configuration.AppVersion;
+        if (!string.IsNullOrWhiteSpace(configuration.BuildNumber))
+            PlayerSettings.iOS.buildNumber = configuration.BuildNumber;
+        if (!string.IsNullOrWhiteSpace(configuration.Il2CppCodeGeneration))
+            PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.iOS,
+                ParseIl2CppCodeGeneration(configuration.Il2CppCodeGeneration));
+        if (!string.IsNullOrWhiteSpace(configuration.ManagedStrippingLevel))
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.iOS,
+                ParseManagedStrippingLevel(configuration.ManagedStrippingLevel));
+        if (configuration.StripEngineCode.HasValue)
+            PlayerSettings.stripEngineCode = configuration.StripEngineCode.Value;
     }
 
     private static void ApplyAndroidSettings(BuildConfiguration configuration)
@@ -917,6 +1047,24 @@ public static class BuildEntry
 #endif
     }
 
+    private static void SetIosApplicationIdentifier(string value)
+    {
+#if UNITY_2021_2_OR_NEWER
+        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, value);
+#else
+        PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.iOS, value);
+#endif
+    }
+
+    private static void SetIosScriptingDefineSymbols(string value)
+    {
+#if UNITY_2021_2_OR_NEWER
+        PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.iOS, value);
+#else
+        PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.iOS, value);
+#endif
+    }
+
     private static void Log(string message) { Debug.Log($"{LogPrefix} {message}"); }
 
     private static void Warning(string message)
@@ -980,6 +1128,20 @@ public static class BuildEntry
         public string KeystorePassword { get; set; }
         public string KeyAliasName     { get; set; }
         public string KeyAliasPassword { get; set; }
+    }
+    private sealed class IosBuildConfiguration
+    {
+        public string OutputPath { get; set; }
+        public bool UnityDevelopmentBuild { get; set; }
+        public bool ScriptDebugging { get; set; }
+        public string ProductName { get; set; }
+        public string BundleIdentifier { get; set; }
+        public string ScriptingDefineSymbols { get; set; }
+        public string AppVersion { get; set; }
+        public string BuildNumber { get; set; }
+        public string Il2CppCodeGeneration { get; set; }
+        public string ManagedStrippingLevel { get; set; }
+        public bool? StripEngineCode { get; set; }
     }
 }
 }
