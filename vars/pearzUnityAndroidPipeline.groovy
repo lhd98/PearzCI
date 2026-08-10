@@ -33,6 +33,10 @@ def call(Map config = [:]) {
     def driveRoot = config.get('driveRoot', 'JenkinsBuild')
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
     def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
+    def telegramMaxCommits = config.get('telegramMaxCommits', 10).toString().toInteger()
+    if (telegramMaxCommits < 1) {
+        throw new IllegalArgumentException('telegramMaxCommits must be at least 1.')
+    }
     def windowsUnityHubRoot = config.get(
         'windowsUnityHubRoot',
         configuredUnityHubRoot ?: 'C:\\Program Files\\Unity\\Hub\\Editor'
@@ -260,7 +264,7 @@ def call(Map config = [:]) {
                             ).trim()
                         }
 
-                        env.GIT_CHANGES = collectGitChanges()
+                        env.GIT_CHANGES = collectGitChanges(telegramMaxCommits)
                     }
                 }
             }
@@ -1129,51 +1133,49 @@ def readPearzCiVersion() {
     return 'unknown'
 }
 
-def collectGitChanges() {
+def collectGitChanges(int maximumChanges) {
     // Mốc là build THÀNH CÔNG gần nhất, không phải build gần nhất. Git
     // plugin ghi lại commit ngay ở bước checkout, nên một build bị huỷ
     // (disableConcurrentBuilds abortPrevious) hoặc build hỏng vẫn kịp
     // đẩy GIT_PREVIOUS_COMMIT lên. Build chạy tới cùng sau đó sẽ tưởng
     // không có gì mới và báo "No new commits", dù chính nó tạo artifact.
-    def previousBuildCommit = (
-        env.GIT_PREVIOUS_SUCCESSFUL_COMMIT?.trim() ?:
-        env.GIT_PREVIOUS_COMMIT?.trim()
-    )
-    def logOutput = ''
-    def hasValidPreviousCommit = false
+    // GIT_PREVIOUS_SUCCESSFUL_COMMIT không phải lúc nào cũng được expose khi
+    // dùng checkout(...) thủ công. Đọc thêm BuildData của build thành công
+    // trước đó để không rơi về git log -1 chỉ vì thiếu biến môi trường.
+    def previousBuildCandidates = [
+        [
+            source: 'previous successful Jenkins BuildData',
+            commit: readPreviousSuccessfulBuildCommit()
+        ],
+        [
+            source: 'GIT_PREVIOUS_SUCCESSFUL_COMMIT',
+            commit: env.GIT_PREVIOUS_SUCCESSFUL_COMMIT?.trim()
+        ],
+        [
+            source: 'GIT_PREVIOUS_COMMIT',
+            commit: env.GIT_PREVIOUS_COMMIT?.trim()
+        ]
+    ].findAll { it.commit }
+    def previousBuildCommit = null
+    def previousBuildSource = 'none'
 
-    if (previousBuildCommit) {
-        if (isUnix()) {
-            withEnv([
-                "PREVIOUS_BUILD_COMMIT=${previousBuildCommit}"
-            ]) {
-                hasValidPreviousCommit = sh(
-                    script: '''
-                        git rev-parse --verify \
-                            "$PREVIOUS_BUILD_COMMIT^{commit}" >/dev/null 2>&1 &&
-                        git merge-base --is-ancestor \
-                            "$PREVIOUS_BUILD_COMMIT" HEAD
-                    ''',
-                    returnStatus: true
-                ) == 0
-            }
-        } else {
-            withEnv([
-                "PREVIOUS_BUILD_COMMIT=${previousBuildCommit}"
-            ]) {
-                hasValidPreviousCommit = bat(
-                    script: '''
-                        @echo off
-                        git rev-parse --verify "%PREVIOUS_BUILD_COMMIT%^{commit}" >nul 2>&1
-                        if errorlevel 1 exit /b 1
-                        git merge-base --is-ancestor "%PREVIOUS_BUILD_COMMIT%" HEAD
-                    ''',
-                    returnStatus: true
-                ) == 0
-            }
+    for (def candidate : previousBuildCandidates) {
+        if (isAncestorCommit(candidate.commit)) {
+            previousBuildCommit = candidate.commit
+            previousBuildSource = candidate.source
+            break
         }
     }
 
+    def hasValidPreviousCommit = previousBuildCommit != null
+    def logOutput = ''
+
+    echo(
+        previousBuildCommit
+            ? 'Telegram commit baseline: ' + previousBuildCommit +
+                ' (source: ' + previousBuildSource + ').'
+            : 'Telegram commit baseline unavailable; using HEAD only.'
+    )
     if (isUnix()) {
         withEnv([
             "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
@@ -1222,14 +1224,22 @@ def collectGitChanges() {
         }
         .findAll { it }
 
+    int totalChanges = changes.size()
+    int hiddenCount = Math.max(0, totalChanges - maximumChanges)
+
+    echo(
+        'Telegram commit summary: source=' + previousBuildSource +
+        ', total=' + totalChanges +
+        ', shown=' + Math.min(totalChanges, maximumChanges) +
+        ', hidden=' + hiddenCount + '.'
+    )
     if (hasValidPreviousCommit && !changes) {
         return '- No new commits since the previous successful build.'
     }
 
-    int maximumChanges = 20
+    // Telegram vẫn giữ message ngắn; mỗi commit nằm trên một dòng.
 
     if (changes.size() > maximumChanges) {
-        int hiddenCount = changes.size() - maximumChanges
         def limitedChanges = []
 
         limitedChanges.addAll(changes[0..(maximumChanges - 1)])
@@ -1238,6 +1248,59 @@ def collectGitChanges() {
     }
 
     return changes.join('\n')
+}
+
+def readPreviousSuccessfulBuildCommit() {
+    try {
+        def previousSuccessfulBuild = currentBuild.previousSuccessfulBuild
+        def rawBuild = previousSuccessfulBuild?.rawBuild
+        def buildData = rawBuild?.getAllActions()?.find { action ->
+            action?.class?.name == 'hudson.plugins.git.util.BuildData'
+        }
+        def revision = buildData?.lastBuiltRevision
+        def commit = revision?.sha1?.name()?.toString()?.trim()
+
+        if (commit) {
+            return commit
+        }
+    } catch (Exception exception) {
+        echo(
+            'Could not read the previous successful build commit: ' +
+            exception.message
+        )
+    }
+
+    return ''
+}
+
+def isAncestorCommit(String commit) {
+    if (!commit?.trim()) {
+        return false
+    }
+
+    withEnv(["PREVIOUS_BUILD_COMMIT=" + commit.trim()]) {
+        if (isUnix()) {
+            return sh(
+                script: '''
+                    git rev-parse --verify \
+                        "$PREVIOUS_BUILD_COMMIT^{commit}" >/dev/null 2>&1 &&
+                    git merge-base --is-ancestor \
+                        "$PREVIOUS_BUILD_COMMIT" HEAD
+                ''',
+                returnStatus: true
+            ) == 0
+        }
+
+        return bat(
+            script: '''
+                @echo off
+                git rev-parse --verify "%PREVIOUS_BUILD_COMMIT%^{commit}" >nul 2>&1
+                if errorlevel 1 exit /b 1
+                git merge-base --is-ancestor "%PREVIOUS_BUILD_COMMIT%" HEAD
+            ''',
+            returnStatus: true
+        ) == 0
+    }
 }
 
 def renderTelegramTemplate(Map values) {

@@ -4,6 +4,19 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-10
+
+### Added
+
+- Added the telegramMaxCommits pipeline option, defaulting to 10.
+- Jenkins logs now report the Telegram commit baseline source and commit counts.
+
+### Fixed
+
+- Telegram commit changes now fall back to the previous successful Jenkins
+  build's Git metadata when the Git plugin does not expose its previous-commit
+  environment variable. The notification lists each commit on its own line.
+
 ## [0.5.2] - 2026-08-04
 
 ### Fixed
