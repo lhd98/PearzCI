@@ -264,6 +264,18 @@ def call(Map config = [:]) {
                             ).trim()
                         }
 
+                        if (isUnix()) {
+                            env.PEARZCI_GIT_COMMIT = sh(
+                                script: 'git rev-parse HEAD',
+                                returnStdout: true
+                            ).trim()
+                        } else {
+                            env.PEARZCI_GIT_COMMIT = bat(
+                                script: '@git rev-parse HEAD',
+                                returnStdout: true
+                            ).trim()
+                        }
+
                         env.GIT_CHANGES = collectGitChanges(telegramMaxCommits)
                     }
                 }
@@ -1253,19 +1265,20 @@ def collectGitChanges(int maximumChanges) {
 def readPreviousSuccessfulBuildCommit() {
     try {
         def previousSuccessfulBuild = currentBuild.previousSuccessfulBuild
-        def rawBuild = previousSuccessfulBuild?.rawBuild
-        def buildData = rawBuild?.getAllActions()?.find { action ->
-            action?.class?.name == 'hudson.plugins.git.util.BuildData'
+        def buildVariables = previousSuccessfulBuild?.getBuildVariables()
+        def commit = buildVariables?.get('PEARZCI_GIT_COMMIT')?.trim()
+
+        if (!commit) {
+            // Compatibility with successful builds created before v0.5.4.
+            commit = buildVariables?.get('GIT_COMMIT')?.trim()
         }
-        def revision = buildData?.lastBuiltRevision
-        def commit = revision?.sha1?.name()?.toString()?.trim()
 
         if (commit) {
             return commit
         }
     } catch (Exception exception) {
         echo(
-            'Could not read the previous successful build commit: ' +
+            'Could not read the previous successful build variables: ' +
             exception.message
         )
     }

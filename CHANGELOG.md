@@ -4,6 +4,12 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-10
+
+### Fixed
+
+- Telegram commit collection now uses whitelisted Jenkins build variables instead of raw build APIs, and persists the full HEAD commit for the next build baseline.
+
 ## [0.5.3] - 2026-08-10
 
 ### Added

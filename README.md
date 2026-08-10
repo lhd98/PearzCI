@@ -346,9 +346,9 @@ Package Manager and use **Update** to move to the latest release. Commit both
 `Packages/manifest.json` and `Packages/packages-lock.json` after updating so
 every developer and Jenkins build resolves the same commit.
 
-Immutable tags such as `v0.5.3` remain available for rollback or projects that
+Immutable tags such as `v0.5.4` remain available for rollback or projects that
 prefer a fixed UPM version. The Jenkins administrator should pin a release tag
-such as `v0.5.3` when automatic updates through the `upm` branch are not
+such as `v0.5.4` when automatic updates through the `upm` branch are not
 desired.
 
 ### Releasing a new version
@@ -359,8 +359,8 @@ The version appears in `package.json` and in
 editing them by hand:
 
 ```powershell
-pwsh ./tools/bump-version.ps1 -Version 0.5.3
+pwsh ./tools/bump-version.ps1 -Version 0.5.4
 ```
 
 Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
-(`git tag -a v0.5.3 -m "Release v0.5.3"`), and advance the `upm` branch.
+(`git tag -a v0.5.4 -m "Release v0.5.4"`), and advance the `upm` branch.
