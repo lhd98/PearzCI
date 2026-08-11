@@ -1,32 +1,32 @@
-BUILD {{RESULT}}
---------------------
-Job: {{JOB}}
-Build URL: {{BUILD_URL}}
-Result: {{RESULT}}
-PearzCI: {{PEARZ_CI_VERSION}}
---------------------
+<b>BUILD {{RESULT}}</b>
+━━━━━━━━━━━━━━━━━━
+<b>Job:</b> {{JOB}}
+<b>Build URL:</b> {{BUILD_URL}}
+<b>Result:</b> {{RESULT}}
+<b>PearzCI:</b> {{PEARZ_CI_VERSION}}
+━━━━━━━━━━━━━━━━━━
 {{ERROR_SECTION}}
-Version: {{VERSION}}
-Product Name: {{PRODUCT_NAME}}
-Bundle ID: {{BUNDLE_ID}}
-Google Play: {{GOOGLE_PLAY_URL}}
-Branch: {{BRANCH}}
---------------------
-Configuration: {{CONFIGURATION}}
-Scripting Backend: {{SCRIPTING_BACKEND}}
-Stripping Level: {{STRIPPING_LEVEL}}
-Orientation: {{ORIENTATION}}
-Unity: {{UNITY_VERSION}}
---------------------
-Build Time: {{BUILD_TIME}}
-Upload Time: {{UPLOAD_TIME}}
-Total Time: {{TOTAL_TIME}}
---------------------
-Drive Folder: {{DRIVE_FOLDER_URL}}
-Drive Root: {{DRIVE_ROOT_URL}}
-APK: {{APK}}
-AAB: {{AAB}}
-mapping.txt: {{MAPPING}}
+<b>Version:</b> {{VERSION}}
+<b>Product:</b> {{PRODUCT_NAME}}
+<b>Bundle ID:</b> <code>{{BUNDLE_ID}}</code>
+<b>Google Play:</b> {{GOOGLE_PLAY_URL}}
+<b>Branch:</b> <code>{{BRANCH}}</code>
+━━━━━━━━━━━━━━━━━━
+<b>Configuration:</b> {{CONFIGURATION}}
+<b>Scripting Backend:</b> {{SCRIPTING_BACKEND}}
+<b>Stripping Level:</b> {{STRIPPING_LEVEL}}
+<b>Orientation:</b> {{ORIENTATION}}
+<b>Unity:</b> {{UNITY_VERSION}}
+━━━━━━━━━━━━━━━━━━
+<b>Build Time:</b> {{BUILD_TIME}}
+<b>Upload Time:</b> {{UPLOAD_TIME}}
+<b>Total Time:</b> {{TOTAL_TIME}}
+━━━━━━━━━━━━━━━━━━
+<b>Drive Folder:</b> {{DRIVE_FOLDER_URL}}
+<b>Drive Root:</b> {{DRIVE_ROOT_URL}}
+<b>APK:</b> {{APK}}
+<b>AAB:</b> {{AAB}}
+<b>mapping.txt:</b> {{MAPPING}}
 {{DEFINE_SYMBOLS_SECTION}}
 {{CHANGES_SECTION}}
 {{JENKINS_LOGS_SECTION}}

@@ -844,57 +844,58 @@ def buildTelegramMessage() {
         ?.findAll { it }
 
     def symbolsSection = symbols
-        ? 'Scripting Define Symbols:\n' +
-            symbols.collect { "- ${it}" }.join('\n')
+        ? '<b>Scripting Define Symbols:</b>\n' +
+            symbols.collect { "• <code>${telegramHtmlEscape(it)}</code>" }
+                .join('\n')
         : ''
     def changeDescription = env.GIT_CHANGES?.trim()
 
     def logLines = []
 
     if (env.JENKINS_BUILD_LOG_URL?.trim()) {
-        logLines << "Build: ${env.JENKINS_BUILD_LOG_URL.trim()}"
+        logLines << "Build: ${telegramHtmlEscape(env.JENKINS_BUILD_LOG_URL.trim())}"
     }
 
     if (env.JENKINS_UPLOAD_LOG_URL?.trim()) {
-        logLines << "Upload: ${env.JENKINS_UPLOAD_LOG_URL.trim()}"
+        logLines << "Upload: ${telegramHtmlEscape(env.JENKINS_UPLOAD_LOG_URL.trim())}"
     }
 
     def values = [
-        RESULT: result,
-        JOB: "${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        JOB_NAME: env.JOB_NAME,
-        BUILD_NUMBER: env.BUILD_NUMBER,
-        BUILD_URL: env.BUILD_URL,
-        PEARZ_CI_VERSION: env.PEARZ_CI_VERSION,
-        VERSION: versionParts.join(' / '),
-        VERSION_NAME: env.META_VERSION_NAME,
-        VERSION_CODE: env.META_VERSION_CODE,
-        PRODUCT_NAME: env.META_PRODUCT_NAME ?: params.PRODUCT_NAME,
-        BUNDLE_ID: env.META_BUNDLE_IDENTIFIER,
-        GOOGLE_PLAY_URL: googlePlayUrl,
-        BRANCH: params.GIT_BRANCH,
-        CONFIGURATION: params.BUILD_CONFIGURATION,
-        SCRIPTING_BACKEND: env.META_SCRIPTING_BACKEND,
-        STRIPPING_LEVEL: env.META_STRIPPING_LEVEL,
-        ORIENTATION: env.META_ORIENTATION,
-        UNITY_VERSION: env.META_UNITY_VERSION ?: params.UNITY_VERSION,
-        BUILD_TIME: formatDurationMillis(env.BUILD_TIME_MILLIS),
-        UPLOAD_TIME: formatDurationMillis(env.UPLOAD_TIME_MILLIS),
-        TOTAL_TIME: formatDurationMillis(env.TOTAL_TIME_MILLIS),
-        DRIVE_FOLDER_URL: env.DRIVE_FOLDER_URL,
-        DRIVE_ROOT_URL: env.DRIVE_ROOT_URL,
-        APK: apkDescription,
-        AAB: aabDescription,
-        MAPPING: mappingDescription,
+        RESULT: telegramHtmlEscape(result),
+        JOB: telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}"),
+        JOB_NAME: telegramHtmlEscape(env.JOB_NAME),
+        BUILD_NUMBER: telegramHtmlEscape(env.BUILD_NUMBER),
+        BUILD_URL: telegramHtmlEscape(env.BUILD_URL),
+        PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
+        VERSION: telegramHtmlEscape(versionParts.join(' / ')),
+        VERSION_NAME: telegramHtmlEscape(env.META_VERSION_NAME),
+        VERSION_CODE: telegramHtmlEscape(env.META_VERSION_CODE),
+        PRODUCT_NAME: telegramHtmlEscape(env.META_PRODUCT_NAME ?: params.PRODUCT_NAME),
+        BUNDLE_ID: telegramHtmlEscape(env.META_BUNDLE_IDENTIFIER),
+        GOOGLE_PLAY_URL: telegramHtmlEscape(googlePlayUrl),
+        BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
+        CONFIGURATION: telegramHtmlEscape(params.BUILD_CONFIGURATION),
+        SCRIPTING_BACKEND: telegramHtmlEscape(env.META_SCRIPTING_BACKEND),
+        STRIPPING_LEVEL: telegramHtmlEscape(env.META_STRIPPING_LEVEL),
+        ORIENTATION: telegramHtmlEscape(env.META_ORIENTATION),
+        UNITY_VERSION: telegramHtmlEscape(env.META_UNITY_VERSION ?: params.UNITY_VERSION),
+        BUILD_TIME: telegramHtmlEscape(formatDurationMillis(env.BUILD_TIME_MILLIS)),
+        UPLOAD_TIME: telegramHtmlEscape(formatDurationMillis(env.UPLOAD_TIME_MILLIS)),
+        TOTAL_TIME: telegramHtmlEscape(formatDurationMillis(env.TOTAL_TIME_MILLIS)),
+        DRIVE_FOLDER_URL: telegramHtmlEscape(env.DRIVE_FOLDER_URL),
+        DRIVE_ROOT_URL: telegramHtmlEscape(env.DRIVE_ROOT_URL),
+        APK: telegramHtmlEscape(apkDescription),
+        AAB: telegramHtmlEscape(aabDescription),
+        MAPPING: telegramHtmlEscape(mappingDescription),
         DEFINE_SYMBOLS_SECTION: symbolsSection,
         ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
-            ? "Error:\n${env.META_ERROR_MESSAGE.trim()}"
+            ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
             : '',
         CHANGES_SECTION: changeDescription
-            ? "Changes:\n${changeDescription}"
+            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
             : '',
         JENKINS_LOGS_SECTION: logLines
-            ? 'Jenkins Logs:\n' + logLines.join('\n')
+            ? '<b>Jenkins Logs</b>\n' + logLines.join('\n')
             : ''
     ]
 
@@ -912,6 +913,19 @@ def truncateTelegramMessage(String message) {
 
     def notice = '\n... (message truncated)'
     return message.substring(0, maximumLength - notice.length()) + notice
+}
+
+// Telegram HTML chỉ cho phép một tập thẻ giới hạn; escape toàn bộ dữ liệu
+// đến từ Jenkins để commit message/branch không thể làm hỏng markup.
+def telegramHtmlEscape(Object value) {
+    if (value == null) {
+        return ''
+    }
+
+    return value.toString()
+        .replace('&', '&amp;')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
 }
 
 // Gọi được từ cả stage lẫn khối post. Lần gọi thứ hai không làm gì, nên

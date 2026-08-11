@@ -4,6 +4,13 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-08-11
+
+### Changed
+
+- Telegram notifications now use HTML formatting with safely escaped Jenkins
+  values and a more readable default template.
+
 ## [0.6.3] - 2026-08-11
 
 ### Fixed

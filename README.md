@@ -259,6 +259,11 @@ such as `--------------------`. No file is added to a Unity project's `Assets`
 folder. Release a new PearzCI tag and update the Jenkins Global Pipeline
 Library version to apply the layout to all jobs.
 
+Telegram messages use `parse_mode=HTML`, so the template can use Telegram's
+supported tags such as `<b>`, `<i>`, `<u>`, `<code>`, and `<blockquote>`. Values
+coming from Jenkins are escaped automatically before rendering; do not add
+HTML markup inside placeholder values.
+
 Available placeholders are:
 
 ```text

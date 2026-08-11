@@ -109,6 +109,7 @@ while :; do
                             --request POST \
                             --data-urlencode "chat_id=$chat_id" \
                             --data-urlencode "text=$message" \
+                            --data-urlencode "parse_mode=HTML" \
                             --data-urlencode \
                                 "disable_web_page_preview=false" \
                             --data-urlencode \
@@ -121,6 +122,7 @@ while :; do
                             --request POST \
                             --data-urlencode "chat_id=$chat_id" \
                             --data-urlencode "text=$message" \
+                            --data-urlencode "parse_mode=HTML" \
                             --data-urlencode \
                                 "disable_web_page_preview=false" \
                             "$uri"

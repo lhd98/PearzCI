@@ -109,6 +109,7 @@ for ($index = 0; $index -lt $targets.Count; $index++) {
     $body = @{
         chat_id = $chatId
         text = $message
+        parse_mode = "HTML"
         disable_web_page_preview = "false"
     }
 
