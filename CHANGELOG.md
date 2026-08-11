@@ -4,6 +4,13 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-11
+
+### Fixed
+
+- Telegram commit summaries now preserve multi-line commit bodies on one line,
+  joining non-empty lines with ` • `.
+
 ## [0.6.2] - 2026-08-11
 
 ### Fixed

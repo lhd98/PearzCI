@@ -1212,10 +1212,10 @@ def collectGitChanges(int maximumChanges) {
             logOutput = sh(
                 script: '''
                     if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
-                        git log --pretty=format:'%h%x09%an%x09%s' \
+                        git log --pretty=format:'%h%x09%an%x09%B%x1e' \
                             "$PREVIOUS_BUILD_COMMIT..HEAD"
                     else
-                        git log -1 --pretty=format:'%h%x09%an%x09%s'
+                        git log -1 --pretty=format:'%h%x09%an%x09%B%x1e'
                     fi
                 ''',
                 returnStdout: true
@@ -1230,9 +1230,9 @@ def collectGitChanges(int maximumChanges) {
                 script: '''
                     @echo off
                     if "%HAS_VALID_PREVIOUS_COMMIT%"=="true" (
-                        git log --pretty=format:%%h%%x09%%an%%x09%%s "%PREVIOUS_BUILD_COMMIT%..HEAD"
+                        git log --pretty=format:%%h%%x09%%an%%x09%%B%%x1e "%PREVIOUS_BUILD_COMMIT%..HEAD"
                     ) else (
-                        git log -1 --pretty=format:%%h%%x09%%an%%x09%%s
+                        git log -1 --pretty=format:%%h%%x09%%an%%x09%%B%%x1e
                     )
                 ''',
                 returnStdout: true
@@ -1243,11 +1243,12 @@ def collectGitChanges(int maximumChanges) {
 
     if (!changes) {
         changes = logOutput
-            .readLines()
-            .collect { line ->
-                def fields = line.split('\t', 3)
+            .split('\u001e')
+            .collect { record ->
+                def fields = record.trim().split('\t', 3)
                 if (fields.size() == 3) {
-                    '- ' + fields[0] + ' - ' + fields[1] + ': ' + fields[2]
+                    '- ' + fields[0] + ' - ' + fields[1] + ': ' +
+                        formatCommitMessage(fields[2])
                 } else {
                     ''
                 }
@@ -1273,7 +1274,8 @@ def collectGitChanges(int maximumChanges) {
         return '- No new commits since the previous successful build.'
     }
 
-    // Telegram vẫn giữ message ngắn; mỗi commit nằm trên một dòng.
+    // Telegram giữ message ngắn; toàn bộ nội dung mỗi commit được gộp về
+    // một dòng để markdown checklist trong body không làm vỡ bố cục.
 
     if (changes.size() > maximumChanges) {
         def limitedChanges = []
@@ -1294,11 +1296,7 @@ def collectJenkinsChangeSets() {
             changeSet.items?.each { entry ->
                 def commit = entry.commitId?.toString()?.trim()
                 def author = entry.author?.fullName?.toString()?.trim()
-                def message = entry.msg
-                    ?.toString()
-                    ?.readLines()
-                    ?.find { it?.trim() }
-                    ?.trim()
+                def message = formatCommitMessage(entry.msg?.toString())
 
                 if (commit && message) {
                     changes << '- ' + commit.take(7) + ' - ' +
@@ -1314,6 +1312,18 @@ def collectJenkinsChangeSets() {
     }
 
     return changes
+}
+
+def formatCommitMessage(String message) {
+    if (!message?.trim()) {
+        return ''
+    }
+
+    return message
+        .readLines()
+        .collect { it.trim().replaceFirst(/^[-*•]\\s+/, '') }
+        .findAll { it }
+        .join(' • ')
 }
 
 def readPreviousSuccessfulBuildCommit() {
