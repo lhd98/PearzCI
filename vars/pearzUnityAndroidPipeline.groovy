@@ -343,8 +343,11 @@ def call(Map config = [:]) {
                         def buildStartedAt = System.currentTimeMillis()
                         def configuredAppVersion = params.APP_VERSION?.trim()
                         def ciAppVersion = configuredAppVersion
-                            ? "${configuredAppVersion} (CI ${env.BUILD_NUMBER})"
-                            : "CI ${env.BUILD_NUMBER}"
+                            ? "${configuredAppVersion}-${env.BUILD_NUMBER}"
+                            : "${env.BUILD_NUMBER}"
+
+                        echo "Android APP_VERSION passed to Unity: ${ciAppVersion}"
+                        echo "Android version code passed to Unity: ${env.BUILD_NUMBER}"
 
                         try {
                             // BUILD_NUMBER do Jenkins duy trì riêng cho từng Job.

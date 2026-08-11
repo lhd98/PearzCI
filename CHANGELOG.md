@@ -3,6 +3,14 @@
 All notable changes to this package are documented in this file.
 
 ## [Unreleased]
+
+## [0.6.2] - 2026-08-11
+
+### Fixed
+
+- Android builds now expose the Jenkins build number in Unity as
+  `<APP_VERSION>-<BUILD_NUMBER>` (for example `1.0.0-67`).
+
 ## [0.6.1] - 2026-08-11
 
 ### Added

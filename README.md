@@ -140,8 +140,9 @@ Common optional parameters:
 `ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
 `BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
 also gets a visible version for use through Unity `Application.version`:
-`CI <BUILD_NUMBER>`, or `<APP_VERSION> (CI <BUILD_NUMBER>)` when the optional
-`APP_VERSION` parameter is set.
+`<BUILD_NUMBER>`, or `<APP_VERSION>-<BUILD_NUMBER>` when the optional
+`APP_VERSION` parameter is set. For example, Jenkins build `67` with
+`APP_VERSION=1.0.0` is shown in-game as `Build 1.0.0-67`.
 
 ### Configure the shared GitHub webhook
 
