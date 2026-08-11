@@ -95,7 +95,7 @@ Create one Jenkins **Pipeline** job for each Unity project. Select
 the Jenkins job:
 
 ```groovy
-pearzUnityAndroidPipeline()
+pearzUnityPipeline()
 ```
 
 This one-line script is identical for every project. Jenkins loads PearzCI
@@ -122,6 +122,7 @@ Required parameters:
 - String `UNITY_VERSION`, for example `6000.3.14f1`
 - String `PRODUCT_NAME`, for example `MyGame`
 - Choice `BUILD_CONFIGURATION`: `Development` or `Release`
+- Choice `BUILD_PLATFORM`: `Android` or `iOS` (default: `Android`)
 
 Common optional parameters:
 
@@ -136,6 +137,10 @@ Common optional parameters:
   `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
 - String `APP_VERSION`, `KEYSTORE_PATH`, and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
+- String `IOS_BUILD_NUMBER`, `IOS_DEVELOPMENT_TEAM`, and
+  `IOS_PROVISIONING_PROFILE_SPECIFIER`
+- String `IOS_EXPORT_OPTIONS_PLIST_PATH`
+- Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
 
 `ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
 `BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
@@ -384,8 +389,9 @@ the call). Install the same Unity editor version with **iOS Build Support**,
 Xcode Command Line Tools, Git, rclone, and a valid Unity license under the
 Jenkins agent user.
 
-Create a second Pipeline job for the same Unity project. Its Pipeline script
-is:
+With `pearzUnityPipeline()`, no second job is needed: select `iOS` from
+`BUILD_PLATFORM` in the existing job. To keep Android and iOS as separate
+Jenkins jobs instead, create a second Pipeline job with this script:
 
 ```groovy
 pearzUnityIosPipeline()

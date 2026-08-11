@@ -4,6 +4,13 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-08-11
+
+### Added
+
+- Added `pearzUnityPipeline`, which selects the Android or iOS build pipeline
+  from the Jenkins `BUILD_PLATFORM` parameter.
+
 ## [0.6.4] - 2026-08-11
 
 ### Changed
