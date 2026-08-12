@@ -2,12 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
-## [Unreleased]
+## [0.6.10] - 2026-08-13
 
 ### Added
 
 - iOS builds can now target a connected device through `IOS_BUILD_TO_DEVICE`
   and `IOS_DEVICE_UDID`, building and installing the app without IPA export.
+
+### Fixed
+
+- Added missing Unity `.meta` files for the Jenkins and tooling folders so
+  Git-installed packages no longer emit import warnings.
 
 ## [0.6.9] - 2026-08-13
 
