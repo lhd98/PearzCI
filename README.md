@@ -111,7 +111,9 @@ notify the developer Telegram group when a release tag is pushed.
 1. Select **Pipeline script** and paste the content of
    [`Jenkinsfile.release.example`](Jenkinsfile.release.example). Change
    `gitCredentialsId` if the SSH credential for this repository has another
-   ID.
+   ID. The explicit `@Library('pearz-ci@main')` keeps this operational job on
+   the current pipeline code; game jobs can remain on the released `upm`
+   version.
 2. Create the Jenkins **Secret text** credential
    `pearz-telegram-release`. Its value is
    `<telegram-bot-token>|<telegram-group-chat-id>`, for example

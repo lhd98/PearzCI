@@ -1,3 +1,5 @@
+@Library('pearz-ci@main') _
+
 pearzCiReleasePipeline(
     repositoryUrl: 'ssh://git@github.com/lhd98/PearzCI.git',
     gitCredentialsId: 'github-ssh'
