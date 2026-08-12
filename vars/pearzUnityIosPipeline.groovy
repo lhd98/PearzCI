@@ -349,6 +349,7 @@ def call(Map config = [:]) {
                                         -destination "id=$IOS_DEVICE_UDID" \\
                                         -derivedDataPath "$DERIVED_DATA_PATH" \\
                                         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \\
+                                        CODE_SIGN_ENTITLEMENTS= \\
                                         DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
                                         "PRODUCT_BUNDLE_IDENTIFIER=$IOS_BUNDLE_IDENTIFIER" \\
                                         "$@" \\
@@ -357,9 +358,9 @@ def call(Map config = [:]) {
 
                                 set +e
                                 if [ -n "$IOS_PROFILE_SPECIFIER" ]; then
-                                    echo "Using provisioning profile: $IOS_PROFILE_SPECIFIER"
+                                    echo "Using Xcode-managed provisioning profile: $IOS_PROFILE_SPECIFIER"
                                     run_xcodebuild \\
-                                        CODE_SIGN_STYLE=Manual \\
+                                        CODE_SIGN_STYLE=Automatic \\
                                         "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
                                 else
                                     run_xcodebuild \\
