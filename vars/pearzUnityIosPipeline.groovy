@@ -315,8 +315,12 @@ def call(Map config = [:]) {
                                     perl -0pi -e 's/\\s*com\\.apple\\.InAppPurchase\\s*=\\s*\\{\\s*enabled\\s*=\\s*1;\\s*\\};\\s*//g' "$pbxproj_path"
                                     echo 'Removed In-App Purchase capability for Personal Team device signing.'
                                 fi
-                                find "$IOS_PROJECT_PATH" -name '*.entitlements' -type f -exec \
-                                    perl -0pi -e 's/[ \\t]*<key>com\\.apple\\.developer\\.in-app-payments<\\/key>\\s*<(true|array)>[^<]*(<\\/array>)?\\s*//g' {} +
+                                find "$IOS_PROJECT_PATH" -name '*.entitlements' -type f -print |
+                                    while IFS= read -r entitlements_path; do
+                                        /usr/libexec/PlistBuddy \\
+                                            -c 'Delete :com.apple.developer.in-app-payments' \\
+                                            "$entitlements_path" >/dev/null 2>&1 || true
+                                    done
 
                                 set +e
                                 xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
