@@ -357,11 +357,12 @@ def call(Map config = [:]) {
                                 }
 
                                 set +e
-                                if [ -n "$IOS_PROFILE_SPECIFIER" ]; then
-                                    echo "Using Xcode-managed provisioning profile: $IOS_PROFILE_SPECIFIER"
+                                profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
+                                if [ -n "$profile_specifier" ]; then
+                                    echo "Using Xcode-managed provisioning profile: $profile_specifier"
                                     run_xcodebuild \\
                                         CODE_SIGN_STYLE=Automatic \\
-                                        "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                        "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
                                 else
                                     run_xcodebuild \\
                                         -allowProvisioningUpdates \\
