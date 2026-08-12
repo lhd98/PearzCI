@@ -358,16 +358,21 @@ def call(Map config = [:]) {
 
                                 set +e
                                 profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
-                                if [ -n "$profile_specifier" ]; then
-                                    echo "Using Xcode-managed provisioning profile: $profile_specifier"
-                                    run_xcodebuild \\
-                                        CODE_SIGN_STYLE=Automatic \\
-                                        "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
-                                else
-                                    run_xcodebuild \\
-                                        -allowProvisioningUpdates \\
-                                        CODE_SIGN_STYLE=Automatic
-                                fi
+                                [ -n "$profile_specifier" ] || {
+                                    echo 'ERROR: IOS_PROVISIONING_PROFILE_SPECIFIER is required for a device build.'
+                                    echo 'Use the installed profile name shown by: security cms -D -i <profile> | plutil -extract Name raw -'
+                                    exit 2
+                                }
+
+                                # A Jenkins-launched xcodebuild process cannot reliably use the
+                                # Apple account configured in the Xcode GUI.  Use the already
+                                # installed development profile instead of asking Xcode to contact
+                                # the developer portal with -allowProvisioningUpdates.
+                                echo "Using installed provisioning profile: $profile_specifier"
+                                run_xcodebuild \\
+                                    CODE_SIGN_STYLE=Manual \\
+                                    CODE_SIGN_IDENTITY='Apple Development' \\
+                                    "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"
