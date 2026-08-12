@@ -79,15 +79,16 @@ jobs:
           safe_notes="$(printf '%s' "$RELEASE_NOTES" | escape_html)"
           tag="v$VERSION"
           tag_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${tag}"
-          message="<b>PearzCI ${tag} đã phát hành</b>
-
-<b>Tag:</b> <code>${tag}</code>
-<b>Chi tiết:</b> <a href=\"${tag_url}\">Xem trên GitHub</a>
-
-<b>Thay đổi</b>
-<blockquote>${safe_notes}</blockquote>
-
-Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>."
+          message="$(printf '%s\n' \
+            "<b>PearzCI ${tag} đã phát hành</b>" \
+            '' \
+            "<b>Tag:</b> <code>${tag}</code>" \
+            "<b>Chi tiết:</b> <a href=\"${tag_url}\">Xem trên GitHub</a>" \
+            '' \
+            '<b>Thay đổi</b>' \
+            "<blockquote>${safe_notes}</blockquote>" \
+            '' \
+            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
 
           curl --fail --silent --show-error \
             --request POST \
