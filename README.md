@@ -103,6 +103,30 @@ implicitly at the globally configured version, so project jobs do not need an
 `@Library` declaration, a second CI repository, or a project-specific
 pipeline.
 
+### PearzCI release notification
+
+Create one additional Jenkins **Pipeline** job named `PearzCI Release` to
+notify the developer Telegram group when a release tag is pushed.
+
+1. Select **Pipeline script** and paste the content of
+   [`Jenkinsfile.release.example`](Jenkinsfile.release.example). Change
+   `gitCredentialsId` if the SSH credential for this repository has another
+   ID.
+2. Create the Jenkins **Secret text** credential
+   `pearz-telegram-release`. Its value is
+   `<telegram-bot-token>|<telegram-group-chat-id>`, for example
+   `123456:ABC...|-5311807067`.
+3. Keep (or create) the Secret text credential `pearz-github-webhook` used by
+   the Generic Webhook Trigger setup below.
+4. Run the job once manually. Jenkins saves the tag-only webhook trigger.
+5. In the GitHub webhook for this repository, enable **Pushes** and use the
+   Jenkins Generic Webhook Trigger URL described below.
+
+After that, pushing an exact semantic-version tag such as `v0.6.6` sends one
+Telegram message. Regular commits and non-release tags do not notify the
+group. The tag must match the `package.json` version and the changelog must
+contain a matching `## [0.6.6]` section.
+
 Keep **Include `@Library` changes in job recent changes** disabled. Jenkins
 Poll SCM otherwise also polls the PearzCI repository and can repeatedly start
 game builds when the library's `main` branch is ahead of the pinned release

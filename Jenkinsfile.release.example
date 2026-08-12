@@ -1,0 +1,4 @@
+pearzCiReleasePipeline(
+    repositoryUrl: 'ssh://git@github.com/lhd98/PearzCI.git',
+    gitCredentialsId: 'github-ssh'
+)
