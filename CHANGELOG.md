@@ -4,6 +4,12 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-08-12
+
+### Fixed
+
+- Fixed the PearzCI release Telegram workflow YAML so release tags can run it.
+
 ## [0.6.6] - 2026-08-12
 
 ### Added
