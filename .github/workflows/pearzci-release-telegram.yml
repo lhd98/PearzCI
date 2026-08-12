@@ -1,0 +1,99 @@
+name: Notify Telegram about PearzCI releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  notify-telegram:
+    name: Notify developer group
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate release version
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Skipping non-release tag: $tag"
+            echo 'should_notify=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version="$(jq -r '.version' package.json)"
+          if [[ "v$version" != "$tag" ]]; then
+            echo "Tag $tag does not match package.json version $version." >&2
+            exit 1
+          fi
+
+          notes="$(awk -v version="$version" '
+            index($0, "## [" version "]") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md | sed '/^[[:space:]]*$/d')"
+
+          if [[ -z "$notes" ]]; then
+            notes="Release notes are not available."
+          fi
+
+          {
+            echo 'should_notify=true'
+            echo "version=$version"
+            echo 'notes<<EOF'
+            echo "$notes"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram message
+        if: steps.release.outputs.should_notify == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: '-5311807067'
+          VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_NOTES: ${{ steps.release.outputs.notes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$TELEGRAM_BOT_TOKEN" ]]; then
+            echo 'Missing GitHub Actions secret TELEGRAM_BOT_TOKEN.' >&2
+            exit 1
+          fi
+
+          escape_html() {
+            sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+          }
+
+          safe_notes="$(printf '%s' "$RELEASE_NOTES" | escape_html)"
+          tag="v$VERSION"
+          tag_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${tag}"
+          message="$(printf '%s\n' \
+            "<b>PearzCI ${tag} đã phát hành</b>" \
+            '' \
+            "<b>Tag:</b> <code>${tag}</code>" \
+            "<b>Chi tiết:</b> <a href=\"${tag_url}\">Xem trên GitHub</a>" \
+            '' \
+            '<b>Thay đổi</b>' \
+            "<blockquote>${safe_notes}</blockquote>" \
+            '' \
+            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${message}" \
+            --data-urlencode 'parse_mode=HTML' \
+            --data-urlencode 'disable_web_page_preview=true' \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"

@@ -9,6 +9,37 @@ All notable changes to this package are documented in this file.
 - iOS builds can now target a connected device through `IOS_BUILD_TO_DEVICE`
   and `IOS_DEVICE_UDID`, building and installing the app without IPA export.
 
+## [0.6.9] - 2026-08-13
+
+### Added
+
+- Added the optional `CLEAN_WORKSPACE` build parameter. When enabled, it
+  removes the job workspace before checkout so the build starts from a fresh
+  project state.
+- Added the optional `SEND_NOTIFICATIONS` build parameter. It defaults to
+  enabled and can suppress all post-build notification platforms for one run.
+
+## [0.6.8] - 2026-08-12
+
+### Changed
+
+- Android signing now defaults to
+  `Config/<BundleIdentifier>.keystore` when `KEYSTORE_PATH` is not provided,
+  while retaining explicit path overrides for existing Jenkins jobs.
+
+## [0.6.7] - 2026-08-12
+
+### Fixed
+
+- Fixed the PearzCI release Telegram workflow YAML so release tags can run it.
+
+## [0.6.6] - 2026-08-12
+
+### Added
+
+- Added a GitHub Actions workflow that notifies the developer Telegram group
+  when an exact PearzCI release tag is pushed.
+
 ## [0.6.5] - 2026-08-11
 
 ### Added

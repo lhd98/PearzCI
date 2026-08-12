@@ -124,6 +124,17 @@ def call(Map config = [:]) {
                             )
                         }
 
+                        // Workspace của Pipeline không luôn xuất hiện trong UI
+                        // Jenkins. Cho phép xoá bản checkout/caches cũ theo yêu
+                        // cầu của build, trước khi Git checkout lại toàn bộ project.
+                        if (params.CLEAN_WORKSPACE?.toString()?.toBoolean()) {
+                            echo(
+                                'CLEAN_WORKSPACE is enabled; removing the ' +
+                                'current job workspace before checkout.'
+                            )
+                            deleteDir()
+                        }
+
                         def branchSpec = params.GIT_BRANCH?.trim()
                             ? params.GIT_BRANCH.trim()
                             : defaultGitBranch
@@ -706,7 +717,17 @@ def call(Map config = [:]) {
                 // pipeline sẽ bị bỏ qua khi build hỏng, đúng lúc cần báo
                 // nhất. Đặt trước bước dọn dẹp vì còn cần đọc metadata.
                 script {
-                    sendTelegramNotification(telegramCredentialsId)
+                    // Mặc định bật để không thay đổi hành vi các job hiện có.
+                    // Đây là cờ tổng cho Telegram và các nền tảng thông báo
+                    // khác được bổ sung sau này.
+                    def sendNotifications = params.SEND_NOTIFICATIONS == null ||
+                        params.SEND_NOTIFICATIONS.toString().toBoolean()
+
+                    if (sendNotifications) {
+                        sendTelegramNotification(telegramCredentialsId)
+                    } else {
+                        echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
+                    }
                 }
 
                 script {

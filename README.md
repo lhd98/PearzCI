@@ -29,6 +29,20 @@ Unity automatically adds the dependency to `Packages/manifest.json` and locks
 the resolved commit in `Packages/packages-lock.json`. Commit both files with
 the project.
 
+### PearzCI release Telegram notification
+
+This repository sends a Telegram notice when an exact release tag such as
+`v0.6.6` is pushed. It runs entirely through GitHub Actions; Jenkins game
+build jobs are not involved.
+
+In GitHub, open **PearzCI > Settings > Secrets and variables > Actions** and
+create the secret `TELEGRAM_BOT_TOKEN` with the token from BotFather. Add the
+bot to the developer group. The group ID is configured in the workflow.
+
+The tag must match the `package.json` version and the changelog must include
+the corresponding `## [0.6.6]` section. Normal commits and non-semantic tags
+do not send a message.
+
 ### Manual installation
 
 For CI setup or troubleshooting, add the package directly to
@@ -66,12 +80,25 @@ are:
 - `APP_VERSION`
 - `ANDROID_VERSION_CODE`
 - `TARGET_ARCHITECTURES`
-- `KEYSTORE_PATH`
+- `KEYSTORE_PATH` (optional path override)
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS_NAME`
 - `KEY_ALIAS_PASSWORD`
 
 See `BuildEntry.cs` for the complete list and accepted values.
+
+When Android signing credentials are provided without `KEYSTORE_PATH`, PearzCI
+loads the keystore from the project convention below:
+
+```text
+<ProjectRoot>/Config/<BundleIdentifier>.keystore
+```
+
+For example, package name `com.pg.sushi.sort` uses
+`Config/com.pg.sushi.sort.keystore`. The effective Android bundle identifier is
+used after applying any `BUNDLE_IDENTIFIER` override. `KEYSTORE_PATH` remains
+supported for existing jobs and non-standard locations; relative overrides are
+resolved from the Unity project root.
 
 ## Jenkins Shared Library
 
@@ -134,13 +161,25 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
-  `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
-- String `APP_VERSION`, `KEYSTORE_PATH`, and `KEY_ALIAS_NAME`
+  `UNITY_DEVELOPMENT_BUILD`, `BUILD_APP_BUNDLE`, `CLEAN_WORKSPACE`, and
+  `SEND_NOTIFICATIONS`
+- String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
+- Optional String `KEYSTORE_PATH`, only to override the default
+  `Config/<BundleIdentifier>.keystore` location
 - String `IOS_BUILD_NUMBER`, `IOS_DEVELOPMENT_TEAM`, and
   `IOS_PROVISIONING_PROFILE_SPECIFIER`
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH`
 - Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+
+`CLEAN_WORKSPACE` mặc định là `false`. Khi bật, PearzCI xoá toàn bộ workspace
+của riêng Jenkins job trước bước checkout rồi tải lại project từ Git. Dùng tuỳ
+chọn này khi Unity/Package cache hoặc `ProjectSettings` còn trạng thái từ build
+trước; không bật nếu cần giữ file cục bộ chưa được commit trong workspace.
+
+`SEND_NOTIFICATIONS` mặc định là `true`. Tắt nó để bỏ qua toàn bộ thông báo
+sau build (hiện tại là Telegram); cờ này cũng áp dụng cho Discord, Lark hoặc
+nền tảng khác khi được bổ sung sau này.
 
 `ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
 `BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
