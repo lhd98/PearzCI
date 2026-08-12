@@ -32,6 +32,14 @@ def call(Map config = [:]) {
     pipeline {
         agent any
 
+        parameters {
+            string(
+                name: 'RELEASE_TAG',
+                defaultValue: '',
+                description: 'Chỉ dùng để gửi thử thủ công, ví dụ v0.6.5.'
+            )
+        }
+
         triggers {
             GenericTrigger(
                 genericVariables: [
@@ -53,6 +61,9 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def releaseRef = (env.GITHUB_REF ?: '').trim()
+                        if (!releaseRef && params.RELEASE_TAG?.trim()) {
+                            releaseRef = "refs/tags/${params.RELEASE_TAG.trim()}"
+                        }
                         if (!(releaseRef ==~ /^refs\/tags\/v\d+\.\d+\.\d+$/)) {
                             error("Expected a release tag ref, got '${releaseRef}'.")
                         }

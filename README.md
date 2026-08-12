@@ -120,7 +120,10 @@ notify the developer Telegram group when a release tag is pushed.
    `123456:ABC...|-5311807067`.
 3. Keep (or create) the Secret text credential `pearz-github-webhook` used by
    the Generic Webhook Trigger setup below.
-4. Run the job once manually. Jenkins saves the tag-only webhook trigger.
+4. Run the job once manually. To test the bot, select **Build with
+   Parameters**, enter an existing tag such as `v0.6.5` in `RELEASE_TAG`, and
+   verify that the group receives the message. Jenkins also saves the
+   tag-only webhook trigger.
 5. In the GitHub webhook for this repository, enable **Pushes** and use the
    Jenkins Generic Webhook Trigger URL described below.
 
