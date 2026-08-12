@@ -29,6 +29,20 @@ Unity automatically adds the dependency to `Packages/manifest.json` and locks
 the resolved commit in `Packages/packages-lock.json`. Commit both files with
 the project.
 
+### PearzCI release Telegram notification
+
+This repository sends a Telegram notice when an exact release tag such as
+`v0.6.6` is pushed. It runs entirely through GitHub Actions; Jenkins game
+build jobs are not involved.
+
+In GitHub, open **PearzCI > Settings > Secrets and variables > Actions** and
+create the secret `TELEGRAM_BOT_TOKEN` with the token from BotFather. Add the
+bot to the developer group. The group ID is configured in the workflow.
+
+The tag must match the `package.json` version and the changelog must include
+the corresponding `## [0.6.6]` section. Normal commits and non-semantic tags
+do not send a message.
+
 ### Manual installation
 
 For CI setup or troubleshooting, add the package directly to
@@ -102,35 +116,6 @@ This one-line script is identical for every project. Jenkins loads PearzCI
 implicitly at the globally configured version, so project jobs do not need an
 `@Library` declaration, a second CI repository, or a project-specific
 pipeline.
-
-### PearzCI release notification
-
-Create one additional Jenkins **Pipeline** job named `PearzCI Release` to
-notify the developer Telegram group when a release tag is pushed.
-
-1. Select **Pipeline script** and paste the content of
-   [`Jenkinsfile.release.example`](Jenkinsfile.release.example). Change
-   `gitCredentialsId` if the SSH credential for this repository has another
-   ID. The explicit `@Library('pearz-ci@main')` keeps this operational job on
-   the current pipeline code; game jobs can remain on the released `upm`
-   version.
-2. Create the Jenkins **Secret text** credential
-   `pearz-telegram-release`. Its value is
-   `<telegram-bot-token>|<telegram-group-chat-id>`, for example
-   `123456:ABC...|-5311807067`.
-3. Keep (or create) the Secret text credential `pearz-github-webhook` used by
-   the Generic Webhook Trigger setup below.
-4. Run the job once manually. To test the bot, select **Build with
-   Parameters**, enter an existing tag such as `v0.6.5` in `RELEASE_TAG`, and
-   verify that the group receives the message. Jenkins also saves the
-   tag-only webhook trigger.
-5. In the GitHub webhook for this repository, enable **Pushes** and use the
-   Jenkins Generic Webhook Trigger URL described below.
-
-After that, pushing an exact semantic-version tag such as `v0.6.6` sends one
-Telegram message. Regular commits and non-release tags do not notify the
-group. The tag must match the `package.json` version and the changelog must
-contain a matching `## [0.6.6]` section.
 
 Keep **Include `@Library` changes in job recent changes** disabled. Jenkins
 Poll SCM otherwise also polls the PearzCI repository and can repeatedly start
