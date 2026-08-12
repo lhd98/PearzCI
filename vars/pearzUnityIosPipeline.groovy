@@ -168,7 +168,19 @@ def call(Map config = [:]) {
                     script {
                         def startedAt = System.currentTimeMillis()
                         try {
-                            withEnv(["OUTPUT_PATH=${env.IOS_PROJECT_PATH}"]) {
+                            withEnv([
+                                "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
+                                "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
+                                "BUNDLE_IDENTIFIER=${params.BUNDLE_IDENTIFIER ?: ''}",
+                                "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
+                                "APP_VERSION=${params.APP_VERSION ?: ''}",
+                                "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
+                                "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
+                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}",
+                                "UNITY_DEVELOPMENT_BUILD=${params.UNITY_DEVELOPMENT_BUILD}",
+                                "SCRIPT_DEBUGGING=${params.SCRIPT_DEBUGGING}"
+                            ]) {
                                 sh '''
                                     set +e
                                     "$UNITY_EXE" -batchmode -quit \
