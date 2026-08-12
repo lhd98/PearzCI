@@ -4,6 +4,16 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-08-13
+
+### Added
+
+- Added the optional `CLEAN_WORKSPACE` build parameter. When enabled, it
+  removes the job workspace before checkout so the build starts from a fresh
+  project state.
+- Added the optional `SEND_NOTIFICATIONS` build parameter. It defaults to
+  enabled and can suppress all post-build notification platforms for one run.
+
 ## [0.6.8] - 2026-08-12
 
 ### Changed

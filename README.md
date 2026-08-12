@@ -161,7 +161,8 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
-  `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
+  `UNITY_DEVELOPMENT_BUILD`, `BUILD_APP_BUNDLE`, `CLEAN_WORKSPACE`, and
+  `SEND_NOTIFICATIONS`
 - String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
@@ -170,6 +171,15 @@ Common optional parameters:
   `IOS_PROVISIONING_PROFILE_SPECIFIER`
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH`
 - Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+
+`CLEAN_WORKSPACE` mặc định là `false`. Khi bật, PearzCI xoá toàn bộ workspace
+của riêng Jenkins job trước bước checkout rồi tải lại project từ Git. Dùng tuỳ
+chọn này khi Unity/Package cache hoặc `ProjectSettings` còn trạng thái từ build
+trước; không bật nếu cần giữ file cục bộ chưa được commit trong workspace.
+
+`SEND_NOTIFICATIONS` mặc định là `true`. Tắt nó để bỏ qua toàn bộ thông báo
+sau build (hiện tại là Telegram); cờ này cũng áp dụng cho Discord, Lark hoặc
+nền tảng khác khi được bổ sung sau này.
 
 `ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
 `BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
