@@ -295,6 +295,10 @@ def call(Map config = [:]) {
                             'xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Debug'
                         ).toString().trim()
                         def bundleIdentifier = params.BUNDLE_IDENTIFIER?.toString()?.trim() ?: ''
+                        def profileSpecifier = config.get(
+                            'iosProvisioningProfileSpecifier',
+                            params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
+                        ).toString().trim()
 
                         if (!deviceUdid) {
                             error('IOS_DEVICE_UDID is required when IOS_BUILD_TO_DEVICE=true.')
@@ -310,7 +314,8 @@ def call(Map config = [:]) {
                             "IOS_DEVICE_UDID=${deviceUdid}",
                             "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
                             "XCODE_CONFIGURATION=${xcodeConfiguration}",
-                            "IOS_BUNDLE_IDENTIFIER=${bundleIdentifier}"
+                            "IOS_BUNDLE_IDENTIFIER=${bundleIdentifier}",
+                            "IOS_PROFILE_SPECIFIER=${profileSpecifier}"
                         ]) {
                             sh '''
                                 set -eu
@@ -337,23 +342,30 @@ def call(Map config = [:]) {
                                             "$entitlements_path" >/dev/null 2>&1 || true
                                     done
 
-                                bundle_args=""
-                                if [ -n "$IOS_BUNDLE_IDENTIFIER" ]; then
-                                    bundle_args="PRODUCT_BUNDLE_IDENTIFIER=$IOS_BUNDLE_IDENTIFIER"
-                                fi
+                                run_xcodebuild() {
+                                    xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
+                                        -scheme Unity-iPhone \\
+                                        -configuration "$XCODE_CONFIGURATION" \\
+                                        -destination "id=$IOS_DEVICE_UDID" \\
+                                        -derivedDataPath "$DERIVED_DATA_PATH" \\
+                                        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \\
+                                        DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
+                                        "PRODUCT_BUNDLE_IDENTIFIER=$IOS_BUNDLE_IDENTIFIER" \\
+                                        "$@" \\
+                                        build > "$XCODEBUILD_LOG_PATH" 2>&1
+                                }
 
                                 set +e
-                                xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
-                                    -scheme Unity-iPhone \\
-                                    -configuration "$XCODE_CONFIGURATION" \\
-                                    -destination "id=$IOS_DEVICE_UDID" \\
-                                    -derivedDataPath "$DERIVED_DATA_PATH" \\
-                                    -allowProvisioningUpdates \\
-                                    CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \\
-                                    CODE_SIGN_STYLE=Automatic \\
-                                    DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
-                                    $bundle_args \\
-                                    build > "$XCODEBUILD_LOG_PATH" 2>&1
+                                if [ -n "$IOS_PROFILE_SPECIFIER" ]; then
+                                    echo "Using provisioning profile: $IOS_PROFILE_SPECIFIER"
+                                    run_xcodebuild \\
+                                        CODE_SIGN_STYLE=Manual \\
+                                        "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                else
+                                    run_xcodebuild \\
+                                        -allowProvisioningUpdates \\
+                                        CODE_SIGN_STYLE=Automatic
+                                fi
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"

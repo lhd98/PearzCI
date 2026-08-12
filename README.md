@@ -429,6 +429,9 @@ PearzCI builds the exported Xcode project for that device and installs the app
 with `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`,
 create an IPA, or upload to Drive. The connected device must be trusted and
 visible to the Jenkins macOS user through `xcrun devicectl list devices`.
+For an agent without access to Xcode's Apple account, set
+`IOS_PROVISIONING_PROFILE_SPECIFIER` to an installed development profile name;
+PearzCI then uses manual signing for the device build.
 When the Xcode project includes In-App Purchase, this device-only flow removes
 that capability from the generated export so a free Apple Personal Team can
 sign it. In-App Purchase is therefore unavailable in that test build; normal
