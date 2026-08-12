@@ -350,6 +350,7 @@ def call(Map config = [:]) {
                                     -derivedDataPath "$DERIVED_DATA_PATH" \\
                                     -allowProvisioningUpdates \\
                                     CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \\
+                                    CODE_SIGN_STYLE=Automatic \\
                                     DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
                                     $bundle_args \\
                                     build > "$XCODEBUILD_LOG_PATH" 2>&1
