@@ -17,6 +17,9 @@ def call(Map config = [:]) {
     ).toString().trim()
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
     def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
+    def buildToDevice = config.get(
+        'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
+    ).toString().trim().toBoolean()
     def webhookBranch = defaultGitBranch.replaceFirst(/^refs\/heads\//, '')
     def webhookRepository = extractGitHubRepository(repositoryUrl)
     def webhookFilterExpression = webhookRepository
@@ -64,6 +67,7 @@ def call(Map config = [:]) {
             RCLONE_EXE = "${rcloneExe}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
+            IOS_BUILD_TO_DEVICE = "${buildToDevice}"
         }
 
         stages {
@@ -119,6 +123,8 @@ def call(Map config = [:]) {
                         env.ARCHIVE_PATH =
                             "${env.WORKSPACE}/Builds/iOS/Unity-iPhone.xcarchive"
                         env.EXPORT_PATH = "${env.WORKSPACE}/Builds/iOS/export"
+                        env.DERIVED_DATA_PATH =
+                            "${env.WORKSPACE}/Builds/iOS/DerivedData"
                         env.BUILD_LOG_PATH =
                             "${env.WORKSPACE}/Builds/iOS/unity-build.log"
                         env.XCODEBUILD_LOG_PATH =
@@ -146,9 +152,11 @@ def call(Map config = [:]) {
                             uname -s | grep -Fx Darwin
                             "$UNITY_EXE" -version
                             xcodebuild -version
-                            command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
-                                [ -x "$RCLONE_EXE" ]
-                            "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
+                            if [ "$IOS_BUILD_TO_DEVICE" != 'true' ]; then
+                                command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
+                                    [ -x "$RCLONE_EXE" ]
+                                "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
+                            fi
                         '''
                     }
                 }
@@ -183,6 +191,7 @@ def call(Map config = [:]) {
             }
 
             stage('Archive and Export IPA') {
+                when { expression { !buildToDevice } }
                 options { timeout(time: 45, unit: 'MINUTES') }
                 steps {
                     script {
@@ -259,7 +268,76 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Build and Install on iOS Device') {
+                when { expression { buildToDevice } }
+                options { timeout(time: 45, unit: 'MINUTES') }
+                steps {
+                    script {
+                        def deviceUdid = config.get(
+                            'iosDeviceUdid', params.IOS_DEVICE_UDID ?: ''
+                        ).toString().trim()
+                        def developmentTeam = config.get(
+                            'iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: ''
+                        ).toString().trim()
+                        def xcodeConfiguration = config.get(
+                            'xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Debug'
+                        ).toString().trim()
+
+                        if (!deviceUdid) {
+                            error('IOS_DEVICE_UDID is required when IOS_BUILD_TO_DEVICE=true.')
+                        }
+                        if (!developmentTeam) {
+                            error('IOS_DEVELOPMENT_TEAM is required when IOS_BUILD_TO_DEVICE=true.')
+                        }
+                        if (xcodeConfiguration != 'Debug' && xcodeConfiguration != 'Release') {
+                            error('XCODE_CONFIGURATION must be Release or Debug.')
+                        }
+
+                        withEnv([
+                            "IOS_DEVICE_UDID=${deviceUdid}",
+                            "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
+                            "XCODE_CONFIGURATION=${xcodeConfiguration}"
+                        ]) {
+                            sh '''
+                                set -eu
+                                [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" ] || {
+                                    echo "ERROR: Unity-iPhone.xcodeproj was not exported."
+                                    exit 1
+                                }
+                                rm -rf "$DERIVED_DATA_PATH"
+
+                                set +e
+                                xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
+                                    -scheme Unity-iPhone \\
+                                    -configuration "$XCODE_CONFIGURATION" \\
+                                    -destination "id=$IOS_DEVICE_UDID" \\
+                                    -derivedDataPath "$DERIVED_DATA_PATH" \\
+                                    -allowProvisioningUpdates \\
+                                    DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
+                                    build > "$XCODEBUILD_LOG_PATH" 2>&1
+                                result=$?
+                                cat "$XCODEBUILD_LOG_PATH"
+                                [ "$result" -eq 0 ] || exit "$result"
+
+                                app_path="$DERIVED_DATA_PATH/Build/Products/$XCODE_CONFIGURATION-iphoneos/Unity-iPhone.app"
+                                [ -d "$app_path" ] || {
+                                    echo "ERROR: Device app was not built: $app_path"
+                                    exit 1
+                                }
+                                xcrun devicectl device install app \\
+                                    --device "$IOS_DEVICE_UDID" "$app_path" \\
+                                    >> "$XCODEBUILD_LOG_PATH" 2>&1
+                                result=$?
+                                cat "$XCODEBUILD_LOG_PATH"
+                                exit "$result"
+                            '''
+                        }
+                    }
+                }
+            }
+
             stage('Archive and Upload IPA') {
+                when { expression { !buildToDevice } }
                 steps {
                     script {
                         if (!fileExists(env.OUTPUT_PATH)) {
@@ -286,7 +364,9 @@ def call(Map config = [:]) {
 
         post {
             success {
-                echo "iOS IPA completed: ${env.OUTPUT_FILE_NAME}"
+                echo(buildToDevice
+                    ? 'iOS device build and install completed.'
+                    : "iOS IPA completed: ${env.OUTPUT_FILE_NAME}")
             }
             always {
                 archiveArtifacts(

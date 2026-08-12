@@ -4,6 +4,11 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- iOS builds can now target a connected device through `IOS_BUILD_TO_DEVICE`
+  and `IOS_DEVICE_UDID`, building and installing the app without IPA export.
+
 ## [0.6.5] - 2026-08-11
 
 ### Added

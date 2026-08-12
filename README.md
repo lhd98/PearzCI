@@ -408,6 +408,8 @@ parameterized**:
   the Xcode project is configured for automatic signing)
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH` (absolute, readable path on the Mac)
 - Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+- Boolean `IOS_BUILD_TO_DEVICE` (default: false)
+- String `IOS_DEVICE_UDID` (required when building to a device)
 
 The remaining shared optional values are also supported: `BUNDLE_IDENTIFIER`,
 `SCRIPTING_DEFINE_SYMBOLS`, `APP_VERSION`, `IL2CPP_CODE_GENERATION`,
@@ -418,6 +420,19 @@ The pipeline first exports `Unity-iPhone.xcodeproj`, then invokes
 `xcodebuild archive` and `xcodebuild -exportArchive`. The final signed IPA,
 Unity log, and Xcode log are archived in Jenkins and uploaded to the configured
 Google Drive remote just like Android artifacts.
+
+### Build directly to a connected iPhone
+
+For a development-only device build, set `IOS_BUILD_TO_DEVICE=true`, provide
+`IOS_DEVICE_UDID` and `IOS_DEVELOPMENT_TEAM`, and normally select `Debug`.
+PearzCI builds the exported Xcode project for that device and installs the app
+with `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`,
+create an IPA, or upload to Drive. The connected device must be trusted and
+visible to the Jenkins macOS user through `xcrun devicectl list devices`.
+
+This is compatible with an Xcode Personal Team for temporary local testing.
+Personal Team provisioning expires frequently and is not appropriate for
+TestFlight, App Store, or general distribution.
 
 ### Signing setup on the Mac agent
 
