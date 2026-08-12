@@ -312,11 +312,11 @@ def call(Map config = [:]) {
                                 # or the normal IPA-export pipeline.
                                 pbxproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"
                                 if grep -Fq 'com.apple.InAppPurchase' "$pbxproj_path"; then
-                                    perl -0pi -e 's/\s*com\.apple\.InAppPurchase\s*=\s*\{\s*enabled\s*=\s*1;\s*\};\s*//g' "$pbxproj_path"
+                                    perl -0pi -e 's/\\s*com\\.apple\\.InAppPurchase\\s*=\\s*\\{\\s*enabled\\s*=\\s*1;\\s*\\};\\s*//g' "$pbxproj_path"
                                     echo 'Removed In-App Purchase capability for Personal Team device signing.'
                                 fi
                                 find "$IOS_PROJECT_PATH" -name '*.entitlements' -type f -exec \
-                                    perl -0pi -e 's/[ \t]*<key>com\.apple\.developer\.in-app-payments<\/key>\s*<(true|array)>[^<]*(<\/array>)?\s*//g' {} +
+                                    perl -0pi -e 's/[ \\t]*<key>com\\.apple\\.developer\\.in-app-payments<\\/key>\\s*<(true|array)>[^<]*(<\\/array>)?\\s*//g' {} +
 
                                 set +e
                                 xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
