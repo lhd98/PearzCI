@@ -582,11 +582,35 @@ public static class BuildEntry
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(configuration.KeystorePath))
-            throw new Exception("Thiếu biến KEYSTORE_PATH.");
+        string configuredKeystorePath = configuration.KeystorePath;
 
-        string keystorePath =
-            Path.GetFullPath(configuration.KeystorePath);
+        if (string.IsNullOrWhiteSpace(configuredKeystorePath))
+        {
+            string bundleIdentifier = GetAndroidApplicationIdentifier();
+
+            if (string.IsNullOrWhiteSpace(bundleIdentifier))
+            {
+                throw new Exception(
+                    "Không thể xác định Android package name để tìm keystore.");
+            }
+
+            configuredKeystorePath = Path.Combine(
+                GetProjectPath(),
+                "Config",
+                bundleIdentifier + ".keystore");
+
+            Log(
+                "KEYSTORE_PATH not provided. " +
+                "Using the project keystore convention.");
+        }
+        else if (!Path.IsPathRooted(configuredKeystorePath))
+        {
+            configuredKeystorePath = Path.Combine(
+                GetProjectPath(),
+                configuredKeystorePath);
+        }
+
+        string keystorePath = Path.GetFullPath(configuredKeystorePath);
 
         if (!File.Exists(keystorePath))
         {

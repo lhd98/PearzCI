@@ -4,6 +4,14 @@ All notable changes to this package are documented in this file.
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-08-12
+
+### Changed
+
+- Android signing now defaults to
+  `Config/<BundleIdentifier>.keystore` when `KEYSTORE_PATH` is not provided,
+  while retaining explicit path overrides for existing Jenkins jobs.
+
 ## [0.6.7] - 2026-08-12
 
 ### Fixed

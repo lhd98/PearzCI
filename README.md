@@ -80,12 +80,25 @@ are:
 - `APP_VERSION`
 - `ANDROID_VERSION_CODE`
 - `TARGET_ARCHITECTURES`
-- `KEYSTORE_PATH`
+- `KEYSTORE_PATH` (optional path override)
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS_NAME`
 - `KEY_ALIAS_PASSWORD`
 
 See `BuildEntry.cs` for the complete list and accepted values.
+
+When Android signing credentials are provided without `KEYSTORE_PATH`, PearzCI
+loads the keystore from the project convention below:
+
+```text
+<ProjectRoot>/Config/<BundleIdentifier>.keystore
+```
+
+For example, package name `com.pg.sushi.sort` uses
+`Config/com.pg.sushi.sort.keystore`. The effective Android bundle identifier is
+used after applying any `BUNDLE_IDENTIFIER` override. `KEYSTORE_PATH` remains
+supported for existing jobs and non-standard locations; relative overrides are
+resolved from the Unity project root.
 
 ## Jenkins Shared Library
 
@@ -149,8 +162,10 @@ Common optional parameters:
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
   `UNITY_DEVELOPMENT_BUILD`, and `BUILD_APP_BUNDLE`
-- String `APP_VERSION`, `KEYSTORE_PATH`, and `KEY_ALIAS_NAME`
+- String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
+- Optional String `KEYSTORE_PATH`, only to override the default
+  `Config/<BundleIdentifier>.keystore` location
 - String `IOS_BUILD_NUMBER`, `IOS_DEVELOPMENT_TEAM`, and
   `IOS_PROVISIONING_PROFILE_SPECIFIER`
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH`
