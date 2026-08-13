@@ -361,15 +361,13 @@ def call(Map config = [:]) {
                                 profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
                                 # The free development profile created by Xcode is Xcode-managed.
                                 # It must stay in Automatic mode; Manual mode is only valid for a
-                                # profile created in the Apple Developer portal.
+                                # profile created in the Apple Developer portal. Passing its name
+                                # to xcodebuild is treated as a manual profile override, so let
+                                # Xcode select the installed matching profile itself.
                                 if [ -n "$profile_specifier" ]; then
-                                    echo "Using Xcode-managed provisioning profile: $profile_specifier"
-                                    run_xcodebuild \\
-                                        CODE_SIGN_STYLE=Automatic \\
-                                        "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
-                                else
-                                    run_xcodebuild CODE_SIGN_STYLE=Automatic
+                                    echo "Ignoring IOS_PROVISIONING_PROFILE_SPECIFIER for Xcode-managed automatic signing: $profile_specifier"
                                 fi
+                                run_xcodebuild CODE_SIGN_STYLE=Automatic
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"
