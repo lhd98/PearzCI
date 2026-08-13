@@ -85,7 +85,11 @@ jobs:
             sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
           }
 
-          safe_notes="$(printf '%s' "$RELEASE_NOTES" | escape_html)"
+          safe_notes="$(printf '%s' "$RELEASE_NOTES" |
+            escape_html |
+            sed -E \
+              -e 's/^### (.+)$/<b>\1<\/b>/' \
+              -e 's/^- (.+)$/• \1/')"
           tag="v$VERSION"
           tag_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${tag}"
           message="$(printf '%s\n' \
@@ -97,7 +101,7 @@ jobs:
             '<b>Thay đổi</b>' \
             "<blockquote>${safe_notes}</blockquote>" \
             '' \
-            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
+            '<i>Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.</i>')"
 
           curl --fail-with-body --silent --show-error \
             --request POST \
