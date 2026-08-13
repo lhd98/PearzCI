@@ -3,9 +3,11 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEditor.iOS.Xcode;
 using UnityEngine;
 
 namespace Pearz.CI
@@ -13,6 +15,7 @@ namespace Pearz.CI
 public static class BuildEntry
 {
     private const string LogPrefix = "[Pearz.CI]";
+    private const string IosDeviceBuildMarkerFileName = ".pearz-ci-ios-device-build";
 
     /// <summary>
     /// Jenkins entry point:
@@ -168,6 +171,7 @@ public static class BuildEntry
                     $"Errors: {report.summary.totalErrors}");
             }
 
+            RemoveIapCapabilityForPersonalTeamDeviceBuild(configuration.OutputPath);
             Log("IOS XCODE EXPORT SUCCEEDED");
             Log($"Output: {configuration.OutputPath}");
             ExitBatchMode(0);
@@ -184,6 +188,36 @@ public static class BuildEntry
             }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Unity IAP adds the In-App Purchase Xcode capability during export.
+    /// Apple Personal Team profiles cannot sign that capability. For the
+    /// Jenkins device-test path only, remove it after the Unity export.
+    /// </summary>
+    private static void RemoveIapCapabilityForPersonalTeamDeviceBuild(string outputPath)
+    {
+        string markerPath = Path.Combine(GetProjectPath(), IosDeviceBuildMarkerFileName);
+        if (!File.Exists(markerPath))
+            return;
+
+        string projectPath = PBXProject.GetPBXProjectPath(outputPath);
+        if (!File.Exists(projectPath))
+            throw new FileNotFoundException("Exported Xcode project file was not found.", projectPath);
+
+        const string capabilityPattern =
+            @"\s*com\.apple\.InAppPurchase\s*=\s*\{\s*enabled\s*=\s*1;\s*\};";
+        string contents = File.ReadAllText(projectPath);
+        string updatedContents = Regex.Replace(contents, capabilityPattern, string.Empty);
+
+        if (contents == updatedContents)
+        {
+            Log("iOS device export: In-App Purchase capability was not present in the Xcode project.");
+            return;
+        }
+
+        File.WriteAllText(projectPath, updatedContents);
+        Log("iOS device export: removed In-App Purchase capability for Personal Team signing.");
     }
 
     private static BuildConfiguration ReadConfiguration()
