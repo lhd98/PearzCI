@@ -17,6 +17,9 @@ def call(Map config = [:]) {
     ).toString().trim()
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
     def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
+    def telegramCredentialsId = config.get(
+        'telegramCredentialsId', ''
+    ).toString().trim()
     def buildToDevice = config.get(
         'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
     ).toString().trim().toBoolean()
@@ -131,6 +134,8 @@ def call(Map config = [:]) {
                             "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
                         env.UPLOAD_LOG_PATH =
                             "${env.WORKSPACE}/Builds/iOS/upload.log"
+                        env.PIPELINE_START_MILLIS =
+                            System.currentTimeMillis().toString()
                         env.DRIVE_DIRECTORY =
                             "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
@@ -428,6 +433,8 @@ def call(Map config = [:]) {
                                     >> "$XCODEBUILD_LOG_PATH" 2>&1
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
+                                [ "$result" -eq 0 ] && \\
+                                    echo 'iOS app installed successfully on the connected device.'
                                 exit "$result"
                             '''
                         }
@@ -473,6 +480,16 @@ def call(Map config = [:]) {
                     allowEmptyArchive: true
                 )
                 script {
+                    def sendNotifications = params.SEND_NOTIFICATIONS == null ||
+                        params.SEND_NOTIFICATIONS.toString().toBoolean()
+
+                    if (buildToDevice && sendNotifications) {
+                        sendIosDeviceTelegramNotification(telegramCredentialsId)
+                    } else if (buildToDevice) {
+                        echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
+                    }
+                }
+                script {
                     if (fileExists('Builds')) {
                         dir('Builds') { deleteDir() }
                     }
@@ -480,6 +497,91 @@ def call(Map config = [:]) {
             }
         }
     }
+}
+
+def sendIosDeviceTelegramNotification(String telegramCredentialsId) {
+    boolean telegramConfigured = telegramCredentialsId ||
+        "${params.TELEGRAM_CHANNEL ?: ''}".trim()
+
+    if (!telegramConfigured) {
+        echo 'No Telegram target configured; iOS device notification skipped.'
+        return
+    }
+
+    try {
+        def result = currentBuild.currentResult ?: 'SUCCESS'
+        def installed = result == 'SUCCESS'
+        def title = installed
+            ? 'iOS DEVICE BUILD SUCCESS'
+            : 'iOS DEVICE BUILD FAILED'
+        def installStatus = installed
+            ? 'Installed successfully on the connected iPhone.'
+            : 'The app was not installed. Open the Jenkins log for details.'
+        def configuration = params.XCODE_CONFIGURATION?.toString()?.trim() ?: 'Debug'
+        def branch = params.GIT_BRANCH?.toString()?.trim() ?: ''
+        def bundleIdentifier = params.BUNDLE_IDENTIFIER?.toString()?.trim() ?: ''
+        def productName = params.PRODUCT_NAME?.toString()?.trim() ?: env.JOB_BASE_NAME
+        def buildLogUrl = env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
+            ? "${env.BUILD_URL}artifact/Builds/iOS/unity-build.log"
+            : ''
+        def xcodeLogUrl = env.XCODEBUILD_LOG_PATH?.trim() && fileExists(env.XCODEBUILD_LOG_PATH)
+            ? "${env.BUILD_URL}artifact/Builds/iOS/xcodebuild.log"
+            : ''
+        def lines = [
+            "<b>${telegramHtmlEscape(title)}</b>",
+            '━━━━━━━━━━━━━━━━━━',
+            "<b>Job:</b> ${telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}")}",
+            "<b>Product:</b> ${telegramHtmlEscape(productName)}",
+            bundleIdentifier ? "<b>Bundle ID:</b> <code>${telegramHtmlEscape(bundleIdentifier)}</code>" : '',
+            branch ? "<b>Branch:</b> <code>${telegramHtmlEscape(branch)}</code>" : '',
+            "<b>Xcode:</b> ${telegramHtmlEscape(configuration)}",
+            '━━━━━━━━━━━━━━━━━━',
+            "<b>Device:</b> Connected iPhone",
+            "<b>Install:</b> ${telegramHtmlEscape(installStatus)}",
+            "<b>Jenkins:</b> ${telegramHtmlEscape(env.BUILD_URL)}",
+            buildLogUrl ? "<b>Unity log:</b> ${telegramHtmlEscape(buildLogUrl)}" : '',
+            xcodeLogUrl ? "<b>Xcode log:</b> ${telegramHtmlEscape(xcodeLogUrl)}" : ''
+        ].findAll { it }.join('\n')
+
+        writeFile(file: 'telegram-message.txt', encoding: 'UTF-8', text: lines)
+
+        def sendTelegram = {
+            writeFile(
+                file: 'send-telegram.sh',
+                encoding: 'UTF-8',
+                text: libraryResource('com/pearz/ci/send-telegram.sh')
+            )
+            withEnv(['TELEGRAM_MESSAGE_FILE=telegram-message.txt']) {
+                sh 'sh ./send-telegram.sh'
+            }
+        }
+
+        if (telegramCredentialsId) {
+            withCredentials([string(
+                credentialsId: telegramCredentialsId,
+                variable: 'TELEGRAM_CHANNEL'
+            )]) {
+                sendTelegram()
+            }
+        } else {
+            withEnv(["TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"]) {
+                sendTelegram()
+            }
+        }
+    } catch (Exception exception) {
+        echo("Telegram notification failed: ${exception.message}")
+        if (currentBuild.currentResult == 'SUCCESS') {
+            currentBuild.result = 'UNSTABLE'
+        }
+    }
+}
+
+def telegramHtmlEscape(Object value) {
+    value?.toString()
+        ?.replace('&', '&amp;')
+        ?.replace('<', '&lt;')
+        ?.replace('>', '&gt;')
+        ?.replace('"', '&quot;') ?: ''
 }
 
 def extractGitHubRepository(String repositoryUrl) {
