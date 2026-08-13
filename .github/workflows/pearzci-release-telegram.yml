@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact release tag to announce (for example v0.6.11)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,15 +23,18 @@ jobs:
       - name: Check out the release tag
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 1
 
       - name: Validate release version
         id: release
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
 
-          tag="${GITHUB_REF_NAME}"
+          tag="$RELEASE_TAG"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Skipping non-release tag: $tag"
             echo 'should_notify=false' >> "$GITHUB_OUTPUT"
@@ -86,7 +95,7 @@ jobs:
             "<b>Chi tiết:</b> <a href=\"${tag_url}\">Xem trên GitHub</a>" \
             '' \
             '<b>Thay đổi</b>' \
-            "<blockquote>${safe_notes}</blockquote>" \
+            "${safe_notes}" \
             '' \
             'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
 
