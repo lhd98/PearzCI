@@ -175,6 +175,7 @@ def call(Map config = [:]) {
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                 "APP_VERSION=${params.APP_VERSION ?: ''}",
                                 "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IOS_BUILD_TO_DEVICE=${buildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                 "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
                                 "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}",
@@ -358,21 +359,17 @@ def call(Map config = [:]) {
 
                                 set +e
                                 profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
-                                [ -n "$profile_specifier" ] || {
-                                    echo 'ERROR: IOS_PROVISIONING_PROFILE_SPECIFIER is required for a device build.'
-                                    echo 'Use the installed profile name shown by: security cms -D -i <profile> | plutil -extract Name raw -'
-                                    exit 2
-                                }
-
-                                # A Jenkins-launched xcodebuild process cannot reliably use the
-                                # Apple account configured in the Xcode GUI.  Use the already
-                                # installed development profile instead of asking Xcode to contact
-                                # the developer portal with -allowProvisioningUpdates.
-                                echo "Using installed provisioning profile: $profile_specifier"
-                                run_xcodebuild \\
-                                    CODE_SIGN_STYLE=Manual \\
-                                    CODE_SIGN_IDENTITY='Apple Development' \\
-                                    "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
+                                # The free development profile created by Xcode is Xcode-managed.
+                                # It must stay in Automatic mode; Manual mode is only valid for a
+                                # profile created in the Apple Developer portal.
+                                if [ -n "$profile_specifier" ]; then
+                                    echo "Using Xcode-managed provisioning profile: $profile_specifier"
+                                    run_xcodebuild \\
+                                        CODE_SIGN_STYLE=Automatic \\
+                                        "PROVISIONING_PROFILE_SPECIFIER=$profile_specifier"
+                                else
+                                    run_xcodebuild CODE_SIGN_STYLE=Automatic
+                                fi
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"
