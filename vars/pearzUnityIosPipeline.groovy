@@ -184,6 +184,13 @@ def call(Map config = [:]) {
                             ]) {
                                 sh '''
                                     set +e
+                                    device_build_marker="$WORKSPACE/.pearz-ci-ios-device-build"
+                                    if [ "$IOS_BUILD_TO_DEVICE" = 'true' ]; then
+                                        : > "$device_build_marker"
+                                    else
+                                        rm -f "$device_build_marker"
+                                    fi
+                                    trap 'rm -f "$device_build_marker"' EXIT
                                     "$UNITY_EXE" -batchmode -quit \
                                         -projectPath "$WORKSPACE" \
                                         -buildTarget iOS \
