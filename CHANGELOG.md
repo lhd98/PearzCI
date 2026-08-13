@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.12] - 2026-08-13
+
+### Added
+
+- Windows 64-bit standalone player builds through `BUILD_PLATFORM=Windows`,
+  including Jenkins artifact archiving and Telegram notifications.
+
+### Changed
+
+- Telegram build titles now identify the selected platform, such as Android,
+  iOS device, or Windows.
+
 ## [0.6.11] - 2026-08-13
 
 ### Added
