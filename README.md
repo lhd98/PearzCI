@@ -201,8 +201,12 @@ trước; không bật nếu cần giữ file cục bộ chưa được commit t
 sau build (hiện tại là Telegram); cờ này cũng áp dụng cho Discord, Lark hoặc
 nền tảng khác khi được bổ sung sau này.
 
-`ANDROID_VERSION_CODE` is managed automatically by PearzCI from Jenkins
-`BUILD_NUMBER`; do not create it as a Jenkins parameter. Every Android build
+`ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
+parameter. APK builds use Jenkins `BUILD_NUMBER`. AAB builds use a separate,
+per-job persistent counter starting at `1`; it advances only after a successful
+AAB pipeline, so APK test builds do not consume Google Play version codes. The
+counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
+which is retained even when `CLEAN_WORKSPACE` is enabled. Every Android build
 also gets a visible version for use through Unity `Application.version`:
 `<BUILD_NUMBER>`, or `<APP_VERSION>-<BUILD_NUMBER>` when the optional
 `APP_VERSION` parameter is set. For example, Jenkins build `67` with

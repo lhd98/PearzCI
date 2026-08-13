@@ -356,18 +356,28 @@ def call(Map config = [:]) {
                         def ciAppVersion = configuredAppVersion
                             ? "${configuredAppVersion}-${env.BUILD_NUMBER}"
                             : "${env.BUILD_NUMBER}"
+                        def androidVersionCode = env.BUILD_NUMBER
+
+                        if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
+                            androidVersionCode = readNextAabVersionCode().toString()
+                            env.AAB_VERSION_CODE = androidVersionCode
+                            echo(
+                                'AAB version code reserved from the ' +
+                                "per-job counter: ${androidVersionCode}"
+                            )
+                        }
 
                         echo "Android APP_VERSION passed to Unity: ${ciAppVersion}"
-                        echo "Android version code passed to Unity: ${env.BUILD_NUMBER}"
+                        echo "Android version code passed to Unity: ${androidVersionCode}"
 
                         try {
-                            // BUILD_NUMBER do Jenkins duy trì riêng cho từng Job.
-                            // Luôn truyền vào APK để tester nhận biết bản đang cài,
-                            // đồng thời đảm bảo Android version code tăng khi cài đè.
+                            // APK dùng BUILD_NUMBER để tester nhận biết bản đang cài.
+                            // AAB dùng bộ đếm riêng, không bị các APK test xen kẽ
+                            // làm nhảy version code trên Google Play.
                             withEnv([
                                 "OUTPUT_PATH=${env.OUTPUT_PATH}",
                                 "APP_VERSION=${ciAppVersion}",
-                                "ANDROID_VERSION_CODE=${env.BUILD_NUMBER}"
+                                "ANDROID_VERSION_CODE=${androidVersionCode}"
                             ]) {
                                 if (isUnix()) {
                                     sh '''
@@ -690,6 +700,10 @@ def call(Map config = [:]) {
                 echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
 
                 script {
+                    if (env.AAB_VERSION_CODE?.trim()) {
+                        saveNextAabVersionCode(env.AAB_VERSION_CODE.toInteger())
+                    }
+
                     if (env.DOWNLOAD_URL?.trim()) {
                         echo "Download URL: ${env.DOWNLOAD_URL}"
                     }
@@ -1550,4 +1564,62 @@ def regexEscape(String value) {
             ? "\\${character}"
             : character
     }.join('')
+}
+
+def readNextAabVersionCode() {
+    def stateFile = getAabVersionCodeStateFile()
+
+    if (!stateFile.exists()) {
+        return 1
+    }
+
+    def value = stateFile.getText('UTF-8').trim()
+    if (!(value ==~ /[1-9][0-9]*/)) {
+        error(
+            "Invalid AAB version-code counter at ${stateFile}: '${value}'. " +
+            'Fix the file to a positive integer before building another AAB.'
+        )
+    }
+
+    try {
+        return value.toInteger()
+    } catch (NumberFormatException ignored) {
+        error(
+            "AAB version-code counter at ${stateFile} is outside Android's " +
+            'supported integer range.'
+        )
+    }
+}
+
+def saveNextAabVersionCode(int usedVersionCode) {
+    if (usedVersionCode == Integer.MAX_VALUE) {
+        error('AAB version code has reached Android\'s maximum integer value.')
+    }
+
+    def stateFile = getAabVersionCodeStateFile()
+    def temporaryFile = new File(
+        stateFile.parentFile,
+        ".${stateFile.name}.${env.BUILD_TAG}.tmp"
+    )
+
+    temporaryFile.setText("${usedVersionCode + 1}\n", 'UTF-8')
+
+    if (stateFile.exists() && !stateFile.delete()) {
+        temporaryFile.delete()
+        error("Unable to update AAB version-code counter at ${stateFile}.")
+    }
+
+    if (!temporaryFile.renameTo(stateFile)) {
+        temporaryFile.delete()
+        error("Unable to save AAB version-code counter at ${stateFile}.")
+    }
+
+    echo "Next AAB version code: ${usedVersionCode + 1}"
+}
+
+def getAabVersionCodeStateFile() {
+    // Job root lives on the Jenkins controller, unlike a workspace it is not
+    // removed by CLEAN_WORKSPACE and is shared by Windows/macOS agents.
+    def jobRoot = currentBuild.rawBuild.parent.rootDir
+    return new File(jobRoot, 'pearz-ci-aab-version-code.txt')
 }

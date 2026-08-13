@@ -2,12 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
-## [0.6.12] - 2026-08-13
+## [0.6.13] - 2026-08-13
 
 ### Added
 
 - Windows 64-bit standalone player builds through `BUILD_PLATFORM=Windows`,
   including Jenkins artifact archiving and Telegram notifications.
+- Android App Bundle builds now use a persistent, per-job version-code counter
+  beginning at `1`, independent of APK test-build numbers.
 
 ### Changed
 
