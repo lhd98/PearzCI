@@ -81,28 +81,22 @@ jobs:
             exit 1
           fi
 
-          escape_html() {
-            sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
-          }
-
-          safe_notes="$(printf '%s' "$RELEASE_NOTES" | escape_html)"
           tag="v$VERSION"
           tag_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${tag}"
           message="$(printf '%s\n' \
-            "<b>PearzCI ${tag} đã phát hành</b>" \
+            "PearzCI ${tag} đã phát hành" \
             '' \
-            "<b>Tag:</b> <code>${tag}</code>" \
-            "<b>Chi tiết:</b> <a href=\"${tag_url}\">Xem trên GitHub</a>" \
+            "Tag: ${tag}" \
+            "Chi tiết: ${tag_url}" \
             '' \
-            '<b>Thay đổi</b>' \
-            "${safe_notes}" \
+            'Thay đổi' \
+            "${RELEASE_NOTES}" \
             '' \
-            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
+            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit Packages/manifest.json và Packages/packages-lock.json.')"
 
           curl --fail --silent --show-error \
             --request POST \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${message}" \
-            --data-urlencode 'parse_mode=HTML' \
             --data-urlencode 'disable_web_page_preview=true' \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
