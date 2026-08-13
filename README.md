@@ -468,6 +468,9 @@ PearzCI builds the exported Xcode project for that device and installs the app
 with `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`,
 create an IPA, or upload to Drive. The connected device must be trusted and
 visible to the Jenkins macOS user through `xcrun devicectl list devices`.
+When `TELEGRAM_CHANNEL` is configured and `SEND_NOTIFICATIONS` is enabled,
+PearzCI also sends a success or failure notification for this device build,
+including the Jenkins and build-log links.
 Set `IOS_PROVISIONING_PROFILE_SPECIFIER` to an installed development profile
 name when a specific Xcode-managed profile should be selected for the device
 build.
