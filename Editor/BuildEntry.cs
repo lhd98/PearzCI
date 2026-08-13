@@ -191,6 +191,66 @@ public static class BuildEntry
     }
 
     /// <summary>
+    /// Jenkins entry point for a Windows standalone player:
+    /// -executeMethod Pearz.CI.BuildEntry.BuildWindows
+    /// </summary>
+    public static void BuildWindows()
+    {
+        WindowsBuildConfiguration configuration = null;
+        BuildReport report = null;
+
+        try
+        {
+            Log("Starting Windows standalone build");
+            string[] scenes = GetEnabledScenes();
+            if (scenes.Length == 0)
+                throw new InvalidOperationException(
+                    "Không có scene nào được bật trong Build Profiles / Build Settings.");
+
+            configuration = ReadWindowsConfiguration();
+            PrepareWindowsOutputDirectory(configuration.OutputPath);
+            ApplyWindowsSettings(configuration);
+
+            report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = scenes,
+                locationPathName = configuration.OutputPath,
+                target = BuildTarget.StandaloneWindows64,
+                targetGroup = BuildTargetGroup.Standalone,
+                options = GetBuildOptions(configuration.UnityDevelopmentBuild,
+                    configuration.ScriptDebugging)
+            });
+
+            PrintBuildSummary(report.summary);
+            if (report.summary.result != BuildResult.Succeeded ||
+                !File.Exists(configuration.OutputPath))
+            {
+                throw new Exception(
+                    $"Windows build failed. Result: {report.summary.result}, " +
+                    $"Errors: {report.summary.totalErrors}");
+            }
+
+            TryWriteWindowsBuildMetadata(report, configuration, string.Empty);
+            Log("WINDOWS BUILD SUCCEEDED");
+            Log($"Output: {configuration.OutputPath}");
+            ExitBatchMode(0);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            Error("WINDOWS BUILD FAILED");
+            Error(exception.Message);
+            TryWriteWindowsBuildMetadata(report, configuration, exception.Message);
+            if (Application.isBatchMode)
+            {
+                EditorApplication.Exit(1);
+                return;
+            }
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Unity IAP adds the In-App Purchase Xcode capability during export.
     /// Apple Personal Team profiles cannot sign that capability. For the
     /// Jenkins device-test path only, remove it after the Unity export.
@@ -335,6 +395,60 @@ public static class BuildEntry
             ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
             StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
         };
+    }
+
+    private static WindowsBuildConfiguration ReadWindowsConfiguration()
+    {
+        string outputPath = Path.GetFullPath(GetEnvironmentVariable(
+            "OUTPUT_PATH",
+            Path.Combine(GetProjectPath(), "Builds", "Windows", "Game.exe")));
+
+        return new WindowsBuildConfiguration
+        {
+            OutputPath = Path.ChangeExtension(outputPath, ".exe"),
+            UnityDevelopmentBuild = GetBooleanEnvironmentVariable(
+                "UNITY_DEVELOPMENT_BUILD", false),
+            ScriptDebugging = GetBooleanEnvironmentVariable("SCRIPT_DEBUGGING", false),
+            ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
+            ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
+            AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+            Il2CppCodeGeneration = GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
+            ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
+            StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
+        };
+    }
+
+    private static void PrepareWindowsOutputDirectory(string outputPath)
+    {
+        PrepareOutputDirectory(outputPath);
+        string dataDirectory = Path.Combine(
+            Path.GetDirectoryName(outputPath) ?? string.Empty,
+            Path.GetFileNameWithoutExtension(outputPath) + "_Data");
+        if (Directory.Exists(dataDirectory))
+            FileUtil.DeleteFileOrDirectory(dataDirectory);
+    }
+
+    private static void ApplyWindowsSettings(WindowsBuildConfiguration configuration)
+    {
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 &&
+            !EditorUserBuildSettings.SwitchActiveBuildTarget(
+                BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64))
+            throw new Exception("Không thể chuyển active build target sang Windows 64-bit.");
+
+        if (!string.IsNullOrWhiteSpace(configuration.ProductName))
+            PlayerSettings.productName = configuration.ProductName;
+        if (!string.IsNullOrWhiteSpace(configuration.ScriptingDefineSymbols))
+            SetWindowsScriptingDefineSymbols(configuration.ScriptingDefineSymbols);
+        if (!string.IsNullOrWhiteSpace(configuration.AppVersion))
+            PlayerSettings.bundleVersion = configuration.AppVersion;
+        if (!string.IsNullOrWhiteSpace(configuration.Il2CppCodeGeneration))
+            PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Standalone,
+                ParseIl2CppCodeGeneration(configuration.Il2CppCodeGeneration));
+        if (!string.IsNullOrWhiteSpace(configuration.ManagedStrippingLevel))
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone,
+                ParseManagedStrippingLevel(configuration.ManagedStrippingLevel));
+        if (configuration.StripEngineCode.HasValue)
+            PlayerSettings.stripEngineCode = configuration.StripEngineCode.Value;
     }
 
     private static void PrepareIosOutputDirectory(string outputPath)
@@ -564,21 +678,29 @@ public static class BuildEntry
     private static BuildOptions GetBuildOptions(
         BuildConfiguration configuration)
     {
-        if (configuration.ScriptDebugging &&
-            !configuration.UnityDevelopmentBuild)
+        return GetBuildOptions(
+            configuration.UnityDevelopmentBuild,
+            configuration.ScriptDebugging);
+    }
+
+    private static BuildOptions GetBuildOptions(
+        bool unityDevelopmentBuild,
+        bool scriptDebugging)
+    {
+        if (scriptDebugging && !unityDevelopmentBuild)
         {
             throw new InvalidOperationException(
                 "SCRIPT_DEBUGGING=true yêu cầu " +
                 "UNITY_DEVELOPMENT_BUILD=true.");
         }
 
-        if (configuration.UnityDevelopmentBuild)
+        if (unityDevelopmentBuild)
         {
             Log("Unity Development Build: enabled");
 
             BuildOptions options = BuildOptions.Development;
 
-            if (configuration.ScriptDebugging)
+            if (scriptDebugging)
             {
                 Log("Script Debugging: enabled");
                 options |= BuildOptions.AllowDebugging;
@@ -877,6 +999,48 @@ public static class BuildEntry
         }
     }
 
+    private static void TryWriteWindowsBuildMetadata(
+        BuildReport report,
+        WindowsBuildConfiguration configuration,
+        string errorMessage)
+    {
+        try
+        {
+            string outputPath = configuration != null
+                ? configuration.OutputPath
+                : Path.Combine(GetProjectPath(), "Builds", "Windows", "Game.exe");
+            string outputDirectory = Path.GetDirectoryName(outputPath);
+            Directory.CreateDirectory(outputDirectory);
+            BuildSummary? summary = report != null ? report.summary : null;
+            FileInfo outputFile = new FileInfo(outputPath);
+
+            WindowsBuildMetadata metadata = new WindowsBuildMetadata
+            {
+                schemaVersion = 1,
+                result = summary.HasValue ? summary.Value.result.ToString() : BuildResult.Failed.ToString(),
+                errorMessage = errorMessage ?? string.Empty,
+                productName = PlayerSettings.productName,
+                versionName = PlayerSettings.bundleVersion,
+                unityVersion = Application.unityVersion,
+                scriptingBackend = PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone).ToString(),
+                managedStrippingLevel = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.Standalone).ToString(),
+                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetWindowsScriptingDefineSymbols()),
+                outputFileName = outputFile.Name,
+                outputSizeBytes = outputFile.Exists ? outputFile.Length : 0,
+                buildDurationSeconds = summary.HasValue ? summary.Value.totalTime.TotalSeconds : 0d,
+                warningCount = summary.HasValue ? (int)summary.Value.totalWarnings : 0,
+                errorCount = summary.HasValue ? (int)summary.Value.totalErrors : 0,
+                generatedAtUtc = DateTime.UtcNow.ToString("o")
+            };
+            File.WriteAllText(Path.Combine(outputDirectory, "build-metadata.json"),
+                JsonUtility.ToJson(metadata, true));
+        }
+        catch (Exception exception)
+        {
+            Warning("Could not write optional Windows build metadata: " + exception.Message);
+        }
+    }
+
     private static string TryCopyMappingFile(
         BuildReport report,
         string outputDirectory)
@@ -1123,6 +1287,24 @@ public static class BuildEntry
 #endif
     }
 
+    private static void SetWindowsScriptingDefineSymbols(string value)
+    {
+#if UNITY_2021_2_OR_NEWER
+        PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, value);
+#else
+        PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, value);
+#endif
+    }
+
+    private static string GetWindowsScriptingDefineSymbols()
+    {
+#if UNITY_2021_2_OR_NEWER
+        return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.Standalone);
+#else
+        return PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+#endif
+    }
+
     private static void Log(string message) { Debug.Log($"{LogPrefix} {message}"); }
 
     private static void Warning(string message)
@@ -1200,6 +1382,39 @@ public static class BuildEntry
         public string Il2CppCodeGeneration { get; set; }
         public string ManagedStrippingLevel { get; set; }
         public bool? StripEngineCode { get; set; }
+    }
+
+    private sealed class WindowsBuildConfiguration
+    {
+        public string OutputPath { get; set; }
+        public bool UnityDevelopmentBuild { get; set; }
+        public bool ScriptDebugging { get; set; }
+        public string ProductName { get; set; }
+        public string ScriptingDefineSymbols { get; set; }
+        public string AppVersion { get; set; }
+        public string Il2CppCodeGeneration { get; set; }
+        public string ManagedStrippingLevel { get; set; }
+        public bool? StripEngineCode { get; set; }
+    }
+
+    [Serializable]
+    private sealed class WindowsBuildMetadata
+    {
+        public int schemaVersion;
+        public string result;
+        public string errorMessage;
+        public string productName;
+        public string versionName;
+        public string unityVersion;
+        public string scriptingBackend;
+        public string managedStrippingLevel;
+        public string[] scriptingDefineSymbols;
+        public string outputFileName;
+        public long outputSizeBytes;
+        public double buildDurationSeconds;
+        public int warningCount;
+        public int errorCount;
+        public string generatedAtUtc;
     }
 }
 }

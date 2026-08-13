@@ -1,4 +1,4 @@
-<b>BUILD {{RESULT}}</b>
+<b>{{PLATFORM}} BUILD {{RESULT}}</b>
 ━━━━━━━━━━━━━━━━━━
 <b>Job:</b> {{JOB}}
 <b>Build URL:</b> {{BUILD_URL}}

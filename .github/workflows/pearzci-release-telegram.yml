@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact release tag to announce (for example v0.6.11)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,15 +23,18 @@ jobs:
       - name: Check out the release tag
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 1
 
       - name: Validate release version
         id: release
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
 
-          tag="${GITHUB_REF_NAME}"
+          tag="$RELEASE_TAG"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Skipping non-release tag: $tag"
             echo 'should_notify=false' >> "$GITHUB_OUTPUT"
@@ -60,7 +69,7 @@ jobs:
         if: steps.release.outputs.should_notify == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: '-5311807067'
+          TELEGRAM_CHAT_ID: '-1004401874691'
           VERSION: ${{ steps.release.outputs.version }}
           RELEASE_NOTES: ${{ steps.release.outputs.notes }}
         shell: bash
@@ -76,7 +85,11 @@ jobs:
             sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
           }
 
-          safe_notes="$(printf '%s' "$RELEASE_NOTES" | escape_html)"
+          safe_notes="$(printf '%s' "$RELEASE_NOTES" |
+            escape_html |
+            sed -E \
+              -e 's/^### (.+)$/<b>\1<\/b>/' \
+              -e 's/^- (.+)$/• \1/')"
           tag="v$VERSION"
           tag_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${tag}"
           message="$(printf '%s\n' \
@@ -88,9 +101,9 @@ jobs:
             '<b>Thay đổi</b>' \
             "<blockquote>${safe_notes}</blockquote>" \
             '' \
-            'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.')"
+            '<i>Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit <code>Packages/manifest.json</code> và <code>Packages/packages-lock.json</code>.</i>')"
 
-          curl --fail --silent --show-error \
+          curl --fail-with-body --silent --show-error \
             --request POST \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${message}" \

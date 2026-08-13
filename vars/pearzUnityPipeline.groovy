@@ -11,10 +11,14 @@ def call(Map config = [:]) {
         case 'ios':
             pearzUnityIosPipeline(config)
             break
+        case 'windows':
+        case 'windows64':
+            pearzUnityWindowsPipeline(config)
+            break
         default:
             throw new IllegalArgumentException(
                 "Unsupported BUILD_PLATFORM '${platform}'. " +
-                'Choose Android or iOS.'
+                'Choose Android, iOS, or Windows.'
             )
     }
 }
