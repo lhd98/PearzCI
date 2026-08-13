@@ -17,6 +17,9 @@ def call(Map config = [:]) {
     ).toString().trim()
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
     def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
+    def buildToDevice = config.get(
+        'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
+    ).toString().trim().toBoolean()
     def webhookBranch = defaultGitBranch.replaceFirst(/^refs\/heads\//, '')
     def webhookRepository = extractGitHubRepository(repositoryUrl)
     def webhookFilterExpression = webhookRepository
@@ -64,6 +67,7 @@ def call(Map config = [:]) {
             RCLONE_EXE = "${rcloneExe}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
+            IOS_BUILD_TO_DEVICE = "${buildToDevice}"
         }
 
         stages {
@@ -119,6 +123,8 @@ def call(Map config = [:]) {
                         env.ARCHIVE_PATH =
                             "${env.WORKSPACE}/Builds/iOS/Unity-iPhone.xcarchive"
                         env.EXPORT_PATH = "${env.WORKSPACE}/Builds/iOS/export"
+                        env.DERIVED_DATA_PATH =
+                            "${env.WORKSPACE}/Builds/iOS/DerivedData"
                         env.BUILD_LOG_PATH =
                             "${env.WORKSPACE}/Builds/iOS/unity-build.log"
                         env.XCODEBUILD_LOG_PATH =
@@ -146,9 +152,11 @@ def call(Map config = [:]) {
                             uname -s | grep -Fx Darwin
                             "$UNITY_EXE" -version
                             xcodebuild -version
-                            command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
-                                [ -x "$RCLONE_EXE" ]
-                            "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
+                            if [ "$IOS_BUILD_TO_DEVICE" != 'true' ]; then
+                                command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
+                                    [ -x "$RCLONE_EXE" ]
+                                "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
+                            fi
                         '''
                     }
                 }
@@ -160,9 +168,29 @@ def call(Map config = [:]) {
                     script {
                         def startedAt = System.currentTimeMillis()
                         try {
-                            withEnv(["OUTPUT_PATH=${env.IOS_PROJECT_PATH}"]) {
+                            withEnv([
+                                "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
+                                "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
+                                "BUNDLE_IDENTIFIER=${params.BUNDLE_IDENTIFIER ?: ''}",
+                                "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
+                                "APP_VERSION=${params.APP_VERSION ?: ''}",
+                                "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IOS_BUILD_TO_DEVICE=${buildToDevice}",
+                                "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
+                                "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
+                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}",
+                                "UNITY_DEVELOPMENT_BUILD=${params.UNITY_DEVELOPMENT_BUILD}",
+                                "SCRIPT_DEBUGGING=${params.SCRIPT_DEBUGGING}"
+                            ]) {
                                 sh '''
                                     set +e
+                                    device_build_marker="$WORKSPACE/.pearz-ci-ios-device-build"
+                                    if [ "$IOS_BUILD_TO_DEVICE" = 'true' ]; then
+                                        : > "$device_build_marker"
+                                    else
+                                        rm -f "$device_build_marker"
+                                    fi
+                                    trap 'rm -f "$device_build_marker"' EXIT
                                     "$UNITY_EXE" -batchmode -quit \
                                         -projectPath "$WORKSPACE" \
                                         -buildTarget iOS \
@@ -183,6 +211,7 @@ def call(Map config = [:]) {
             }
 
             stage('Archive and Export IPA') {
+                when { expression { !buildToDevice } }
                 options { timeout(time: 45, unit: 'MINUTES') }
                 steps {
                     script {
@@ -259,7 +288,155 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Build and Install on iOS Device') {
+                when { expression { buildToDevice } }
+                options { timeout(time: 45, unit: 'MINUTES') }
+                steps {
+                    script {
+                        def deviceUdid = config.get(
+                            'iosDeviceUdid', params.IOS_DEVICE_UDID ?: ''
+                        ).toString().trim()
+                        def developmentTeam = config.get(
+                            'iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: ''
+                        ).toString().trim()
+                        def xcodeConfiguration = config.get(
+                            'xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Debug'
+                        ).toString().trim()
+                        def bundleIdentifier = params.BUNDLE_IDENTIFIER?.toString()?.trim() ?: ''
+                        def profileSpecifier = config.get(
+                            'iosProvisioningProfileSpecifier',
+                            params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
+                        ).toString().trim()
+
+                        if (!deviceUdid) {
+                            error('IOS_DEVICE_UDID is required when IOS_BUILD_TO_DEVICE=true.')
+                        }
+                        if (!developmentTeam) {
+                            error('IOS_DEVELOPMENT_TEAM is required when IOS_BUILD_TO_DEVICE=true.')
+                        }
+                        if (xcodeConfiguration != 'Debug' && xcodeConfiguration != 'Release') {
+                            error('XCODE_CONFIGURATION must be Release or Debug.')
+                        }
+
+                        withEnv([
+                            "IOS_DEVICE_UDID=${deviceUdid}",
+                            "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
+                            "XCODE_CONFIGURATION=${xcodeConfiguration}",
+                            "IOS_BUNDLE_IDENTIFIER=${bundleIdentifier}",
+                            "IOS_PROFILE_SPECIFIER=${profileSpecifier}"
+                        ]) {
+                            sh '''
+                                set -eu
+                                [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" ] || {
+                                    echo "ERROR: Unity-iPhone.xcodeproj was not exported."
+                                    exit 1
+                                }
+                                rm -rf "$DERIVED_DATA_PATH"
+                                echo "iOS device bundle identifier: ${IOS_BUNDLE_IDENTIFIER:-<from Unity project>}"
+
+                                # Personal Teams cannot provision the In-App Purchase capability.
+                                # This is a development-only device build, so remove it from the
+                                # generated Xcode project without changing the Unity source project
+                                # or the normal IPA-export pipeline.
+                                pbxproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"
+                                if grep -Fq 'com.apple.InAppPurchase' "$pbxproj_path"; then
+                                    perl -0pi -e 's/\\s*com\\.apple\\.InAppPurchase\\s*=\\s*\\{\\s*enabled\\s*=\\s*1;\\s*\\};\\s*//g' "$pbxproj_path"
+                                    echo 'Removed In-App Purchase capability for Personal Team device signing.'
+                                fi
+                                find "$IOS_PROJECT_PATH" -name '*.entitlements' -type f -print |
+                                    while IFS= read -r entitlements_path; do
+                                        /usr/libexec/PlistBuddy \\
+                                            -c 'Delete :com.apple.developer.in-app-payments' \\
+                                            "$entitlements_path" >/dev/null 2>&1 || true
+                                    done
+
+                                run_xcodebuild_unsigned() {
+                                    xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
+                                        -scheme Unity-iPhone \\
+                                        -configuration "$XCODE_CONFIGURATION" \\
+                                        -destination "id=$IOS_DEVICE_UDID" \\
+                                        -derivedDataPath "$DERIVED_DATA_PATH" \\
+                                        CODE_SIGNING_ALLOWED=NO \\
+                                        CODE_SIGNING_REQUIRED=NO \\
+                                        CODE_SIGN_IDENTITY='' \\
+                                        build > "$XCODEBUILD_LOG_PATH" 2>&1
+                                }
+
+                                set +e
+                                profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
+                                [ -n "$profile_specifier" ] || {
+                                    echo 'ERROR: IOS_PROVISIONING_PROFILE_SPECIFIER is required for an iOS device build.'
+                                    exit 2
+                                }
+
+                                # Build unsigned first. Xcode 26 performs provisioning validation
+                                # before it builds and rejects Personal Team profiles for Unity IAP,
+                                # even after the capability is removed. We then sign the built app
+                                # directly with the installed development profile.
+                                echo 'Building unsigned iOS app for direct development signing.'
+                                run_xcodebuild_unsigned
+                                result=$?
+                                cat "$XCODEBUILD_LOG_PATH"
+                                [ "$result" -eq 0 ] || exit "$result"
+
+                                app_path="$(find "$DERIVED_DATA_PATH/Build/Products" \
+                                    -type d -name '*.app' -print -quit)"
+                                [ -d "$app_path" ] || {
+                                    echo 'ERROR: Xcode did not produce an iOS .app bundle.'
+                                    exit 1
+                                }
+                                echo "Built iOS app: $app_path"
+                                profile_path=''
+                                for profiles_dir in \\
+                                    "$HOME/Library/MobileDevice/Provisioning Profiles" \\
+                                    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+                                    [ -d "$profiles_dir" ] || continue
+                                    for candidate_profile in "$profiles_dir"/*.mobileprovision; do
+                                        [ -f "$candidate_profile" ] || continue
+                                        candidate_name="$(security cms -D -i "$candidate_profile" 2>/dev/null | \\
+                                            plutil -extract Name raw - 2>/dev/null || true)"
+                                        if [ "$candidate_name" = "$profile_specifier" ]; then
+                                            profile_path="$candidate_profile"
+                                            break 2
+                                        fi
+                                    done
+                                done
+                                [ -n "$profile_path" ] || {
+                                    echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
+                                    exit 3
+                                }
+
+                                profile_plist="$DERIVED_DATA_PATH/provisioning-profile.plist"
+                                signing_entitlements="$DERIVED_DATA_PATH/signing-entitlements.plist"
+                                security cms -D -i "$profile_path" > "$profile_plist"
+                                plutil -extract Entitlements xml1 -o "$signing_entitlements" "$profile_plist"
+                                cp "$profile_path" "$app_path/embedded.mobileprovision"
+
+                                echo "Signing iOS device app with installed profile: $profile_specifier"
+                                find "$app_path" -depth -type d \\
+                                    \\( -name '*.framework' -o -name '*.appex' \\) \\
+                                    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \\;
+                                find "$app_path" -type f -name '*.dylib' \\
+                                    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \\;
+                                codesign --force --sign 'Apple Development' \\
+                                    --entitlements "$signing_entitlements" \\
+                                    --timestamp=none "$app_path"
+                                codesign --verify --deep --strict "$app_path"
+
+                                xcrun devicectl device install app \\
+                                    --device "$IOS_DEVICE_UDID" "$app_path" \\
+                                    >> "$XCODEBUILD_LOG_PATH" 2>&1
+                                result=$?
+                                cat "$XCODEBUILD_LOG_PATH"
+                                exit "$result"
+                            '''
+                        }
+                    }
+                }
+            }
+
             stage('Archive and Upload IPA') {
+                when { expression { !buildToDevice } }
                 steps {
                     script {
                         if (!fileExists(env.OUTPUT_PATH)) {
@@ -286,7 +463,9 @@ def call(Map config = [:]) {
 
         post {
             success {
-                echo "iOS IPA completed: ${env.OUTPUT_FILE_NAME}"
+                echo(buildToDevice
+                    ? 'iOS device build and install completed.'
+                    : "iOS IPA completed: ${env.OUTPUT_FILE_NAME}")
             }
             always {
                 archiveArtifacts(
