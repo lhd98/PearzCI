@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.11] - 2026-08-13
+
+### Added
+
+- iOS device-test builds can compile unsigned, sign directly with an installed
+  development profile, and install to the selected connected iPhone.
+
+### Fixed
+
+- Personal Team device builds now remove the Unity IAP capability only for the
+  device-test path, while keeping normal IPA exports unchanged.
+- Device installs now locate the generated app bundle by its actual product
+  name and preserve the UnityFramework bundle identifier.
+
 ## [0.6.10] - 2026-08-13
 
 ### Added
