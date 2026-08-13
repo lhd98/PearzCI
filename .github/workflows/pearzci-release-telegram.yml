@@ -94,7 +94,7 @@ jobs:
             '' \
             'Dev nào cần cập nhật: Unity Package Manager → PearzCI → Update, rồi commit Packages/manifest.json và Packages/packages-lock.json.')"
 
-          curl --fail --silent --show-error \
+          curl --fail-with-body --silent --show-error \
             --request POST \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "text=${message}" \
