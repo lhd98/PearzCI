@@ -7,6 +7,7 @@ Pearz CI pipelines.
 
 - Unity 6000.3 or newer on Windows or macOS
 - Android Build Support when building Android players
+- Windows Build Support (IL2CPP) when building Windows players with IL2CPP
 - Jenkins with Pipeline, Git, Credentials, Shared Library, and Generic Webhook Trigger support
 - rclone with a configured Google Drive remote
 - `curl` on macOS for Telegram notifications
@@ -100,6 +101,25 @@ used after applying any `BUNDLE_IDENTIFIER` override. `KEYSTORE_PATH` remains
 supported for existing jobs and non-standard locations; relative overrides are
 resolved from the Unity project root.
 
+## Windows standalone (.exe)
+
+Run Unity on a **Windows Jenkins agent** with Windows Build Support installed:
+
+```text
+-executeMethod Pearz.CI.BuildEntry.BuildWindows
+```
+
+Set `BUILD_PLATFORM` to `Windows`. The pipeline writes and archives the full
+player under `Builds/Windows/`: the `.exe`, its matching `*_Data` folder, and
+Unity runtime files. Keep the whole folder together when distributing or
+running the game; the `.exe` alone is not a runnable Unity player.
+
+Supported optional settings are `PRODUCT_NAME`, `APP_VERSION`,
+`SCRIPTING_DEFINE_SYMBOLS`, `UNITY_DEVELOPMENT_BUILD`, `SCRIPT_DEBUGGING`,
+`IL2CPP_CODE_GENERATION`, `MANAGED_STRIPPING_LEVEL`, and
+`STRIP_ENGINE_CODE`. `SCRIPT_DEBUGGING=true` requires
+`UNITY_DEVELOPMENT_BUILD=true`.
+
 ## Jenkins Shared Library
 
 The package contains the Unity build entry point, while this repository also
@@ -149,7 +169,7 @@ Required parameters:
 - String `UNITY_VERSION`, for example `6000.3.14f1`
 - String `PRODUCT_NAME`, for example `MyGame`
 - Choice `BUILD_CONFIGURATION`: `Development` or `Release`
-- Choice `BUILD_PLATFORM`: `Android` or `iOS` (default: `Android`)
+- Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
 
 Common optional parameters:
 
