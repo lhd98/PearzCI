@@ -882,6 +882,7 @@ def buildTelegramMessage() {
     }
 
     def values = [
+        PLATFORM: 'ANDROID',
         RESULT: telegramHtmlEscape(result),
         JOB: telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}"),
         JOB_NAME: telegramHtmlEscape(env.JOB_NAME),
