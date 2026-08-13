@@ -381,11 +381,13 @@ def call(Map config = [:]) {
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"
 
-                                app_path="$DERIVED_DATA_PATH/Build/Products/$XCODE_CONFIGURATION-iphoneos/Unity-iPhone.app"
+                                app_path="$(find "$DERIVED_DATA_PATH/Build/Products" \
+                                    -type d -name '*.app' -print -quit)"
                                 [ -d "$app_path" ] || {
-                                    echo "ERROR: Device app was not built: $app_path"
+                                    echo 'ERROR: Xcode did not produce an iOS .app bundle.'
                                     exit 1
                                 }
+                                echo "Built iOS app: $app_path"
                                 profile_path=''
                                 for profiles_dir in \\
                                     "$HOME/Library/MobileDevice/Provisioning Profiles" \\
