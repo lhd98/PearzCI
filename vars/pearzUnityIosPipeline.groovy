@@ -350,31 +350,33 @@ def call(Map config = [:]) {
                                             "$entitlements_path" >/dev/null 2>&1 || true
                                     done
 
-                                run_xcodebuild() {
+                                run_xcodebuild_unsigned() {
                                     xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
                                         -scheme Unity-iPhone \\
                                         -configuration "$XCODE_CONFIGURATION" \\
                                         -destination "id=$IOS_DEVICE_UDID" \\
                                         -derivedDataPath "$DERIVED_DATA_PATH" \\
-                                        CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \\
-                                        CODE_SIGN_ENTITLEMENTS= \\
                                         DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
                                         "PRODUCT_BUNDLE_IDENTIFIER=$IOS_BUNDLE_IDENTIFIER" \\
-                                        "$@" \\
+                                        CODE_SIGNING_ALLOWED=NO \\
+                                        CODE_SIGNING_REQUIRED=NO \\
+                                        CODE_SIGN_IDENTITY='' \\
                                         build > "$XCODEBUILD_LOG_PATH" 2>&1
                                 }
 
                                 set +e
                                 profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
-                                # The free development profile created by Xcode is Xcode-managed.
-                                # It must stay in Automatic mode; Manual mode is only valid for a
-                                # profile created in the Apple Developer portal. Passing its name
-                                # to xcodebuild is treated as a manual profile override, so let
-                                # Xcode select the installed matching profile itself.
-                                if [ -n "$profile_specifier" ]; then
-                                    echo "Ignoring IOS_PROVISIONING_PROFILE_SPECIFIER for Xcode-managed automatic signing: $profile_specifier"
-                                fi
-                                run_xcodebuild CODE_SIGN_STYLE=Automatic
+                                [ -n "$profile_specifier" ] || {
+                                    echo 'ERROR: IOS_PROVISIONING_PROFILE_SPECIFIER is required for an iOS device build.'
+                                    exit 2
+                                }
+
+                                # Build unsigned first. Xcode 26 performs provisioning validation
+                                # before it builds and rejects Personal Team profiles for Unity IAP,
+                                # even after the capability is removed. We then sign the built app
+                                # directly with the installed development profile.
+                                echo 'Building unsigned iOS app for direct development signing.'
+                                run_xcodebuild_unsigned
                                 result=$?
                                 cat "$XCODEBUILD_LOG_PATH"
                                 [ "$result" -eq 0 ] || exit "$result"
@@ -384,6 +386,43 @@ def call(Map config = [:]) {
                                     echo "ERROR: Device app was not built: $app_path"
                                     exit 1
                                 }
+                                profile_path=''
+                                for profiles_dir in \\
+                                    "$HOME/Library/MobileDevice/Provisioning Profiles" \\
+                                    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+                                    [ -d "$profiles_dir" ] || continue
+                                    for candidate_profile in "$profiles_dir"/*.mobileprovision; do
+                                        [ -f "$candidate_profile" ] || continue
+                                        candidate_name="$(security cms -D -i "$candidate_profile" 2>/dev/null | \\
+                                            plutil -extract Name raw - 2>/dev/null || true)"
+                                        if [ "$candidate_name" = "$profile_specifier" ]; then
+                                            profile_path="$candidate_profile"
+                                            break 2
+                                        fi
+                                    done
+                                done
+                                [ -n "$profile_path" ] || {
+                                    echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
+                                    exit 3
+                                }
+
+                                profile_plist="$DERIVED_DATA_PATH/provisioning-profile.plist"
+                                signing_entitlements="$DERIVED_DATA_PATH/signing-entitlements.plist"
+                                security cms -D -i "$profile_path" > "$profile_plist"
+                                plutil -extract Entitlements xml1 -o "$signing_entitlements" "$profile_plist"
+                                cp "$profile_path" "$app_path/embedded.mobileprovision"
+
+                                echo "Signing iOS device app with installed profile: $profile_specifier"
+                                find "$app_path" -depth -type d \\
+                                    \\( -name '*.framework' -o -name '*.appex' \\) \\
+                                    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \\;
+                                find "$app_path" -type f -name '*.dylib' \\
+                                    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \\;
+                                codesign --force --sign 'Apple Development' \\
+                                    --entitlements "$signing_entitlements" \\
+                                    --timestamp=none "$app_path"
+                                codesign --verify --deep --strict "$app_path"
+
                                 xcrun devicectl device install app \\
                                     --device "$IOS_DEVICE_UDID" "$app_path" \\
                                     >> "$XCODEBUILD_LOG_PATH" 2>&1
