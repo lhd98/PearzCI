@@ -356,8 +356,6 @@ def call(Map config = [:]) {
                                         -configuration "$XCODE_CONFIGURATION" \\
                                         -destination "id=$IOS_DEVICE_UDID" \\
                                         -derivedDataPath "$DERIVED_DATA_PATH" \\
-                                        DEVELOPMENT_TEAM="$IOS_DEVELOPMENT_TEAM" \\
-                                        "PRODUCT_BUNDLE_IDENTIFIER=$IOS_BUNDLE_IDENTIFIER" \\
                                         CODE_SIGNING_ALLOWED=NO \\
                                         CODE_SIGNING_REQUIRED=NO \\
                                         CODE_SIGN_IDENTITY='' \\
