@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.23] - 2026-08-14
+
+### Fixed
+
+- Fixed the iOS AppLovin cleanup script so Jenkins can compile the shared
+  pipeline before starting a build.
+
 ## [0.6.22] - 2026-08-14
 
 ### Fixed

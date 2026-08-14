@@ -244,25 +244,25 @@ def call(Map config = [:]) {
                             exit 0
                         fi
 
-                        perl -0pi -e '
+                        perl -0pi -e "
                             my @product_ids;
-                            while ($_ =~ /^\s*([A-F0-9]{24}) \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n/gms) {
-                                push @product_ids, $1;
+                            while (\$_ =~ /^\s*([A-F0-9]{24}) \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n/gms) {
+                                push @product_ids, \$1;
                             }
-                            for my $id (@product_ids) {
-                                s/^\s*\Q$id\E \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n//gms;
-                                s/^\s*\Q$id\E \/\* AppLovinSDK \*\/,?\n//gm;
+                            for my \$id (@product_ids) {
+                                s/^\s*\Q\$id\E \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n//gms;
+                                s/^\s*\Q\$id\E \/\* AppLovinSDK \*\/,?\n//gm;
                             }
 
                             my @package_ids;
-                            while ($_ =~ /^\s*([A-F0-9]{24}) \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n/gmsi) {
-                                push @package_ids, $1;
+                            while (\$_ =~ /^\s*([A-F0-9]{24}) \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n/gmsi) {
+                                push @package_ids, \$1;
                             }
-                            for my $id (@package_ids) {
-                                s/^\s*\Q$id\E \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n//gmsi;
-                                s/^\s*\Q$id\E \/\* .*? \*\/,?\n//gm;
+                            for my \$id (@package_ids) {
+                                s/^\s*\Q\$id\E \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n//gmsi;
+                                s/^\s*\Q\$id\E \/\* .*? \*\/,?\n//gm;
                             }
-                        ' "$pbxproj_path"
+                        " "$pbxproj_path"
 
                         if grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
                             echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
