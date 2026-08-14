@@ -6,10 +6,11 @@ def call(Map config = [:]) {
 
     switch (platform.toLowerCase(Locale.ROOT)) {
         case 'android':
-            pearzUnityAndroidPipeline(config)
-            break
         case 'ios':
-            pearzUnityIosPipeline(config)
+            // Android and iOS intentionally share one Declarative Pipeline.
+            // A fixed stage declaration keeps Jenkins Stage View stable when a
+            // user changes BUILD_PLATFORM; irrelevant stages are skipped.
+            pearzUnityAndroidPipeline(config + [mobilePlatform: platform])
             break
         case 'windows':
         case 'windows64':

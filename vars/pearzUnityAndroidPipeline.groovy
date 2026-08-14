@@ -1,4 +1,17 @@
 def call(Map config = [:]) {
+    def mobilePlatform = config.get('mobilePlatform', 'Android')
+        .toString().trim()
+    boolean isIos = mobilePlatform.equalsIgnoreCase('iOS')
+    boolean isAndroid = !isIos
+    def iosBuildToDevice = config.get(
+        'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
+    ).toString().trim().toBoolean()
+    if (isIos && iosBuildToDevice) {
+        throw new IllegalArgumentException(
+            'IOS_BUILD_TO_DEVICE=true is not supported by the shared mobile ' +
+            'stage graph yet. Use pearzUnityIosPipeline() for device builds.'
+        )
+    }
     def pearzCiVersion = readPearzCiVersion()
     def repositoryUrl = config.get(
         'repositoryUrl',
@@ -227,21 +240,22 @@ def call(Map config = [:]) {
                             '_'
                         )
 
-                        env.OUTPUT_EXTENSION = params.BUILD_APP_BUNDLE
-                            ? 'aab'
-                            : 'apk'
-                        env.OUTPUT_FILE_NAME =
-                            "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
-                        env.OUTPUT_PATH =
-                            "${env.WORKSPACE}/Builds/Android/${env.OUTPUT_FILE_NAME}"
-                        env.METADATA_PATH =
-                            "${env.WORKSPACE}/Builds/Android/build-metadata.json"
-                        env.MAPPING_PATH =
-                            "${env.WORKSPACE}/Builds/Android/mapping.txt"
-                        env.BUILD_LOG_PATH =
-                            "${env.WORKSPACE}/Builds/Android/unity-build.log"
-                        env.UPLOAD_LOG_PATH =
-                            "${env.WORKSPACE}/Builds/Android/upload.log"
+                        env.OUTPUT_EXTENSION = isIos
+                            ? 'ipa'
+                            : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
+                        env.OUTPUT_FILE_NAME = "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
+                        def buildFolder = isIos ? 'iOS' : 'Android'
+                        env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
+                        env.METADATA_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/build-metadata.json"
+                        env.MAPPING_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/mapping.txt"
+                        env.BUILD_LOG_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/unity-build.log"
+                        env.UPLOAD_LOG_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/upload.log"
+                        if (isIos) {
+                            env.IOS_PROJECT_PATH = "${env.WORKSPACE}/Builds/iOS/Unity-iPhone"
+                            env.ARCHIVE_PATH = "${env.WORKSPACE}/Builds/iOS/Unity-iPhone.xcarchive"
+                            env.EXPORT_PATH = "${env.WORKSPACE}/Builds/iOS/export"
+                            env.XCODEBUILD_LOG_PATH = "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
+                        }
                         env.DRIVE_DIRECTORY =
                             "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
@@ -338,6 +352,9 @@ def call(Map config = [:]) {
 
                         if (isUnix()) {
                             sh "\"${unityExe}\" -version"
+                            if (isIos) {
+                                sh 'xcodebuild -version'
+                            }
                         } else {
                             bat "\"${unityExe}\" -version"
                         }
@@ -346,6 +363,7 @@ def call(Map config = [:]) {
             }
 
             stage('Build Unity Android') {
+                when { expression { isAndroid } }
                 options {
                     timeout(time: 60, unit: 'MINUTES')
                 }
@@ -433,7 +451,81 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Build Unity iOS') {
+                when { expression { isIos } }
+                options { timeout(time: 60, unit: 'MINUTES') }
+                steps {
+                    script {
+                        def startedAt = System.currentTimeMillis()
+                        try {
+                            withEnv([
+                                "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
+                                "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
+                                'BUNDLE_IDENTIFIER=',
+                                "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
+                                "APP_VERSION=${params.APP_VERSION ?: ''}",
+                                "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
+                                "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
+                                "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
+                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}",
+                                "UNITY_DEVELOPMENT_BUILD=${params.UNITY_DEVELOPMENT_BUILD}",
+                                "SCRIPT_DEBUGGING=${params.SCRIPT_DEBUGGING}"
+                            ]) {
+                                sh '''
+                                    set +e
+                                    "$UNITY_EXE" -batchmode -quit \\
+                                        -projectPath "$WORKSPACE" \\
+                                        -buildTarget iOS \\
+                                        -executeMethod Pearz.CI.BuildEntry.BuildIOS \\
+                                        -logFile "$BUILD_LOG_PATH"
+                                    result=$?
+                                    [ ! -f "$BUILD_LOG_PATH" ] || cat "$BUILD_LOG_PATH"
+                                    exit "$result"
+                                '''
+                            }
+                        } finally {
+                            env.BUILD_TIME_MILLIS = (System.currentTimeMillis() - startedAt).toString()
+                        }
+                    }
+                }
+            }
+
+            stage('Archive and Export IPA') {
+                when { expression { isIos && !iosBuildToDevice } }
+                options { timeout(time: 45, unit: 'MINUTES') }
+                steps {
+                    script {
+                        def exportOptionsPath = config.get('iosExportOptionsPlistPath', params.IOS_EXPORT_OPTIONS_PLIST_PATH ?: '').toString().trim()
+                        def developmentTeam = config.get('iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: '').toString().trim()
+                        def profileSpecifier = config.get('iosProvisioningProfileSpecifier', params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: '').toString().trim()
+                        def xcodeConfiguration = config.get('xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Release').toString().trim()
+                        if (!exportOptionsPath || !fileExists(exportOptionsPath)) {
+                            error('A readable IOS_EXPORT_OPTIONS_PLIST_PATH is required for IPA export.')
+                        }
+                        withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}", "IOS_DEVELOPMENT_TEAM=${developmentTeam}", "IOS_PROFILE_SPECIFIER=${profileSpecifier}", "XCODE_CONFIGURATION=${xcodeConfiguration}"]) {
+                            sh '''
+                                set -eu
+                                [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" ]
+                                rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
+                                mkdir -p "$EXPORT_PATH"
+                                signing_args=""
+                                [ -z "$IOS_DEVELOPMENT_TEAM" ] || signing_args="$signing_args DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
+                                [ -z "$IOS_PROFILE_SPECIFIER" ] || signing_args="$signing_args CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" -scheme Unity-iPhone -configuration "$XCODE_CONFIGURATION" -archivePath "$ARCHIVE_PATH" archive $signing_args > "$XCODEBUILD_LOG_PATH" 2>&1
+                                xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportOptionsPlist "$IOS_EXPORT_OPTIONS" -exportPath "$EXPORT_PATH" >> "$XCODEBUILD_LOG_PATH" 2>&1
+                                cat "$XCODEBUILD_LOG_PATH"
+                                ipa=$(find "$EXPORT_PATH" -maxdepth 1 -type f -name '*.ipa' -print -quit)
+                                [ -n "$ipa" ]
+                                cp "$ipa" "$OUTPUT_PATH"
+                            '''
+                        }
+                    }
+                }
+            }
+
             stage('Verify Artifact') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     script {
                         if (!fileExists(env.OUTPUT_PATH)) {
@@ -448,6 +540,7 @@ def call(Map config = [:]) {
             }
 
             stage('Read Build Metadata') {
+                when { expression { isAndroid } }
                 steps {
                     script {
                         readBuildMetadata()
@@ -456,21 +549,23 @@ def call(Map config = [:]) {
             }
 
             stage('Archive Artifact') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
-                    archiveArtifacts(
-                        artifacts:
-                            "Builds/Android/${env.OUTPUT_FILE_NAME}," +
-                            'Builds/Android/build-metadata.json,' +
-                            'Builds/Android/mapping.txt,' +
-                            'Builds/Android/unity-build.log',
-                        allowEmptyArchive: true,
-                        fingerprint: true,
-                        onlyIfSuccessful: true
-                    )
+                    script {
+                        archiveArtifacts(
+                            artifacts: isIos
+                                ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
+                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
+                            allowEmptyArchive: true,
+                            fingerprint: true,
+                            onlyIfSuccessful: true
+                        )
+                    }
                 }
             }
 
             stage('Validate rclone') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     script {
                         if (isUnix()) {
@@ -513,6 +608,7 @@ def call(Map config = [:]) {
             }
 
             stage('Upload Google Drive') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 options {
                     timeout(time: 30, unit: 'MINUTES')
                 }
@@ -555,7 +651,7 @@ def call(Map config = [:]) {
                                 }
                             }
 
-                            if (fileExists(env.MAPPING_PATH)) {
+                            if (isAndroid && fileExists(env.MAPPING_PATH)) {
                                 def mappingUploadStatus
 
                                 if (isUnix()) {
@@ -601,6 +697,7 @@ def call(Map config = [:]) {
             }
 
             stage('Verify Google Drive Upload') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     script {
                         if (isUnix()) {
@@ -626,7 +723,7 @@ def call(Map config = [:]) {
 
                         env.MAPPING_UPLOADED = 'false'
 
-                        if (fileExists(env.MAPPING_PATH)) {
+                        if (isAndroid && fileExists(env.MAPPING_PATH)) {
                             def mappingStatus = isUnix()
                                 ? sh(
                                     script:
@@ -656,6 +753,7 @@ def call(Map config = [:]) {
             }
 
             stage('Create Public Link') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     script {
                         env.DOWNLOAD_URL =
@@ -667,7 +765,7 @@ def call(Map config = [:]) {
                             )
                         }
 
-                        if (env.MAPPING_UPLOADED == 'true') {
+                        if (isAndroid && env.MAPPING_UPLOADED == 'true') {
                             env.MAPPING_URL =
                                 createRcloneLink(env.DRIVE_MAPPING_PATH)
                         }
@@ -685,11 +783,12 @@ def call(Map config = [:]) {
             }
 
             stage('Archive Notification Artifacts') {
+                when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     // Chỉ upload.log là file mới kể từ stage 'Archive Artifact'.
                     // Các file còn lại đã được archive ở đó.
                     archiveArtifacts(
-                        artifacts: 'Builds/Android/upload.log',
+                        artifacts: isIos ? 'Builds/iOS/upload.log' : 'Builds/Android/upload.log',
                         allowEmptyArchive: true,
                         fingerprint: true
                     )
@@ -699,11 +798,13 @@ def call(Map config = [:]) {
 
         post {
             success {
-                echo "Unity Android build completed: ${env.OUTPUT_FILE_NAME}"
-                echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
+                echo "Unity ${isIos ? 'iOS' : 'Android'} build completed: ${env.OUTPUT_FILE_NAME}"
+                if (!isIos || !iosBuildToDevice) {
+                    echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
+                }
 
                 script {
-                    if (env.AAB_VERSION_CODE?.trim()) {
+                    if (isAndroid && env.AAB_VERSION_CODE?.trim()) {
                         saveNextAabVersionCode(env.AAB_VERSION_CODE.toInteger())
                     }
 
@@ -723,10 +824,9 @@ def call(Map config = [:]) {
                 // artifact chính vì stage 'Archive Artifact' đã làm.
                 // Phải chạy trước khi gửi Telegram để link log có hiệu lực.
                 archiveArtifacts(
-                    artifacts:
-                        'Builds/Android/build-metadata.json,' +
-                        'Builds/Android/unity-build.log,' +
-                        'Builds/Android/upload.log',
+                    artifacts: isIos
+                        ? 'Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log,Builds/iOS/upload.log'
+                        : 'Builds/Android/build-metadata.json,Builds/Android/unity-build.log,Builds/Android/upload.log',
                     allowEmptyArchive: true
                 )
 
@@ -740,10 +840,14 @@ def call(Map config = [:]) {
                     def sendNotifications = params.SEND_NOTIFICATIONS == null ||
                         params.SEND_NOTIFICATIONS.toString().toBoolean()
 
-                    if (sendNotifications) {
+                    if (isAndroid && sendNotifications) {
                         sendTelegramNotification(telegramCredentialsId)
+                    } else if (isIos && iosBuildToDevice && sendNotifications) {
+                        pearzUnityIosPipeline.sendIosDeviceTelegramNotification(
+                            telegramCredentialsId
+                        )
                     } else {
-                        echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
+                        echo 'Notification skipped for this platform or configuration.'
                     }
                 }
 

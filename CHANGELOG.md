@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.17] - 2026-08-14
+
+### Changed
+
+- `pearzUnityPipeline()` now uses one fixed Declarative stage graph for Android
+  and iOS. Changing `BUILD_PLATFORM` skips irrelevant stages instead of
+  replacing the Jenkins Stage View layout.
+
+### Compatibility
+
+- iOS device builds (`IOS_BUILD_TO_DEVICE=true`) remain available through the
+  dedicated `pearzUnityIosPipeline()` entry point while the shared graph covers
+  Android builds and signed iOS IPA exports.
+
 ## [0.6.16] - 2026-08-14
 
 ### Changed
