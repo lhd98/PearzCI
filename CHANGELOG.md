@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.29] - 2026-08-14
+
+### Fixed
+
+- Use the CocoaPods-generated iOS workspace for device builds, so pod headers such as AppsFlyer are available to Xcode.
+
 ## [0.6.28] - 2026-08-14
 
 ### Fixed

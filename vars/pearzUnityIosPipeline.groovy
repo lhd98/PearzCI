@@ -396,15 +396,12 @@ def call(Map config = [:]) {
                                     done
 
                                 run_xcodebuild_unsigned() {
-                                    xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" \\
-                                        -scheme Unity-iPhone \\
-                                        -configuration "$XCODE_CONFIGURATION" \\
-                                        -destination "id=$IOS_DEVICE_UDID" \\
-                                        -derivedDataPath "$DERIVED_DATA_PATH" \\
-                                        CODE_SIGNING_ALLOWED=NO \\
-                                        CODE_SIGNING_REQUIRED=NO \\
-                                        CODE_SIGN_IDENTITY='' \\
-                                        build > "$XCODEBUILD_LOG_PATH" 2>&1
+                                    xcodebuild_args="-scheme Unity-iPhone -configuration $XCODE_CONFIGURATION -destination id=$IOS_DEVICE_UDID -derivedDataPath $DERIVED_DATA_PATH CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build"
+                                    if [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" ]; then
+                                        xcodebuild -workspace "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" $xcodebuild_args > "$XCODEBUILD_LOG_PATH" 2>&1
+                                    else
+                                        xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" $xcodebuild_args > "$XCODEBUILD_LOG_PATH" 2>&1
+                                    fi
                                 }
 
                                 set +e
