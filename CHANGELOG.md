@@ -2,12 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
-## Unreleased
+## [0.6.22] - 2026-08-14
 
 ### Fixed
 
 - `pearzUnityPipeline()` routes iOS connected-device builds to
   `pearzUnityIosPipeline()` instead of the shared Android/iOS release graph.
+- iOS exports remove a duplicate AppLovin Swift Package Manager reference when
+  AppLovin is already installed through CocoaPods, preventing Xcode's
+  `Multiple commands produce AppLovinSDK.framework` build failure.
+
+### Changed
+
+- Telegram build notifications now link Build Info to the Google Drive artifact
+  folder and omit Jenkins URLs, timings, Drive-root links, and Jenkins logs.
 
 ## [0.6.21] - 2026-08-14
 

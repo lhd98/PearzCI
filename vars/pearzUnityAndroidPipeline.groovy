@@ -866,10 +866,6 @@ def call(Map config = [:]) {
 
                         env.DRIVE_FOLDER_URL =
                             createRcloneLink(env.DRIVE_DIRECTORY)
-                        env.DRIVE_ROOT_URL =
-                            createRcloneLink(
-                                "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}"
-                            )
 
                         echo "Public download link: ${env.DOWNLOAD_URL}"
                     }
@@ -1035,7 +1031,6 @@ def createRcloneLink(String remotePath) {
 def buildTelegramMessage() {
     // Kết quả của Jenkins mới là kết quả thật: Unity có thể build xong
     // nhưng upload lên Drive vẫn hỏng sau đó.
-    def result = currentBuild.currentResult ?: 'SUCCESS'
     def versionParts = []
 
     if (env.META_VERSION_NAME?.trim()) {
@@ -1091,23 +1086,10 @@ def buildTelegramMessage() {
         : ''
     def changeDescription = env.GIT_CHANGES?.trim()
 
-    def logLines = []
-
-    if (env.JENKINS_BUILD_LOG_URL?.trim()) {
-        logLines << "Build: ${telegramHtmlEscape(env.JENKINS_BUILD_LOG_URL.trim())}"
-    }
-
-    if (env.JENKINS_UPLOAD_LOG_URL?.trim()) {
-        logLines << "Upload: ${telegramHtmlEscape(env.JENKINS_UPLOAD_LOG_URL.trim())}"
-    }
-
     def values = [
         PLATFORM: 'ANDROID',
-        RESULT: telegramHtmlEscape(result),
-        JOB: telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}"),
         JOB_NAME: telegramHtmlEscape(env.JOB_NAME),
         BUILD_NUMBER: telegramHtmlEscape(env.BUILD_NUMBER),
-        BUILD_URL: telegramHtmlEscape(env.BUILD_URL),
         PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
         VERSION: telegramHtmlEscape(versionParts.join(' / ')),
         VERSION_NAME: telegramHtmlEscape(env.META_VERSION_NAME),
@@ -1121,11 +1103,7 @@ def buildTelegramMessage() {
         STRIPPING_LEVEL: telegramHtmlEscape(env.META_STRIPPING_LEVEL),
         ORIENTATION: telegramHtmlEscape(env.META_ORIENTATION),
         UNITY_VERSION: telegramHtmlEscape(env.META_UNITY_VERSION ?: env.UNITY_VERSION),
-        BUILD_TIME: telegramHtmlEscape(formatDurationMillis(env.BUILD_TIME_MILLIS)),
-        UPLOAD_TIME: telegramHtmlEscape(formatDurationMillis(env.UPLOAD_TIME_MILLIS)),
-        TOTAL_TIME: telegramHtmlEscape(formatDurationMillis(env.TOTAL_TIME_MILLIS)),
-        DRIVE_FOLDER_URL: telegramHtmlEscape(env.DRIVE_FOLDER_URL),
-        DRIVE_ROOT_URL: telegramHtmlEscape(env.DRIVE_ROOT_URL),
+        BUILD_INFO_URL: telegramHtmlEscape(env.DRIVE_FOLDER_URL),
         APK: telegramHtmlEscape(apkDescription),
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
@@ -1135,9 +1113,6 @@ def buildTelegramMessage() {
             : '',
         CHANGES_SECTION: changeDescription
             ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
-            : '',
-        JENKINS_LOGS_SECTION: logLines
-            ? '<b>Jenkins Logs</b>\n' + logLines.join('\n')
             : ''
     ]
 
@@ -1288,17 +1263,6 @@ def sendTelegramNotification(String telegramCredentialsId) {
                 env.PIPELINE_START_MILLIS.toLong()
             ).toString()
         }
-
-        env.JENKINS_BUILD_LOG_URL =
-            env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
-                ? "${env.BUILD_URL}artifact/" +
-                    'Builds/Android/unity-build.log'
-                : ''
-        env.JENKINS_UPLOAD_LOG_URL =
-            env.UPLOAD_LOG_PATH?.trim() && fileExists(env.UPLOAD_LOG_PATH)
-                ? "${env.BUILD_URL}artifact/" +
-                    'Builds/Android/upload.log'
-                : ''
 
         writeFile(
             file: 'telegram-message.txt',
