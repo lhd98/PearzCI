@@ -243,7 +243,15 @@ def call(Map config = [:]) {
                         env.OUTPUT_EXTENSION = isIos
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
-                        env.OUTPUT_FILE_NAME = "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
+                        // Giữ một APK duy nhất trong workspace để mỗi build
+                        // Android mới ghi đè APK của build trước. IPA/AAB vẫn
+                        // kèm BUILD_NUMBER để tránh thay đổi quy ước của chúng.
+                        env.OUTPUT_FILE_NAME = !isIos &&
+                            env.OUTPUT_EXTENSION == 'apk'
+                            ? "${outputName}.apk"
+                            : "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
+                        env.DRIVE_OUTPUT_FILE_NAME =
+                            "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
                         def buildFolder = isIos ? 'iOS' : 'Android'
                         env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
                         env.METADATA_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/build-metadata.json"
@@ -259,7 +267,7 @@ def call(Map config = [:]) {
                         env.DRIVE_DIRECTORY =
                             "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
-                            "${env.DRIVE_DIRECTORY}/${env.OUTPUT_FILE_NAME}"
+                            "${env.DRIVE_DIRECTORY}/${env.DRIVE_OUTPUT_FILE_NAME}"
                         env.DRIVE_MAPPING_PATH =
                             "${env.DRIVE_DIRECTORY}/mapping-${env.BUILD_NUMBER}.txt"
 
@@ -883,7 +891,12 @@ def call(Map config = [:]) {
                         '''
                     }
 
-                    if (fileExists('Builds')) {
+                    if (isAndroid) {
+                        echo(
+                            'Keeping Builds/Android in the workspace; the ' +
+                            'next APK build replaces the existing APK.'
+                        )
+                    } else if (fileExists('Builds')) {
                         echo 'Cleaning build output...'
                         dir('Builds') {
                             deleteDir()

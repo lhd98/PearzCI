@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.19] - 2026-08-14
+
+### Changed
+
+- Android APK output is retained in `Builds/Android` on the Jenkins agent.
+  Each new APK build replaces the prior local APK, while Google Drive uploads
+  remain versioned by Jenkins build number.
+
 ## [0.6.18] - 2026-08-14
 
 ### Changed
