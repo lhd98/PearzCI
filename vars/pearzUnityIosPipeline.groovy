@@ -244,25 +244,7 @@ def call(Map config = [:]) {
                             exit 0
                         fi
 
-                        perl -0pi -e "
-                            my @product_ids;
-                            while (\$_ =~ /^\s*([A-F0-9]{24}) \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n/gms) {
-                                push @product_ids, \$1;
-                            }
-                            for my \$id (@product_ids) {
-                                s/^\s*\Q\$id\E \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n//gms;
-                                s/^\s*\Q\$id\E \/\* AppLovinSDK \*\/,?\n//gm;
-                            }
-
-                            my @package_ids;
-                            while (\$_ =~ /^\s*([A-F0-9]{24}) \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n/gmsi) {
-                                push @package_ids, \$1;
-                            }
-                            for my \$id (@package_ids) {
-                                s/^\s*\Q\$id\E \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n//gmsi;
-                                s/^\s*\Q\$id\E \/\* .*? \*\/,?\n//gm;
-                            }
-                        " "$pbxproj_path"
+                        printf '%s' 'bXkgQHByb2R1Y3RfaWRzOwp3aGlsZSAoJF8gPX4gL15ccyooW0EtRjAtOV17MjR9KSBcL1wqIEFwcExvdmluU0RLIFwqXC8gPSBce1xuXHMqaXNhID0gWENTd2lmdFBhY2thZ2VQcm9kdWN0RGVwZW5kZW5jeTsuKj9eXHMqXH07XG4vZ21zKSB7CiAgICBwdXNoIEBwcm9kdWN0X2lkcywgJDE7Cn0KZm9yIG15ICRpZCAoQHByb2R1Y3RfaWRzKSB7CiAgICBzL15ccypcUSRpZFxFIFwvXCogQXBwTG92aW5TREsgXCpcLyA9IFx7XG5ccyppc2EgPSBYQ1N3aWZ0UGFja2FnZVByb2R1Y3REZXBlbmRlbmN5Oy4qP15ccypcfTtcbi8vZ21zOwogICAgcy9eXHMqXFEkaWRcRSBcL1wqIEFwcExvdmluU0RLIFwqXC8sP1xuLy9nbTsKfQpteSBAcGFja2FnZV9pZHM7CndoaWxlICgkXyA9fiAvXlxzKihbQS1GMC05XXsyNH0pIFwvXCogLio/IFwqXC8gPSBce1xuXHMqaXNhID0gWENSZW1vdGVTd2lmdFBhY2thZ2VSZWZlcmVuY2U7Lio/YXBwbG92aW4tbWF4LXN3aWZ0LXBhY2thZ2UuKj9eXHMqXH07XG4vZ21zaSkgewogICAgcHVzaCBAcGFja2FnZV9pZHMsICQxOwp9CmZvciBteSAkaWQgKEBwYWNrYWdlX2lkcykgewogICAgcy9eXHMqXFEkaWRcRSBcL1wqIC4qPyBcKlwvID0gXHtcblxzKmlzYSA9IFhDUmVtb3RlU3dpZnRQYWNrYWdlUmVmZXJlbmNlOy4qP2FwcGxvdmluLW1heC1zd2lmdC1wYWNrYWdlLio/XlxzKlx9O1xuLy9nbXNpOwogICAgcy9eXHMqXFEkaWRcRSBcL1wqIC4qPyBcKlwvLD9cbi8vZ207Cn0=' | base64 -D | perl -0pi - "$pbxproj_path"
 
                         if grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
                             echo 'ERROR: AppLovin Swift package reference remains after cleanup.'

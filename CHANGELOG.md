@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.24] - 2026-08-14
+
+### Fixed
+
+- Encoded the iOS AppLovin cleanup program before execution so Jenkins Groovy
+  compiles the shared library without parsing Perl regular expressions.
+
 ## [0.6.23] - 2026-08-14
 
 ### Fixed
