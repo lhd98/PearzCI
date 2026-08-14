@@ -179,7 +179,8 @@ Common optional parameters:
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
   `UNITY_DEVELOPMENT_BUILD`, `BUILD_APP_BUNDLE`, `CLEAN_WORKSPACE`, and
   `SEND_NOTIFICATIONS`
-- String `APP_VERSION` and `KEY_ALIAS_NAME`
+- String `APP_VERSION`, `KEY_ALIAS_NAME`, and optional
+  `RELEASE_BUILD_NUMBER` for an AAB that accompanies a tested APK
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
   `Config/<BundleIdentifier>.keystore` location
@@ -213,12 +214,20 @@ also gets a visible version for use through Unity `Application.version`:
 `APP_VERSION` parameter is set. For example, Jenkins build `67` with
 `APP_VERSION=1.0.0` is shown in-game as `Build 1.0.0-67`.
 
+After an APK has been tested, set `RELEASE_BUILD_NUMBER` to that APK's Jenkins
+build number when creating its AAB. For example, an APK from build `157` and an
+AAB built later with `RELEASE_BUILD_NUMBER=157` both use version `157` (or
+`<APP_VERSION>-157`), so they are uploaded to the same Google Drive folder.
+The AAB's Google Play version code remains independently managed.
+
 For Android builds, PearzCI expects the successful Unity export to include
 `Builds/Android/<PRODUCT_NAME>_BUILD_INFO.txt` beside the APK/AAB. The pipeline
 verifies and archives that file, then uploads it with the artifact. Google
 Drive keeps each build in its own version folder:
-`<driveRoot>/<jobName>/<APP_VERSION>-<BUILD_NUMBER>/`. When `APP_VERSION` is
-empty, the folder name is the Jenkins `BUILD_NUMBER`.
+`<driveRoot>/<jobName>/<APP_VERSION>-<artifact build number>/`. When
+`APP_VERSION` is empty, the folder name is the artifact build number. For an
+AAB, this is `RELEASE_BUILD_NUMBER` when supplied; otherwise it is the current
+Jenkins `BUILD_NUMBER`.
 
 ### Configure the shared GitHub webhook
 

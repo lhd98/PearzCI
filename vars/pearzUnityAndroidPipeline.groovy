@@ -240,18 +240,33 @@ def call(Map config = [:]) {
                             '_'
                         )
 
+                        def requestedReleaseBuildNumber = isAndroid &&
+                            params.BUILD_APP_BUNDLE?.toString()?.toBoolean()
+                            ? params.RELEASE_BUILD_NUMBER?.toString()?.trim()
+                            : ''
+                        if (requestedReleaseBuildNumber &&
+                            !(requestedReleaseBuildNumber ==~ /[1-9][0-9]*/)) {
+                            error(
+                                'RELEASE_BUILD_NUMBER must be a positive ' +
+                                'integer, for example 157.'
+                            )
+                        }
+                        def artifactBuildNumber =
+                            requestedReleaseBuildNumber ?: env.BUILD_NUMBER
+                        env.ARTIFACT_BUILD_NUMBER = artifactBuildNumber
+
                         env.OUTPUT_EXTENSION = isIos
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
                         // Giữ một APK duy nhất trong workspace để mỗi build
-                        // Android mới ghi đè APK của build trước. IPA/AAB vẫn
-                        // kèm BUILD_NUMBER để tránh thay đổi quy ước của chúng.
+                        // Android mới ghi đè APK của build trước. AAB có thể
+                        // dùng RELEASE_BUILD_NUMBER để ghép với APK đã duyệt.
                         env.OUTPUT_FILE_NAME = !isIos &&
                             env.OUTPUT_EXTENSION == 'apk'
                             ? "${outputName}.apk"
-                            : "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
+                            : "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
                         env.DRIVE_OUTPUT_FILE_NAME =
-                            "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
+                            "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
                         def buildFolder = isIos ? 'iOS' : 'Android'
                         env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
                         env.BUILD_INFO_FILE_NAME = "${outputName}_BUILD_INFO.txt"
@@ -268,8 +283,8 @@ def call(Map config = [:]) {
                             env.XCODEBUILD_LOG_PATH = "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
                         }
                         def androidBuildVersion = params.APP_VERSION?.trim()
-                            ? "${params.APP_VERSION.trim()}-${env.BUILD_NUMBER}"
-                            : env.BUILD_NUMBER
+                            ? "${params.APP_VERSION.trim()}-${artifactBuildNumber}"
+                            : artifactBuildNumber
                         env.BUILD_VERSION = androidBuildVersion
                         env.DRIVE_DIRECTORY = isAndroid
                             ? "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}/${androidBuildVersion}"
@@ -279,7 +294,7 @@ def call(Map config = [:]) {
                         env.DRIVE_BUILD_INFO_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.BUILD_INFO_FILE_NAME}"
                         env.DRIVE_MAPPING_PATH =
-                            "${env.DRIVE_DIRECTORY}/mapping-${env.BUILD_NUMBER}.txt"
+                            "${env.DRIVE_DIRECTORY}/mapping-${artifactBuildNumber}.txt"
 
                         if (isUnix()) {
                             env.GIT_COMMIT_SHORT = sh(

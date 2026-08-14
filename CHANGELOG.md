@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.21] - 2026-08-14
+
+### Added
+
+- AAB builds can use optional `RELEASE_BUILD_NUMBER` to share the tested APK's
+  version-named Drive folder and artifact filename without reusing the AAB
+  Google Play version code.
+
 ## [0.6.20] - 2026-08-14
 
 ### Changed
