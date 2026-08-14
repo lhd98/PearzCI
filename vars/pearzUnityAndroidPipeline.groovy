@@ -6,7 +6,7 @@ def call(Map config = [:]) {
     ).toString().trim()
     def repositoryCredentialsId = config.get(
         'repositoryCredentialsId',
-        params.GIT_CREDENTIALS_ID ?: 'github-ssh'
+        'github-ssh'
     ).toString().trim()
     def telegramCredentialsId = config.get(
         'telegramCredentialsId',
@@ -194,6 +194,8 @@ def call(Map config = [:]) {
             stage('Prepare Build Variables') {
                 steps {
                     script {
+                        env.UNITY_VERSION = readUnityEditorVersion()
+
                         if (isUnix()) {
                             def kernelName = sh(
                                 script: 'uname -s',
@@ -298,8 +300,7 @@ def call(Map config = [:]) {
                     echo "PRODUCT_NAME = ${params.PRODUCT_NAME}"
                     echo "BUILD_CONFIGURATION = ${params.BUILD_CONFIGURATION}"
                     echo "GIT_BRANCH = ${params.GIT_BRANCH}"
-                    echo "UNITY_VERSION = ${params.UNITY_VERSION}"
-                    echo "BUNDLE_IDENTIFIER = ${params.BUNDLE_IDENTIFIER}"
+                    echo "UNITY_VERSION = ${env.UNITY_VERSION}"
                     echo "TARGET_ARCHITECTURES = ${params.TARGET_ARCHITECTURES}"
                     echo "OUTPUT_PATH = ${env.OUTPUT_PATH}"
                     echo "DRIVE_FILE_PATH = ${env.DRIVE_FILE_PATH}"
@@ -323,9 +324,9 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def unityExe = isUnix()
-                            ? "${env.UNITY_HUB_ROOT}/${params.UNITY_VERSION}" +
+                            ? "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
                                 '/Unity.app/Contents/MacOS/Unity'
-                            : "${env.UNITY_HUB_ROOT}/${params.UNITY_VERSION}" +
+                            : "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
                                 '/Editor/Unity.exe'
 
                         env.UNITY_EXE = unityExe
@@ -377,7 +378,9 @@ def call(Map config = [:]) {
                             withEnv([
                                 "OUTPUT_PATH=${env.OUTPUT_PATH}",
                                 "APP_VERSION=${ciAppVersion}",
-                                "ANDROID_VERSION_CODE=${androidVersionCode}"
+                                "ANDROID_VERSION_CODE=${androidVersionCode}",
+                                // Bundle ID is always sourced from Unity Project Settings.
+                                'BUNDLE_IDENTIFIER='
                             ]) {
                                 if (isUnix()) {
                                     sh '''
@@ -914,7 +917,7 @@ def buildTelegramMessage() {
         SCRIPTING_BACKEND: telegramHtmlEscape(env.META_SCRIPTING_BACKEND),
         STRIPPING_LEVEL: telegramHtmlEscape(env.META_STRIPPING_LEVEL),
         ORIENTATION: telegramHtmlEscape(env.META_ORIENTATION),
-        UNITY_VERSION: telegramHtmlEscape(env.META_UNITY_VERSION ?: params.UNITY_VERSION),
+        UNITY_VERSION: telegramHtmlEscape(env.META_UNITY_VERSION ?: env.UNITY_VERSION),
         BUILD_TIME: telegramHtmlEscape(formatDurationMillis(env.BUILD_TIME_MILLIS)),
         UPLOAD_TIME: telegramHtmlEscape(formatDurationMillis(env.UPLOAD_TIME_MILLIS)),
         TOTAL_TIME: telegramHtmlEscape(formatDurationMillis(env.TOTAL_TIME_MILLIS)),

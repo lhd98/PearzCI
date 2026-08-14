@@ -3,7 +3,7 @@ def call(Map config = [:]) {
         'repositoryUrl', params.PROJECT_REPOSITORY_URL ?: ''
     ).toString().trim()
     def repositoryCredentialsId = config.get(
-        'repositoryCredentialsId', params.GIT_CREDENTIALS_ID ?: 'github-ssh'
+        'repositoryCredentialsId', 'github-ssh'
     ).toString().trim()
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     def unityHubRoot = config.get(
@@ -114,6 +114,7 @@ def call(Map config = [:]) {
             stage('Prepare Build Variables') {
                 steps {
                     script {
+                        env.UNITY_VERSION = readUnityEditorVersion()
                         def outputName = params.PRODUCT_NAME?.trim()
                             ? params.PRODUCT_NAME.trim() : env.JOB_BASE_NAME
                         outputName = outputName.replaceAll('[<>:"\\\\/|?*]', '_')
@@ -147,7 +148,7 @@ def call(Map config = [:]) {
             stage('Validate macOS Toolchain') {
                 steps {
                     script {
-                        env.UNITY_EXE = "${env.UNITY_HUB_ROOT}/${params.UNITY_VERSION}" +
+                        env.UNITY_EXE = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
                             '/Unity.app/Contents/MacOS/Unity'
                         if (!fileExists(env.UNITY_EXE)) {
                             error("Unity not found: ${env.UNITY_EXE}")
@@ -176,7 +177,8 @@ def call(Map config = [:]) {
                             withEnv([
                                 "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
                                 "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
-                                "BUNDLE_IDENTIFIER=${params.BUNDLE_IDENTIFIER ?: ''}",
+                                // Bundle ID is always sourced from Unity Project Settings.
+                                'BUNDLE_IDENTIFIER=',
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                 "APP_VERSION=${params.APP_VERSION ?: ''}",
                                 "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
@@ -307,7 +309,6 @@ def call(Map config = [:]) {
                         def xcodeConfiguration = config.get(
                             'xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Debug'
                         ).toString().trim()
-                        def bundleIdentifier = params.BUNDLE_IDENTIFIER?.toString()?.trim() ?: ''
                         def profileSpecifier = config.get(
                             'iosProvisioningProfileSpecifier',
                             params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
@@ -327,7 +328,6 @@ def call(Map config = [:]) {
                             "IOS_DEVICE_UDID=${deviceUdid}",
                             "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
                             "XCODE_CONFIGURATION=${xcodeConfiguration}",
-                            "IOS_BUNDLE_IDENTIFIER=${bundleIdentifier}",
                             "IOS_PROFILE_SPECIFIER=${profileSpecifier}"
                         ]) {
                             sh '''
@@ -337,7 +337,7 @@ def call(Map config = [:]) {
                                     exit 1
                                 }
                                 rm -rf "$DERIVED_DATA_PATH"
-                                echo "iOS device bundle identifier: ${IOS_BUNDLE_IDENTIFIER:-<from Unity project>}"
+                                echo 'iOS device bundle identifier is sourced from Unity Project Settings.'
 
                                 # Personal Teams cannot provision the In-App Purchase capability.
                                 # This is a development-only device build, so remove it from the
@@ -519,7 +519,6 @@ def sendIosDeviceTelegramNotification(String telegramCredentialsId) {
             : 'The app was not installed. Open the Jenkins log for details.'
         def configuration = params.XCODE_CONFIGURATION?.toString()?.trim() ?: 'Debug'
         def branch = params.GIT_BRANCH?.toString()?.trim() ?: ''
-        def bundleIdentifier = params.BUNDLE_IDENTIFIER?.toString()?.trim() ?: ''
         def productName = params.PRODUCT_NAME?.toString()?.trim() ?: env.JOB_BASE_NAME
         def buildLogUrl = env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
             ? "${env.BUILD_URL}artifact/Builds/iOS/unity-build.log"
@@ -532,7 +531,6 @@ def sendIosDeviceTelegramNotification(String telegramCredentialsId) {
             '━━━━━━━━━━━━━━━━━━',
             "<b>Job:</b> ${telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}")}",
             "<b>Product:</b> ${telegramHtmlEscape(productName)}",
-            bundleIdentifier ? "<b>Bundle ID:</b> <code>${telegramHtmlEscape(bundleIdentifier)}</code>" : '',
             branch ? "<b>Branch:</b> <code>${telegramHtmlEscape(branch)}</code>" : '',
             "<b>Xcode:</b> ${telegramHtmlEscape(configuration)}",
             '━━━━━━━━━━━━━━━━━━',

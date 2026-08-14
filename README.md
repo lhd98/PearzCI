@@ -76,7 +76,6 @@ are:
 - `OUTPUT_PATH`
 - `BUILD_CONFIGURATION`
 - `PRODUCT_NAME`
-- `BUNDLE_IDENTIFIER`
 - `SCRIPTING_DEFINE_SYMBOLS`
 - `APP_VERSION`
 - `ANDROID_VERSION_CODE`
@@ -96,10 +95,10 @@ loads the keystore from the project convention below:
 ```
 
 For example, package name `com.pg.sushi.sort` uses
-`Config/com.pg.sushi.sort.keystore`. The effective Android bundle identifier is
-used after applying any `BUNDLE_IDENTIFIER` override. `KEYSTORE_PATH` remains
-supported for existing jobs and non-standard locations; relative overrides are
-resolved from the Unity project root.
+`Config/com.pg.sushi.sort.keystore`. The Android bundle identifier always comes
+from Unity Project Settings. `KEYSTORE_PATH` remains supported for existing jobs
+and non-standard locations; relative overrides are resolved from the Unity
+project root.
 
 ## Windows standalone (.exe)
 
@@ -164,9 +163,7 @@ Required parameters:
 
 - String `PROJECT_REPOSITORY_URL`, for example
   `git@github.com:PearzGame/MyGame.git`
-- String `GIT_CREDENTIALS_ID`, for example `github-ssh`
 - String `GIT_BRANCH`, for example `main`
-- String `UNITY_VERSION`, for example `6000.3.14f1`
 - String `PRODUCT_NAME`, for example `MyGame`
 - Choice `BUILD_CONFIGURATION`: `Development` or `Release`
 - Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
@@ -175,7 +172,6 @@ Common optional parameters:
 
 - String `TELEGRAM_CHANNEL` using
   `botToken|chatId|messageThreadId`; separate targets with semicolons
-- String `BUNDLE_IDENTIFIER`
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
 - Choice `TARGET_ARCHITECTURES`: `ARM64` or `ARMV7_ARM64`
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
@@ -191,6 +187,11 @@ Common optional parameters:
   `IOS_PROVISIONING_PROFILE_SPECIFIER`
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH`
 - Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+
+PearzCI uses the Jenkins credential ID `github-ssh` for project checkout. The
+Unity editor version is read from `ProjectSettings/ProjectVersion.txt`, and the
+bundle identifier is read from Unity Project Settings; do not create Jenkins
+parameters for these values.
 
 `CLEAN_WORKSPACE` mặc định là `false`. Khi bật, PearzCI xoá toàn bộ workspace
 của riêng Jenkins job trước bước checkout rồi tải lại project từ Git. Dùng tuỳ
@@ -461,8 +462,8 @@ pearzUnityIosPipeline()
 ```
 
 The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
-`GIT_CREDENTIALS_ID`, `GIT_BRANCH`, `UNITY_VERSION`, `PRODUCT_NAME`, and
-`BUILD_CONFIGURATION`. Add these iOS parameters under **This project is
+`GIT_BRANCH`, `PRODUCT_NAME`, and `BUILD_CONFIGURATION`. Add these iOS
+parameters under **This project is
 parameterized**:
 
 - String `IOS_BUILD_NUMBER` (for example `42`)
@@ -474,8 +475,8 @@ parameterized**:
 - Boolean `IOS_BUILD_TO_DEVICE` (default: false)
 - String `IOS_DEVICE_UDID` (required when building to a device)
 
-The remaining shared optional values are also supported: `BUNDLE_IDENTIFIER`,
-`SCRIPTING_DEFINE_SYMBOLS`, `APP_VERSION`, `IL2CPP_CODE_GENERATION`,
+The remaining shared optional values are also supported: `SCRIPTING_DEFINE_SYMBOLS`,
+`APP_VERSION`, `IL2CPP_CODE_GENERATION`,
 `MANAGED_STRIPPING_LEVEL`, `STRIP_ENGINE_CODE`, `UNITY_DEVELOPMENT_BUILD`, and
 `SCRIPT_DEBUGGING`.
 

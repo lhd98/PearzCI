@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.14] - 2026-08-14
+
+### Changed
+
+- Jenkins project checkout now uses the shared `github-ssh` credential instead
+  of a per-job `GIT_CREDENTIALS_ID` parameter.
+- Jenkins reads the Unity editor version from
+  `ProjectSettings/ProjectVersion.txt` instead of a `UNITY_VERSION` parameter.
+- Android and iOS builds now always use the bundle identifier from Unity
+  Project Settings; the Jenkins `BUNDLE_IDENTIFIER` override is no longer used.
+
 ## [0.6.13] - 2026-08-13
 
 ### Added

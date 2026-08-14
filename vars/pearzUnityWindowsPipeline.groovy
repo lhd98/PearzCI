@@ -3,7 +3,7 @@ def call(Map config = [:]) {
         'repositoryUrl', params.PROJECT_REPOSITORY_URL ?: ''
     ).toString().trim()
     def credentialsId = config.get(
-        'repositoryCredentialsId', params.GIT_CREDENTIALS_ID ?: 'github-ssh'
+        'repositoryCredentialsId', 'github-ssh'
     ).toString().trim()
     def defaultGitBranch = config.get('gitBranch', 'master').toString()
     def unityHubRoot = config.get(
@@ -57,8 +57,8 @@ def call(Map config = [:]) {
                 options { timeout(time: 60, unit: 'MINUTES') }
                 steps {
                     script {
-                        def unityVersion = params.UNITY_VERSION?.trim()
-                        if (!unityVersion) error('UNITY_VERSION is required.')
+                        def unityVersion = readUnityEditorVersion()
+                        env.UNITY_VERSION = unityVersion
                         env.UNITY_EXE = "${unityHubRoot}/${unityVersion}/Editor/Unity.exe"
                         if (!fileExists(env.UNITY_EXE)) {
                             error("Unity with Windows Build Support was not found: ${env.UNITY_EXE}")
@@ -143,7 +143,7 @@ def sendWindowsTelegramNotification() {
         "<b>Job:</b> ${telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}")}",
         "<b>Product:</b> ${telegramHtmlEscape(params.PRODUCT_NAME ?: env.JOB_BASE_NAME)}",
         "<b>Branch:</b> <code>${telegramHtmlEscape(params.GIT_BRANCH ?: '')}</code>",
-        "<b>Unity:</b> ${telegramHtmlEscape(params.UNITY_VERSION ?: '')}",
+        "<b>Unity:</b> ${telegramHtmlEscape(env.UNITY_VERSION ?: '')}",
         "<b>Jenkins:</b> ${telegramHtmlEscape(env.BUILD_URL)}",
         env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
             ? "<b>Unity log:</b> ${telegramHtmlEscape("${env.BUILD_URL}artifact/Builds/Windows/unity-build.log")}" : ''
