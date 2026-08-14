@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.35] - 2026-08-14
+
+### Fixed
+
+- `pearzUnityIosPipeline()` derives its webhook branch filter from the job's
+  configured `GIT_BRANCH` default instead of the current run's value. Running
+  the job once with a different branch no longer rewrites the branch the
+  webhook listens on. The shared graph already worked this way.
+
 ## [0.6.34] - 2026-08-14
 
 ### Removed

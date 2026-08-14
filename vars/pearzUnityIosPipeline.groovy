@@ -12,9 +12,7 @@ def call(Map config = [:]) {
     def rcloneExe = config.get('macRcloneExe', 'rclone').toString().trim()
     def driveRemote = config.get('driveRemote', 'gdrive').toString().trim()
     def driveRoot = config.get('driveRoot', 'JenkinsBuild').toString().trim()
-    def defaultGitBranch = config.get(
-        'gitBranch', params.GIT_BRANCH ?: 'master'
-    ).toString().trim()
+    def defaultGitBranch = config.get('gitBranch', 'master').toString().trim()
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
     def artifactBuildsToKeep = config.get('artifactBuildsToKeep', 10).toString()
     def telegramCredentialsId = config.get(
@@ -26,7 +24,17 @@ def call(Map config = [:]) {
     // Message Telegram dùng chung với shared graph, nên job iOS riêng cũng
     // cần biến này để dòng "PearzCI:" không bị bỏ trống.
     def pearzCiVersion = pearzUnityAndroidPipeline.readPearzCiVersion()
-    def webhookBranch = defaultGitBranch.replaceFirst(/^refs\/heads\//, '')
+    // Bộ lọc webhook phải bám giá trị MẶC ĐỊNH của job, không bám giá trị của
+    // lần chạy này. Declarative ghi đè triggers{} vào job mỗi lần build, nên
+    // dùng params.GIT_BRANCH ở đây sẽ khiến một lần "Build with Parameters"
+    // chọn branch khác âm thầm đổi luôn branch mà webhook lắng nghe, và job
+    // phản ứng với sai branch cho tới lần build kế tiếp. Việc checkout bên
+    // dưới vẫn dùng giá trị của lần chạy nên build tay branch khác vẫn chạy
+    // như cũ. Giống hệt cách shared graph đã xử lý.
+    def webhookBranch = pearzUnityAndroidPipeline.normalizeGitBranch(
+        pearzUnityAndroidPipeline.readConfiguredBranchDefault() ?:
+        (params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch)
+    )
     def webhookRepository = extractGitHubRepository(repositoryUrl)
     def webhookFilterExpression = webhookRepository
         ? '^' + regexEscape(webhookRepository) +
