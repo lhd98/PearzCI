@@ -470,10 +470,13 @@ Xcode Command Line Tools, Git, rclone, and a valid Unity license under the
 Jenkins agent user.
 
 With `pearzUnityPipeline()`, no second job is needed: select `iOS` from
-`BUILD_PLATFORM` in the existing job. Android and iOS share one fixed Jenkins
-Stage View; stages for the other platform are shown as skipped, so changing
-the parameter does not replace the graph layout. To keep Android and iOS as separate
-Jenkins jobs instead, create a second Pipeline job with this script:
+`BUILD_PLATFORM` in the existing job. Android, iOS IPA, and iOS connected-device
+builds share one fixed Jenkins Stage View; stages that do not apply to the run
+are shown as skipped, so changing `BUILD_PLATFORM` or `IOS_BUILD_TO_DEVICE` does
+not replace the graph layout. iOS runs are pinned to the `macos` agent label
+(override with `macAgentLabel`), while Android keeps running on any available
+agent. To keep Android and iOS as separate Jenkins jobs instead, create a second
+Pipeline job with this script:
 
 ```groovy
 pearzUnityIosPipeline()
@@ -505,8 +508,10 @@ Google Drive remote just like Android artifacts.
 
 ### Build directly to a connected iPhone
 
-`pearzUnityPipeline()` automatically routes this mode to the dedicated iOS
-device pipeline. A separate `pearzUnityIosPipeline()` job remains optional.
+`pearzUnityPipeline()` runs this mode through the same shared stage graph as
+Android and iOS IPA builds, so the Jenkins Stage View layout does not change
+when `IOS_BUILD_TO_DEVICE` is toggled. A separate `pearzUnityIosPipeline()` job
+remains optional.
 
 For a development-only device build, set `IOS_BUILD_TO_DEVICE=true`, provide
 `IOS_DEVICE_UDID` and `IOS_DEVELOPMENT_TEAM`, and normally select `Debug`.

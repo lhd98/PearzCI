@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.30] - 2026-08-14
+
+### Changed
+
+- The shared mobile stage graph now also runs iOS connected-device builds, so
+  Android, iOS IPA, and iOS device runs of the same job declare one identical
+  Jenkins Stage View layout; stages that do not apply are shown as skipped.
+- `pearzUnityPipeline()` no longer routes `IOS_BUILD_TO_DEVICE=true` to
+  `pearzUnityIosPipeline()`; that entry point remains available for a separate
+  iOS-only Jenkins job.
+- The shared pipeline picks its agent by platform: iOS builds require the
+  `macAgentLabel` node (default `macos`), Android keeps the previous
+  any-available-agent behaviour.
+
 ## [0.6.29] - 2026-08-14
 
 ### Fixed

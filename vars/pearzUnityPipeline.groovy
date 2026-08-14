@@ -9,20 +9,10 @@ def call(Map config = [:]) {
             pearzUnityAndroidPipeline(config + [mobilePlatform: platform])
             break
         case 'ios':
-            // The unified graph handles iOS IPA exports, but a connected-device
-            // build needs the direct-signing flow in the dedicated pipeline.
-            // Keep the job entry point stable for callers using
-            // pearzUnityPipeline() with IOS_BUILD_TO_DEVICE=true.
-            def iosBuildToDevice = config.get(
-                'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
-            ).toString().trim().toBoolean()
-            if (iosBuildToDevice) {
-                pearzUnityIosPipeline(config)
-                break
-            }
             // Android and iOS intentionally share one Declarative Pipeline.
-            // A fixed stage declaration keeps Jenkins Stage View stable when a
-            // user changes BUILD_PLATFORM; irrelevant stages are skipped.
+            // The shared graph also covers connected-device builds, so the
+            // Stage View layout stays identical across BUILD_PLATFORM and
+            // IOS_BUILD_TO_DEVICE; irrelevant stages are shown as skipped.
             pearzUnityAndroidPipeline(config + [mobilePlatform: platform])
             break
         case 'windows':
