@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented in this file.
 
-## [0.6.17] - 2026-08-14
+## [0.6.18] - 2026-08-14
 
 ### Changed
 
@@ -15,6 +15,12 @@ All notable changes to this package are documented in this file.
 - iOS device builds (`IOS_BUILD_TO_DEVICE=true`) remain available through the
   dedicated `pearzUnityIosPipeline()` entry point while the shared graph covers
   Android builds and signed iOS IPA exports.
+
+## [0.6.17] - 2026-08-14
+
+### Fixed
+
+- Corrected the initial `v0.6.17` Declarative Pipeline syntax before release.
 
 ## [0.6.16] - 2026-08-14
 

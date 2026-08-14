@@ -798,12 +798,12 @@ def call(Map config = [:]) {
 
         post {
             success {
-                echo "Unity ${isIos ? 'iOS' : 'Android'} build completed: ${env.OUTPUT_FILE_NAME}"
-                if (!isIos || !iosBuildToDevice) {
-                    echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
-                }
-
                 script {
+                    echo "Unity ${isIos ? 'iOS' : 'Android'} build completed: ${env.OUTPUT_FILE_NAME}"
+                    if (!isIos || !iosBuildToDevice) {
+                        echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
+                    }
+
                     if (isAndroid && env.AAB_VERSION_CODE?.trim()) {
                         saveNextAabVersionCode(env.AAB_VERSION_CODE.toInteger())
                     }
