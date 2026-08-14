@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.13] - 2026-08-14
+
+### Fixed
+
+- iOS exports now remove a duplicate AppLovin Swift Package Manager reference
+  when AppLovin is already installed through CocoaPods, preventing Xcode's
+  `Multiple commands produce AppLovinSDK.framework` build failure.
+
+### Changed
+
+- Android build notifications omit Jenkins URLs, timing details, Drive root
+  links, and log links. The new Build Info link opens the Drive artifact folder,
+  which now includes `buildinfo.txt` with the build metadata.
+
 ## [0.6.12] - 2026-08-13
 
 ### Added
