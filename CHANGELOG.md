@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.25] - 2026-08-14
+
+### Fixed
+
+- The iOS AppLovin cleanup now removes the Swift package through Xcode project's
+  dependency model instead of text matching, so it removes the duplicate SDK
+  reference reliably.
+
 ## [0.6.24] - 2026-08-14
 
 ### Fixed
