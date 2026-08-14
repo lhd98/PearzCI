@@ -293,33 +293,6 @@ public static class BuildEntry
         string outputPath = Path.GetFullPath(
             GetEnvironmentVariable("OUTPUT_PATH", defaultOutputPath));
 
-        // Ưu tiên tên mới. BUILD_TYPE được giữ để tương thích Jenkins job cũ.
-        string buildConfiguration = GetEnvironmentVariable("BUILD_CONFIGURATION");
-
-        if (string.IsNullOrWhiteSpace(buildConfiguration))
-        {
-            buildConfiguration = GetEnvironmentVariable("BUILD_TYPE", "release");
-        }
-
-        buildConfiguration = buildConfiguration.Trim().ToLowerInvariant();
-
-        bool developmentBuild =
-            buildConfiguration == "develop" ||
-            buildConfiguration == "development" ||
-            buildConfiguration == "debug";
-
-        bool releaseBuild =
-            buildConfiguration == "release" ||
-            buildConfiguration == "production" ||
-            buildConfiguration == "prod";
-
-        if (!developmentBuild && !releaseBuild)
-        {
-            throw new ArgumentException(
-                $"BUILD_CONFIGURATION không hợp lệ: '{buildConfiguration}'. " +
-                "Giá trị hợp lệ: develop hoặc release.");
-        }
-
         bool buildAppBundle = GetBooleanEnvironmentVariable(
             "BUILD_APP_BUNDLE",
             false);
@@ -331,8 +304,6 @@ public static class BuildEntry
         return new BuildConfiguration
         {
             OutputPath        = outputPath,
-            ConfigurationName = developmentBuild ? "develop" : "release",
-            DevelopmentBuild  = developmentBuild,
             UnityDevelopmentBuild =
                 GetBooleanEnvironmentVariable(
                     "UNITY_DEVELOPMENT_BUILD",
@@ -544,7 +515,6 @@ public static class BuildEntry
         PlayerSettings.Android.bundleVersionCode =
             configuration.AndroidVersionCode;
 
-        Log($"Build configuration: {configuration.ConfigurationName}");
         Log($"Product name: {PlayerSettings.productName}");
         Log($"Application identifier: {GetAndroidApplicationIdentifier()}");
         Log($"Bundle version: {PlayerSettings.bundleVersion}");
@@ -833,8 +803,6 @@ public static class BuildEntry
     {
         Log("Build configuration:");
         Log($"Output: {configuration.OutputPath}");
-        Log($"Configuration: {configuration.ConfigurationName}");
-        Log($"Development configuration: {configuration.DevelopmentBuild}");
         Log($"Unity Development Build: {configuration.UnityDevelopmentBuild}");
         Log($"Script debugging: {configuration.ScriptDebugging}");
         Log($"App version: {configuration.AppVersion}");
@@ -954,9 +922,6 @@ public static class BuildEntry
                 scriptingDefineSymbols =
                     SplitScriptingDefineSymbols(
                         GetAndroidScriptingDefineSymbols()),
-                buildConfiguration = configuration != null
-                    ? configuration.ConfigurationName
-                    : string.Empty,
                 buildAppBundle =
                     configuration != null && configuration.BuildAppBundle,
                 outputFileName = outputFile != null
@@ -1330,7 +1295,6 @@ public static class BuildEntry
         public string   orientation;
         public string   targetArchitectures;
         public string[] scriptingDefineSymbols;
-        public string   buildConfiguration;
         public bool     buildAppBundle;
         public string   outputFileName;
         public long     outputSizeBytes;
@@ -1345,8 +1309,6 @@ public static class BuildEntry
     private sealed class BuildConfiguration
     {
         public string OutputPath            { get; set; }
-        public string ConfigurationName     { get; set; }
-        public bool   DevelopmentBuild      { get; set; }
         public bool   UnityDevelopmentBuild { get; set; }
         public bool   ScriptDebugging       { get; set; }
         public bool   BuildAppBundle        { get; set; }

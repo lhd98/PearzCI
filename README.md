@@ -74,7 +74,6 @@ Configuration is read from environment variables. The commonly used variables
 are:
 
 - `OUTPUT_PATH`
-- `BUILD_CONFIGURATION`
 - `PRODUCT_NAME`
 - `SCRIPTING_DEFINE_SYMBOLS`
 - `APP_VERSION`
@@ -165,7 +164,6 @@ Required parameters:
   `git@github.com:PearzGame/MyGame.git`
 - String `GIT_BRANCH`, for example `main`
 - String `PRODUCT_NAME`, for example `MyGame`
-- Choice `BUILD_CONFIGURATION`: `Development` or `Release`
 - Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
 
 Common optional parameters:
@@ -483,9 +481,8 @@ pearzUnityIosPipeline()
 ```
 
 The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
-`GIT_BRANCH`, `PRODUCT_NAME`, and `BUILD_CONFIGURATION`. Add these iOS
-parameters under **This project is
-parameterized**:
+`GIT_BRANCH`, and `PRODUCT_NAME`. Add these iOS parameters under **This project
+is parameterized**:
 
 - String `IOS_BUILD_NUMBER` (for example `42`)
 - String `IOS_DEVELOPMENT_TEAM` (Apple Developer Team ID)

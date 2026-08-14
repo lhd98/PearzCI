@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.34] - 2026-08-14
+
+### Removed
+
+- `BUILD_CONFIGURATION` (and its legacy `BUILD_TYPE` fallback). It never
+  affected the built player: development builds are controlled by
+  `UNITY_DEVELOPMENT_BUILD` and `SCRIPT_DEBUGGING`, while `BUILD_CONFIGURATION`
+  only labelled the Android `build-metadata.json` and a few log lines, and iOS
+  and Windows ignored it entirely. The `buildConfiguration` field is gone from
+  `build-metadata.json`; nothing read it back.
+
 ## [0.6.33] - 2026-08-14
 
 ### Changed

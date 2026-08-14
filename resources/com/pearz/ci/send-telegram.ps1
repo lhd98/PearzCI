@@ -28,7 +28,6 @@ if ([string]::IsNullOrWhiteSpace($message)) {
         "Artifact: $env:OUTPUT_FILE_NAME"
         "Build: #$env:BUILD_NUMBER"
         "Branch: $env:GIT_BRANCH"
-        "Configuration: $env:BUILD_CONFIGURATION"
         "Unity: $env:UNITY_VERSION"
         "Commit: $env:GIT_COMMIT_SHORT"
         "Message: $env:GIT_COMMIT_MESSAGE"

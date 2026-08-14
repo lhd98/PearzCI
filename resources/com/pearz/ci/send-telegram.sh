@@ -36,7 +36,6 @@ if [ -z "$message" ]; then
             "Artifact: ${OUTPUT_FILE_NAME:-}" \
             "Build: #${BUILD_NUMBER:-}" \
             "Branch: ${GIT_BRANCH:-}" \
-            "Configuration: ${BUILD_CONFIGURATION:-}" \
             "Unity: ${UNITY_VERSION:-}" \
             "Commit: ${GIT_COMMIT_SHORT:-}" \
             "Message: ${GIT_COMMIT_MESSAGE:-}" \

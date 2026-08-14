@@ -351,7 +351,6 @@ def call(Map config = [:]) {
                 steps {
                     echo "NODE_OS = ${env.NODE_OS}"
                     echo "PRODUCT_NAME = ${params.PRODUCT_NAME}"
-                    echo "BUILD_CONFIGURATION = ${params.BUILD_CONFIGURATION}"
                     echo "GIT_BRANCH = ${params.GIT_BRANCH}"
                     echo "UNITY_VERSION = ${env.UNITY_VERSION}"
                     echo "TARGET_ARCHITECTURES = ${params.TARGET_ARCHITECTURES}"
