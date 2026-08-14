@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.16] - 2026-08-14
+
+### Changed
+
+- The iOS Jenkins stage view now follows the Android release flow: parameters,
+  Unity validation, artifact verification and archiving, rclone validation,
+  Drive upload verification, public-link creation, and upload-log archiving
+  are displayed as separate stages.
+
 ## [0.6.15] - 2026-08-14
 
 ### Fixed

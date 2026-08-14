@@ -145,7 +145,19 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Validate macOS Toolchain') {
+            stage('Show Parameters') {
+                steps {
+                    echo "PRODUCT_NAME = ${params.PRODUCT_NAME}"
+                    echo "GIT_BRANCH = ${params.GIT_BRANCH}"
+                    echo "UNITY_VERSION = ${env.UNITY_VERSION}"
+                    echo "XCODE_CONFIGURATION = ${params.XCODE_CONFIGURATION}"
+                    echo "IOS_BUILD_TO_DEVICE = ${env.IOS_BUILD_TO_DEVICE}"
+                    echo "OUTPUT_PATH = ${env.OUTPUT_PATH}"
+                    echo "DRIVE_FILE_PATH = ${env.DRIVE_FILE_PATH}"
+                }
+            }
+
+            stage('Validate Unity') {
                 steps {
                     script {
                         env.UNITY_EXE = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
@@ -158,17 +170,12 @@ def call(Map config = [:]) {
                             uname -s | grep -Fx Darwin
                             "$UNITY_EXE" -version
                             xcodebuild -version
-                            if [ "$IOS_BUILD_TO_DEVICE" != 'true' ]; then
-                                command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
-                                    [ -x "$RCLONE_EXE" ]
-                                "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
-                            fi
                         '''
                     }
                 }
             }
 
-            stage('Export Unity iOS Project') {
+            stage('Build Unity iOS') {
                 options { timeout(time: 60, unit: 'MINUTES') }
                 steps {
                     script {
@@ -442,28 +449,102 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Archive and Upload IPA') {
+            stage('Verify Artifact') {
                 when { expression { !buildToDevice } }
                 steps {
                     script {
                         if (!fileExists(env.OUTPUT_PATH)) {
                             error("IPA not found: ${env.OUTPUT_PATH}")
                         }
-                        archiveArtifacts(
-                            artifacts: "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log",
-                            allowEmptyArchive: true,
-                            fingerprint: true,
-                            onlyIfSuccessful: true
-                        )
-                        sh '''
-                            set -eu
-                            "$RCLONE_EXE" copyto "$OUTPUT_PATH" "$DRIVE_FILE_PATH" \
-                                --retries 3 --low-level-retries 10 \
-                                --log-file "$UPLOAD_LOG_PATH" --log-level INFO
-                            "$RCLONE_EXE" lsjson "$DRIVE_FILE_PATH" --files-only
-                            "$RCLONE_EXE" link "$DRIVE_FILE_PATH" || true
-                        '''
+                        echo "Build artifact created successfully: ${env.OUTPUT_PATH}"
                     }
+                }
+            }
+
+            stage('Archive Artifact') {
+                when { expression { !buildToDevice } }
+                steps {
+                    archiveArtifacts(
+                        artifacts: "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log",
+                        allowEmptyArchive: true,
+                        fingerprint: true,
+                        onlyIfSuccessful: true
+                    )
+                }
+            }
+
+            stage('Validate rclone') {
+                when { expression { !buildToDevice } }
+                steps {
+                    sh '''
+                        set -eu
+                        command -v "$RCLONE_EXE" >/dev/null 2>&1 ||
+                            [ -x "$RCLONE_EXE" ]
+                        "$RCLONE_EXE" version
+                        "$RCLONE_EXE" listremotes | grep -Fqx "$DRIVE_REMOTE:"
+                    '''
+                }
+            }
+
+            stage('Upload Google Drive') {
+                when { expression { !buildToDevice } }
+                options { timeout(time: 30, unit: 'MINUTES') }
+                steps {
+                    script {
+                        def uploadStartedAt = System.currentTimeMillis()
+                        try {
+                            retry(2) {
+                                sh '''
+                                    set -eu
+                                    "$RCLONE_EXE" copyto "$OUTPUT_PATH" "$DRIVE_FILE_PATH" \
+                                        --retries 3 --low-level-retries 10 \
+                                        --log-file "$UPLOAD_LOG_PATH" --log-level INFO
+                                '''
+                            }
+                        } finally {
+                            env.UPLOAD_TIME_MILLIS = (
+                                System.currentTimeMillis() - uploadStartedAt
+                            ).toString()
+                        }
+                    }
+                }
+            }
+
+            stage('Verify Google Drive Upload') {
+                when { expression { !buildToDevice } }
+                steps {
+                    sh '''
+                        set -eu
+                        "$RCLONE_EXE" lsjson "$DRIVE_FILE_PATH" --files-only
+                        echo 'Build artifact verified successfully on Google Drive.'
+                    '''
+                }
+            }
+
+            stage('Create Public Link') {
+                when { expression { !buildToDevice } }
+                steps {
+                    script {
+                        env.DOWNLOAD_URL = sh(
+                            script: '"$RCLONE_EXE" link "$DRIVE_FILE_PATH"',
+                            returnStdout: true
+                        ).trim()
+                        if (!env.DOWNLOAD_URL) {
+                            error('ERROR: rclone did not return a public link.')
+                        }
+                        echo "Public download link: ${env.DOWNLOAD_URL}"
+                    }
+                }
+            }
+
+            stage('Archive Notification Artifacts') {
+                when { expression { !buildToDevice } }
+                steps {
+                    archiveArtifacts(
+                        artifacts: 'Builds/iOS/upload.log',
+                        allowEmptyArchive: true,
+                        fingerprint: true
+                    )
                 }
             }
         }
