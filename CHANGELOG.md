@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.15] - 2026-08-14
+
+### Fixed
+
+- Added the missing Unity `.meta` file for `readUnityEditorVersion.groovy` so
+  the Jenkins Shared Library asset is imported from the UPM package.
+
 ## [0.6.14] - 2026-08-14
 
 ### Changed
