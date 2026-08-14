@@ -2,6 +2,24 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.36] - 2026-08-14
+
+### Fixed
+
+- The AppLovin Swift Package cleanup no longer aborts the iOS build with
+  `undefined method 'packae_product_dependencies'`. The Ruby program was
+  embedded as base64 in both pipelines and the two copies had drifted by one
+  character; the shared graph held the broken copy, which 0.6.30 started using
+  for connected-device builds.
+- The failure message on an iOS run said `Unity Android build failed.`
+
+### Changed
+
+- The AppLovin cleanup program now lives in
+  `resources/com/pearz/ci/remove-applovin-spm.rb` and is loaded with
+  `libraryResource`, so there is one readable copy instead of two base64 blobs
+  that cannot be diffed by eye.
+
 ## [0.6.35] - 2026-08-14
 
 ### Fixed

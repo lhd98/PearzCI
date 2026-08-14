@@ -543,30 +543,42 @@ def call(Map config = [:]) {
             stage('Remove duplicate AppLovin SPM dependency') {
                 when { expression { isIos } }
                 steps {
-                    sh '''
-                        set -eu
-                        xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
-                        pbxproj_path="$xcodeproj_path/project.pbxproj"
-                        pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
-                        ruby() { command ruby - "$xcodeproj_path"; }
+                    script {
+                        // Script Ruby nằm ở resources thay vì nhúng base64 vào
+                        // Groovy. Bản nhúng từng tồn tại hai bản ở hai pipeline
+                        // và lệch nhau một ký tự mà không ai đọc ra được, vì
+                        // base64 thì mắt thường không diff nổi.
+                        writeFile(
+                            file: 'remove-applovin-spm.rb',
+                            encoding: 'UTF-8',
+                            text: libraryResource(
+                                'com/pearz/ci/remove-applovin-spm.rb'
+                            )
+                        )
+                        sh '''
+                            set -eu
+                            xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+                            pbxproj_path="$xcodeproj_path/project.pbxproj"
+                            pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
 
-                        if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
-                            echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
-                            exit 0
-                        fi
-                        if ! grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
-                            echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
-                            exit 0
-                        fi
+                            if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
+                                echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
+                                exit 0
+                            fi
+                            if ! grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
+                                echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
+                                exit 0
+                            fi
 
-                        printf '%s' 'cmVxdWlyZSAneGNvZGVwcm9qJwpwcm9qZWN0ID0gWGNvZGVwcm9qOjpQcm9qZWN0Lm9wZW4oQVJHVi5mZXRjaCgwKSkKcGFja2FnZXMgPSBwcm9qZWN0LnJvb3Rfb2JqZWN0LnBhY2thZ2VfcmVmZXJlbmNlcy5zZWxlY3QgZG8gfHJlZmVyZW5jZXwKICByZWZlcmVuY2UuaXNhID09ICdYQ1JlbW90ZVN3aWZ0UGFja2FnZVJlZmVyZW5jZScgJiYKICAgIHJlZmVyZW5jZS5yZXBvc2l0b3J5VVJMLnRvX3MuZG93bmNhc2UuaW5jbHVkZT8oJ2FwcGxvdmluLW1heC1zd2lmdC1wYWNrYWdlJykKZW5kCnByb2R1Y3RzID0gcHJvamVjdC5vYmplY3RzLnNlbGVjdCBkbyB8b2JqZWN0fAogIG9iamVjdC5pc2EgPT0gJ1hDU3dpZnRQYWNrYWdlUHJvZHVjdERlcGVuZGVuY3knICYmCiAgICBwYWNrYWdlcy5pbmNsdWRlPyhvYmplY3QucGFja2FnZSkKZW5kCnByb2plY3QudGFyZ2V0cy5lYWNoIGRvIHx0YXJnZXR8CiAgbmV4dCB1bmxlc3MgdGFyZ2V0LnJlc3BvbmRfdG8/KDpwYWNrYWdlX3Byb2R1Y3RfZGVwZW5kZW5jaWVzKQogIHByb2R1Y3RzLmVhY2ggeyB8cHJvZHVjdHwgdGFyZ2V0LnBhY2thZV9wcm9kdWN0X2RlcGVuZGVuY2llcy5kZWxldGUocHJvZHVjdCkgfQplbmQKcHJvZHVjdHMuZWFjaCgmOnJlbW92ZV9mcm9tX3Byb2plY3QpCnBhY2thZ2VzLmVhY2goJjpyZW1vdmVfZnJvbV9wcm9qZWN0KQpwcm9qZWN0LnNhdmUK' | base64 -D | ruby - "$pbxproj_path"
+                            ruby "$WORKSPACE/remove-applovin-spm.rb" "$xcodeproj_path"
 
-                        if grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
-                            echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
-                            exit 1
-                        fi
-                        echo 'Removed duplicate AppLovin Swift Package Manager dependency; using CocoaPods AppLovinSDK.'
-                    '''
+                            if grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
+                                echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
+                                exit 1
+                            fi
+                            echo 'Removed duplicate AppLovin Swift Package Manager dependency; using CocoaPods AppLovinSDK.'
+                        '''
+                    }
                 }
             }
 
@@ -1098,7 +1110,7 @@ def call(Map config = [:]) {
             }
 
             failure {
-                echo 'Unity Android build failed.'
+                echo "Unity ${isIos ? 'iOS' : 'Android'} build failed."
             }
 
             always {
@@ -1141,6 +1153,7 @@ def call(Map config = [:]) {
                             'rm -f send-telegram.sh send-telegram.ps1 ' +
                             'read-build-metadata.sh ' +
                             'read-build-metadata.ps1 ' +
+                            'remove-applovin-spm.rb ' +
                             'telegram-message.txt'
                         )
                     } else {
