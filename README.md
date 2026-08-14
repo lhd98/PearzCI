@@ -505,9 +505,8 @@ Google Drive remote just like Android artifacts.
 
 ### Build directly to a connected iPhone
 
-For this mode, use the dedicated `pearzUnityIosPipeline()` job. The shared
-`pearzUnityPipeline()` graph currently covers Android and signed iOS IPA
-exports only.
+`pearzUnityPipeline()` automatically routes this mode to the dedicated iOS
+device pipeline. A separate `pearzUnityIosPipeline()` job remains optional.
 
 For a development-only device build, set `IOS_BUILD_TO_DEVICE=true`, provide
 `IOS_DEVICE_UDID` and `IOS_DEVELOPMENT_TEAM`, and normally select `Debug`.

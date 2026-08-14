@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- `pearzUnityPipeline()` routes iOS connected-device builds to
+  `pearzUnityIosPipeline()` instead of the shared Android/iOS release graph.
+
 ## [0.6.21] - 2026-08-14
 
 ### Added
