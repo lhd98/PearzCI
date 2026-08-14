@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.20] - 2026-08-14
+
+### Changed
+
+- Android builds now verify, archive, and upload the existing
+  `<PRODUCT_NAME>_BUILD_INFO.txt` file next to the APK/AAB. Google Drive puts
+  each Android build in a version-named folder containing both files.
+
 ## [0.6.19] - 2026-08-14
 
 ### Changed

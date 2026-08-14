@@ -254,6 +254,9 @@ def call(Map config = [:]) {
                             "${outputName}-${env.BUILD_NUMBER}.${env.OUTPUT_EXTENSION}"
                         def buildFolder = isIos ? 'iOS' : 'Android'
                         env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
+                        env.BUILD_INFO_FILE_NAME = "${outputName}_BUILD_INFO.txt"
+                        env.BUILD_INFO_PATH =
+                            "${env.WORKSPACE}/Builds/${buildFolder}/${env.BUILD_INFO_FILE_NAME}"
                         env.METADATA_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/build-metadata.json"
                         env.MAPPING_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/mapping.txt"
                         env.BUILD_LOG_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/unity-build.log"
@@ -264,10 +267,17 @@ def call(Map config = [:]) {
                             env.EXPORT_PATH = "${env.WORKSPACE}/Builds/iOS/export"
                             env.XCODEBUILD_LOG_PATH = "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
                         }
-                        env.DRIVE_DIRECTORY =
-                            "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
+                        def androidBuildVersion = params.APP_VERSION?.trim()
+                            ? "${params.APP_VERSION.trim()}-${env.BUILD_NUMBER}"
+                            : env.BUILD_NUMBER
+                        env.BUILD_VERSION = androidBuildVersion
+                        env.DRIVE_DIRECTORY = isAndroid
+                            ? "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}/${androidBuildVersion}"
+                            : "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.DRIVE_OUTPUT_FILE_NAME}"
+                        env.DRIVE_BUILD_INFO_PATH =
+                            "${env.DRIVE_DIRECTORY}/${env.BUILD_INFO_FILE_NAME}"
                         env.DRIVE_MAPPING_PATH =
                             "${env.DRIVE_DIRECTORY}/mapping-${env.BUILD_NUMBER}.txt"
 
@@ -379,10 +389,7 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
-                        def configuredAppVersion = params.APP_VERSION?.trim()
-                        def ciAppVersion = configuredAppVersion
-                            ? "${configuredAppVersion}-${env.BUILD_NUMBER}"
-                            : "${env.BUILD_NUMBER}"
+                        def ciAppVersion = env.BUILD_VERSION
                         def androidVersionCode = env.BUILD_NUMBER
 
                         if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
@@ -542,6 +549,12 @@ def call(Map config = [:]) {
                             )
                         }
 
+                        if (isAndroid && !fileExists(env.BUILD_INFO_PATH)) {
+                            error(
+                                "Build info file not found: ${env.BUILD_INFO_PATH}"
+                            )
+                        }
+
                         echo "Build artifact created successfully: ${env.OUTPUT_PATH}"
                     }
                 }
@@ -563,7 +576,7 @@ def call(Map config = [:]) {
                         archiveArtifacts(
                             artifacts: isIos
                                 ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
-                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
+                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
                             allowEmptyArchive: true,
                             fingerprint: true,
                             onlyIfSuccessful: true
@@ -640,6 +653,7 @@ def call(Map config = [:]) {
                                             --low-level-retries 10 \
                                             --log-file "$UPLOAD_LOG_PATH" \
                                             --log-level INFO
+
                                     '''
                                 } else {
                                     bat '''
@@ -655,7 +669,42 @@ def call(Map config = [:]) {
                                             echo ERROR: Google Drive upload failed.
                                             exit /b 1
                                         )
+
                                     '''
+                                }
+                            }
+
+                            if (isAndroid) {
+                                retry(2) {
+                                    if (isUnix()) {
+                                        sh '''
+                                            set -eu
+                                            "$RCLONE_EXE" copyto \
+                                                "$BUILD_INFO_PATH" \
+                                                "$DRIVE_BUILD_INFO_PATH" \
+                                                --progress \
+                                                --stats 10s \
+                                                --retries 3 \
+                                                --low-level-retries 10 \
+                                                --log-file "$UPLOAD_LOG_PATH" \
+                                                --log-level INFO
+                                        '''
+                                    } else {
+                                        bat '''
+                                            "%RCLONE_EXE%" copyto "%BUILD_INFO_PATH%" "%DRIVE_BUILD_INFO_PATH%" ^
+                                                --progress ^
+                                                --stats 10s ^
+                                                --retries 3 ^
+                                                --low-level-retries 10 ^
+                                                --log-file "%UPLOAD_LOG_PATH%" ^
+                                                --log-level INFO
+
+                                            if errorlevel 1 (
+                                                echo ERROR: Build info upload failed.
+                                                exit /b 1
+                                            )
+                                        '''
+                                    }
                                 }
                             }
 
@@ -727,6 +776,28 @@ def call(Map config = [:]) {
 
                                 echo Build artifact verified successfully on Google Drive.
                             '''
+                        }
+
+                        if (isAndroid) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+                                    "$RCLONE_EXE" lsjson \
+                                        "$DRIVE_BUILD_INFO_PATH" \
+                                        --files-only
+                                '''
+                            } else {
+                                bat '''
+                                    "%RCLONE_EXE%" lsjson "%DRIVE_BUILD_INFO_PATH%" --files-only
+
+                                    if errorlevel 1 (
+                                        echo ERROR: Uploaded build info file could not be verified.
+                                        exit /b 1
+                                    )
+                                '''
+                            }
+
+                            echo 'Build info file verified on Google Drive.'
                         }
 
                         env.MAPPING_UPLOADED = 'false'

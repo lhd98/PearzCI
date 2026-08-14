@@ -213,6 +213,13 @@ also gets a visible version for use through Unity `Application.version`:
 `APP_VERSION` parameter is set. For example, Jenkins build `67` with
 `APP_VERSION=1.0.0` is shown in-game as `Build 1.0.0-67`.
 
+For Android builds, PearzCI expects the successful Unity export to include
+`Builds/Android/<PRODUCT_NAME>_BUILD_INFO.txt` beside the APK/AAB. The pipeline
+verifies and archives that file, then uploads it with the artifact. Google
+Drive keeps each build in its own version folder:
+`<driveRoot>/<jobName>/<APP_VERSION>-<BUILD_NUMBER>/`. When `APP_VERSION` is
+empty, the folder name is the Jenkins `BUILD_NUMBER`.
+
 ### Configure the shared GitHub webhook
 
 For existing Pipeline jobs, first create a Jenkins **Secret text** credential:
