@@ -228,8 +228,10 @@ def call(Map config = [:]) {
                 steps {
                     sh '''
                         set -eu
-                        pbxproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"
+                        xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+                        pbxproj_path="$xcodeproj_path/project.pbxproj"
                         pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
+                        ruby() { command ruby - "$xcodeproj_path"; }
 
                         # MAX's Unity plugin installs AppLovin through CocoaPods.  Some Unity
                         # exports also retain the AppLovin Swift package, which makes Xcode

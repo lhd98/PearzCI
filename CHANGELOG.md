@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.28] - 2026-08-14
+
+### Fixed
+
+- Pass the Xcode project directory, rather than its `project.pbxproj` file, to the AppLovin Swift Package cleanup.
+
 ## [0.6.27] - 2026-08-14
 
 ### Fixed

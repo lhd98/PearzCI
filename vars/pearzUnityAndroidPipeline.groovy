@@ -526,8 +526,10 @@ def call(Map config = [:]) {
                 steps {
                     sh '''
                         set -eu
-                        pbxproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"
+                        xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+                        pbxproj_path="$xcodeproj_path/project.pbxproj"
                         pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
+                        ruby() { command ruby - "$xcodeproj_path"; }
 
                         if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
                             echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
