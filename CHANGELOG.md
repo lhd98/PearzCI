@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.32] - 2026-08-14
+
+### Changed
+
+- Telegram notifications drop the build-settings block: `Configuration`,
+  `Xcode`, `Scripting Backend`, `Stripping Level`, `Orientation`, and `Unity`.
+  These rarely change between builds and pushed the artifact links further down
+  the message.
+
 ## [0.6.31] - 2026-08-14
 
 ### Added

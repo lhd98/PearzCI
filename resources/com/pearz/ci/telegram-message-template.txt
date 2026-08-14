@@ -9,13 +9,6 @@
 <b>Google Play:</b> {{GOOGLE_PLAY_URL}}
 <b>Branch:</b> <code>{{BRANCH}}</code>
 ━━━━━━━━━━━━━━━━━━
-<b>Configuration:</b> {{CONFIGURATION}}
-<b>Xcode:</b> {{XCODE_CONFIGURATION}}
-<b>Scripting Backend:</b> {{SCRIPTING_BACKEND}}
-<b>Stripping Level:</b> {{STRIPPING_LEVEL}}
-<b>Orientation:</b> {{ORIENTATION}}
-<b>Unity:</b> {{UNITY_VERSION}}
-━━━━━━━━━━━━━━━━━━
 <b>Build Info:</b> {{BUILD_INFO_URL}}
 <b>APK:</b> {{APK}}
 <b>AAB:</b> {{AAB}}

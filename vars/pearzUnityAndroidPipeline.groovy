@@ -1293,11 +1293,6 @@ def buildTelegramMessage() {
         BUNDLE_ID: telegramHtmlEscape(env.META_BUNDLE_IDENTIFIER),
         GOOGLE_PLAY_URL: telegramHtmlEscape(googlePlayUrl),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
-        CONFIGURATION: telegramHtmlEscape(params.BUILD_CONFIGURATION),
-        SCRIPTING_BACKEND: telegramHtmlEscape(env.META_SCRIPTING_BACKEND),
-        STRIPPING_LEVEL: telegramHtmlEscape(env.META_STRIPPING_LEVEL),
-        ORIENTATION: telegramHtmlEscape(env.META_ORIENTATION),
-        UNITY_VERSION: telegramHtmlEscape(env.META_UNITY_VERSION ?: env.UNITY_VERSION),
         BUILD_INFO_URL: telegramHtmlEscape(env.DRIVE_FOLDER_URL),
         APK: telegramHtmlEscape(apkDescription),
         AAB: telegramHtmlEscape(aabDescription),
@@ -1363,13 +1358,6 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         VERSION: telegramHtmlEscape(versionParts.join(' / ')),
         PRODUCT_NAME: telegramHtmlEscape(params.PRODUCT_NAME),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
-        CONFIGURATION: telegramHtmlEscape(params.BUILD_CONFIGURATION),
-        XCODE_CONFIGURATION: telegramHtmlEscape(params.XCODE_CONFIGURATION),
-        // Unity chỉ hỗ trợ IL2CPP trên iOS, nên đây là sự thật chứ không
-        // phải giá trị đoán để lấp chỗ trống.
-        SCRIPTING_BACKEND: 'IL2CPP',
-        STRIPPING_LEVEL: telegramHtmlEscape(params.MANAGED_STRIPPING_LEVEL),
-        UNITY_VERSION: telegramHtmlEscape(env.UNITY_VERSION),
         BUILD_INFO_URL: telegramHtmlEscape(
             deviceBuild ? '' : env.DRIVE_FOLDER_URL
         ),
