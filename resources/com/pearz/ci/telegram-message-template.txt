@@ -10,6 +10,7 @@
 <b>Branch:</b> <code>{{BRANCH}}</code>
 ━━━━━━━━━━━━━━━━━━
 <b>Configuration:</b> {{CONFIGURATION}}
+<b>Xcode:</b> {{XCODE_CONFIGURATION}}
 <b>Scripting Backend:</b> {{SCRIPTING_BACKEND}}
 <b>Stripping Level:</b> {{STRIPPING_LEVEL}}
 <b>Orientation:</b> {{ORIENTATION}}
@@ -18,6 +19,8 @@
 <b>Build Info:</b> {{BUILD_INFO_URL}}
 <b>APK:</b> {{APK}}
 <b>AAB:</b> {{AAB}}
+<b>IPA:</b> {{IPA}}
 <b>mapping.txt:</b> {{MAPPING}}
+<b>Install:</b> {{INSTALL_STATUS}}
 {{DEFINE_SYMBOLS_SECTION}}
 {{CHANGES_SECTION}}

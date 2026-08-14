@@ -23,6 +23,9 @@ def call(Map config = [:]) {
     def buildToDevice = config.get(
         'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
     ).toString().trim().toBoolean()
+    // Message Telegram dùng chung với shared graph, nên job iOS riêng cũng
+    // cần biến này để dòng "PearzCI:" không bị bỏ trống.
+    def pearzCiVersion = pearzUnityAndroidPipeline.readPearzCiVersion()
     def webhookBranch = defaultGitBranch.replaceFirst(/^refs\/heads\//, '')
     def webhookRepository = extractGitHubRepository(repositoryUrl)
     def webhookFilterExpression = webhookRepository
@@ -71,6 +74,7 @@ def call(Map config = [:]) {
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
             IOS_BUILD_TO_DEVICE = "${buildToDevice}"
+            PEARZ_CI_VERSION = "${pearzCiVersion}"
         }
 
         stages {
@@ -611,86 +615,13 @@ def call(Map config = [:]) {
 }
 
 def sendIosDeviceTelegramNotification(String telegramCredentialsId) {
-    boolean telegramConfigured = telegramCredentialsId ||
-        "${params.TELEGRAM_CHANNEL ?: ''}".trim()
-
-    if (!telegramConfigured) {
-        echo 'No Telegram target configured; iOS device notification skipped.'
-        return
-    }
-
-    try {
-        def result = currentBuild.currentResult ?: 'SUCCESS'
-        def installed = result == 'SUCCESS'
-        def title = installed
-            ? 'iOS DEVICE BUILD SUCCESS'
-            : 'iOS DEVICE BUILD FAILED'
-        def installStatus = installed
-            ? 'Installed successfully on the connected iPhone.'
-            : 'The app was not installed. Open the Jenkins log for details.'
-        def configuration = params.XCODE_CONFIGURATION?.toString()?.trim() ?: 'Debug'
-        def branch = params.GIT_BRANCH?.toString()?.trim() ?: ''
-        def productName = params.PRODUCT_NAME?.toString()?.trim() ?: env.JOB_BASE_NAME
-        def buildLogUrl = env.BUILD_LOG_PATH?.trim() && fileExists(env.BUILD_LOG_PATH)
-            ? "${env.BUILD_URL}artifact/Builds/iOS/unity-build.log"
-            : ''
-        def xcodeLogUrl = env.XCODEBUILD_LOG_PATH?.trim() && fileExists(env.XCODEBUILD_LOG_PATH)
-            ? "${env.BUILD_URL}artifact/Builds/iOS/xcodebuild.log"
-            : ''
-        def lines = [
-            "<b>${telegramHtmlEscape(title)}</b>",
-            '━━━━━━━━━━━━━━━━━━',
-            "<b>Job:</b> ${telegramHtmlEscape("${env.JOB_NAME} #${env.BUILD_NUMBER}")}",
-            "<b>Product:</b> ${telegramHtmlEscape(productName)}",
-            branch ? "<b>Branch:</b> <code>${telegramHtmlEscape(branch)}</code>" : '',
-            "<b>Xcode:</b> ${telegramHtmlEscape(configuration)}",
-            '━━━━━━━━━━━━━━━━━━',
-            "<b>Device:</b> Connected iPhone",
-            "<b>Install:</b> ${telegramHtmlEscape(installStatus)}",
-            "<b>Jenkins:</b> ${telegramHtmlEscape(env.BUILD_URL)}",
-            buildLogUrl ? "<b>Unity log:</b> ${telegramHtmlEscape(buildLogUrl)}" : '',
-            xcodeLogUrl ? "<b>Xcode log:</b> ${telegramHtmlEscape(xcodeLogUrl)}" : ''
-        ].findAll { it }.join('\n')
-
-        writeFile(file: 'telegram-message.txt', encoding: 'UTF-8', text: lines)
-
-        def sendTelegram = {
-            writeFile(
-                file: 'send-telegram.sh',
-                encoding: 'UTF-8',
-                text: libraryResource('com/pearz/ci/send-telegram.sh')
-            )
-            withEnv(['TELEGRAM_MESSAGE_FILE=telegram-message.txt']) {
-                sh 'sh ./send-telegram.sh'
-            }
-        }
-
-        if (telegramCredentialsId) {
-            withCredentials([string(
-                credentialsId: telegramCredentialsId,
-                variable: 'TELEGRAM_CHANNEL'
-            )]) {
-                sendTelegram()
-            }
-        } else {
-            withEnv(["TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"]) {
-                sendTelegram()
-            }
-        }
-    } catch (Exception exception) {
-        echo("Telegram notification failed: ${exception.message}")
-        if (currentBuild.currentResult == 'SUCCESS') {
-            currentBuild.result = 'UNSTABLE'
-        }
-    }
-}
-
-def telegramHtmlEscape(Object value) {
-    value?.toString()
-        ?.replace('&', '&amp;')
-        ?.replace('<', '&lt;')
-        ?.replace('>', '&gt;')
-        ?.replace('"', '&quot;') ?: ''
+    // Giữ tên hàm cho các job iOS riêng đang gọi vào đây, nhưng nội dung
+    // message dùng chung với shared graph để iOS và Android không trôi
+    // khỏi nhau mỗi lần một bên được chỉnh.
+    pearzUnityAndroidPipeline.sendIosTelegramNotification(
+        telegramCredentialsId,
+        true
+    )
 }
 
 def extractGitHubRepository(String repositoryUrl) {

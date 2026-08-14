@@ -1124,14 +1124,15 @@ def call(Map config = [:]) {
                     def sendNotifications = params.SEND_NOTIFICATIONS == null ||
                         params.SEND_NOTIFICATIONS.toString().toBoolean()
 
-                    if (isAndroid && sendNotifications) {
+                    if (!sendNotifications) {
+                        echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
+                    } else if (isAndroid) {
                         sendTelegramNotification(telegramCredentialsId)
-                    } else if (isIos && iosBuildToDevice && sendNotifications) {
-                        pearzUnityIosPipeline.sendIosDeviceTelegramNotification(
-                            telegramCredentialsId
-                        )
                     } else {
-                        echo 'Notification skipped for this platform or configuration.'
+                        sendIosTelegramNotification(
+                            telegramCredentialsId,
+                            iosBuildToDevice
+                        )
                     }
                 }
 
@@ -1305,6 +1306,81 @@ def buildTelegramMessage() {
         ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
             ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
             : '',
+        CHANGES_SECTION: changeDescription
+            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
+            : ''
+    ]
+
+    return truncateTelegramMessage(renderTelegramTemplate(values))
+}
+
+// iOS không có build-metadata.json: BuildEntry chỉ ghi file đó trong
+// BuildAndroid(), và mọi field bên trong đều là Android. Nên message iOS
+// dựng từ tham số job cộng biến môi trường của pipeline. Vẫn đi qua đúng
+// template của Android để hai nền tảng không trôi khỏi nhau như trước;
+// những dòng không có dữ liệu sẽ tự bị renderTelegramTemplate bỏ đi.
+def buildIosTelegramMessage(boolean deviceBuild) {
+    def result = currentBuild.currentResult ?: 'SUCCESS'
+    boolean succeeded = result == 'SUCCESS'
+    def versionParts = []
+    def appVersion = params.APP_VERSION?.toString()?.trim()
+    def iosBuildNumber = params.IOS_BUILD_NUMBER?.toString()?.trim()
+
+    if (appVersion) {
+        versionParts << appVersion
+    }
+
+    if (iosBuildNumber) {
+        versionParts << "build ${iosBuildNumber}"
+    }
+
+    def symbols = params.SCRIPTING_DEFINE_SYMBOLS
+        ?.toString()
+        ?.split(';')
+        ?.collect { it.trim() }
+        ?.findAll { it }
+
+    def symbolsSection = symbols
+        ? '<b>Scripting Define Symbols:</b>\n' +
+            symbols.collect { "• <code>${telegramHtmlEscape(it)}</code>" }
+                .join('\n')
+        : ''
+    def changeDescription = env.GIT_CHANGES?.trim()
+    def errorSection = ''
+
+    if (!succeeded) {
+        def reason = deviceBuild
+            ? 'The app was not installed on the connected device.'
+            : 'The IPA was not produced.'
+        errorSection = '<blockquote><b>Error</b>\n' +
+            "${telegramHtmlEscape(result)} - ${telegramHtmlEscape(reason)}" +
+            '</blockquote>'
+    }
+
+    def values = [
+        PLATFORM: deviceBuild ? 'IOS DEVICE' : 'IOS',
+        PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
+        VERSION: telegramHtmlEscape(versionParts.join(' / ')),
+        PRODUCT_NAME: telegramHtmlEscape(params.PRODUCT_NAME),
+        BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
+        CONFIGURATION: telegramHtmlEscape(params.BUILD_CONFIGURATION),
+        XCODE_CONFIGURATION: telegramHtmlEscape(params.XCODE_CONFIGURATION),
+        // Unity chỉ hỗ trợ IL2CPP trên iOS, nên đây là sự thật chứ không
+        // phải giá trị đoán để lấp chỗ trống.
+        SCRIPTING_BACKEND: 'IL2CPP',
+        STRIPPING_LEVEL: telegramHtmlEscape(params.MANAGED_STRIPPING_LEVEL),
+        UNITY_VERSION: telegramHtmlEscape(env.UNITY_VERSION),
+        BUILD_INFO_URL: telegramHtmlEscape(
+            deviceBuild ? '' : env.DRIVE_FOLDER_URL
+        ),
+        IPA: telegramHtmlEscape(deviceBuild ? '' : env.DOWNLOAD_URL),
+        INSTALL_STATUS: deviceBuild
+            ? (succeeded
+                ? 'Installed on the connected device.'
+                : 'Not installed.')
+            : '',
+        DEFINE_SYMBOLS_SECTION: symbolsSection,
+        ERROR_SECTION: errorSection,
         CHANGES_SECTION: changeDescription
             ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
             : ''
@@ -1517,6 +1593,70 @@ def sendTelegramNotification(String telegramCredentialsId) {
     } catch (Exception exception) {
         // Không để lỗi thông báo ghi đè kết quả build thật. Chỉ hạ xuống
         // UNSTABLE khi build vốn đang thành công, để sự cố không bị chìm.
+        echo("Telegram notification failed: ${exception.message}")
+
+        if (currentBuild.currentResult == 'SUCCESS') {
+            currentBuild.result = 'UNSTABLE'
+        }
+    }
+}
+
+// Dùng cho cả iOS IPA lẫn iOS device. Trước đây chỉ device build mới được
+// báo, còn IPA thì im lặng hoàn toàn. iOS luôn chạy trên macOS nên chỉ cần
+// nhánh sh, không cần bản PowerShell như Android.
+def sendIosTelegramNotification(
+    String telegramCredentialsId,
+    boolean deviceBuild
+) {
+    boolean telegramConfigured = telegramCredentialsId ||
+        "${params.TELEGRAM_CHANNEL ?: ''}".trim()
+
+    if (!telegramConfigured) {
+        echo 'No Telegram target configured; notification skipped.'
+        return
+    }
+
+    try {
+        writeFile(
+            file: 'telegram-message.txt',
+            encoding: 'UTF-8',
+            text: buildIosTelegramMessage(deviceBuild)
+        )
+
+        def sendTelegram = {
+            writeFile(
+                file: 'send-telegram.sh',
+                encoding: 'UTF-8',
+                text: libraryResource(
+                    'com/pearz/ci/send-telegram.sh'
+                )
+            )
+            withEnv([
+                'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+            ]) {
+                sh 'sh ./send-telegram.sh'
+            }
+        }
+
+        if (telegramCredentialsId) {
+            withCredentials([
+                string(
+                    credentialsId: telegramCredentialsId,
+                    variable: 'TELEGRAM_CHANNEL'
+                )
+            ]) {
+                sendTelegram()
+            }
+        } else {
+            withEnv([
+                "TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"
+            ]) {
+                sendTelegram()
+            }
+        }
+    } catch (Exception exception) {
+        // Cùng cách xử lý với Android: lỗi thông báo không được ghi đè kết
+        // quả build thật, chỉ hạ SUCCESS xuống UNSTABLE.
         echo("Telegram notification failed: ${exception.message}")
 
         if (currentBuild.currentResult == 'SUCCESS') {

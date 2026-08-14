@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.31] - 2026-08-14
+
+### Added
+
+- iOS IPA builds now send a Telegram notification; previously only Android and
+  iOS connected-device builds were reported.
+
+### Changed
+
+- iOS Telegram notifications are rendered from the same message template as
+  Android, so both platforms report version, product, branch, configuration,
+  Unity version, artifact links, scripting define symbols, and the commit list
+  in one layout. Rows without data for a platform are omitted, and the Android
+  message is unchanged.
+- iOS connected-device notifications no longer include Jenkins URLs or build-log
+  links, matching the notification content decided in 0.6.22.
+
 ## [0.6.30] - 2026-08-14
 
 ### Changed
