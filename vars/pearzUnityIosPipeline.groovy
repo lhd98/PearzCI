@@ -239,14 +239,14 @@ def call(Map config = [:]) {
                             echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
                             exit 0
                         fi
-                        if ! grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
+                        if ! grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
                             echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
                             exit 0
                         fi
 
                         printf '%s' 'cmVxdWlyZSAneGNvZGVwcm9qJwpwcm9qZWN0ID0gWGNvZGVwcm9qOjpQcm9qZWN0Lm9wZW4oQVJHVi5mZXRjaCgwKSkKcGFja2FnZXMgPSBwcm9qZWN0LnJvb3Rfb2JqZWN0LnBhY2thZ2VfcmVmZXJlbmNlcy5zZWxlY3QgZG8gfHJlZmVyZW5jZXwKICByZWZlcmVuY2UuaXNhID09ICdYQ1JlbW90ZVN3aWZ0UGFja2FnZVJlZmVyZW5jZScgJiYKICAgIHJlZmVyZW5jZS5yZXBvc2l0b3J5VVJMLnRvX3MuZG93bmNhc2UuaW5jbHVkZT8oJ2FwcGxvdmluLW1heC1zd2lmdC1wYWNrYWdlJykKZW5kCnByb2R1Y3RzID0gcHJvamVjdC5vYmplY3RzLnNlbGVjdCBkbyB8b2JqZWN0fAogIG9iamVjdC5pc2EgPT0gJ1hDU3dpZnRQYWNrYWdlUHJvZHVjdERlcGVuZGVuY3knICYmCiAgICBwYWNrYWdlcy5pbmNsdWRlPyhvYmplY3QucGFja2FnZSkKZW5kCnByb2plY3QudGFyZ2V0cy5lYWNoIGRvIHx0YXJnZXR8CiAgbmV4dCB1bmxlc3MgdGFyZ2V0LnJlc3BvbmRfdG8/KDpwYWNrYWdlX3Byb2R1Y3RfZGVwZW5kZW5jaWVzKQogIHByb2R1Y3RzLmVhY2ggeyB8cHJvZHVjdHwgdGFyZ2V0LnBhY2thZ2VfcHJvZHVjdF9kZXBlbmRlbmNpZXMuZGVsZXRlKHByb2R1Y3QpIH0KZW5kCnByb2R1Y3RzLmVhY2goJjpyZW1vdmVfZnJvbV9wcm9qZWN0KQpwYWNrYWdlcy5lYWNoKCY6cmVtb3ZlX2Zyb21fcHJvamVjdCkKcHJvamVjdC5zYXZlCg==' | base64 -D | ruby - "$pbxproj_path"
 
-                        if grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
+                        if grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
                             echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
                             exit 1
                         fi
