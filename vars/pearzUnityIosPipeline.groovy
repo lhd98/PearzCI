@@ -224,6 +224,55 @@ def call(Map config = [:]) {
                 }
             }
 
+            stage('Remove duplicate AppLovin SPM dependency') {
+                steps {
+                    sh '''
+                        set -eu
+                        pbxproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"
+                        pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
+
+                        # MAX's Unity plugin installs AppLovin through CocoaPods.  Some Unity
+                        # exports also retain the AppLovin Swift package, which makes Xcode
+                        # process two copies of AppLovinSDK.xcframework into the same output.
+                        # Do not alter projects that use the Swift package on its own.
+                        if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
+                            echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
+                            exit 0
+                        fi
+                        if ! grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
+                            echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
+                            exit 0
+                        fi
+
+                        perl -0pi -e '
+                            my @product_ids;
+                            while ($_ =~ /^\s*([A-F0-9]{24}) \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n/gms) {
+                                push @product_ids, $1;
+                            }
+                            for my $id (@product_ids) {
+                                s/^\s*\Q$id\E \/\* AppLovinSDK \*\/ = \{\n\s*isa = XCSwiftPackageProductDependency;.*?^\s*\};\n//gms;
+                                s/^\s*\Q$id\E \/\* AppLovinSDK \*\/,?\n//gm;
+                            }
+
+                            my @package_ids;
+                            while ($_ =~ /^\s*([A-F0-9]{24}) \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n/gmsi) {
+                                push @package_ids, $1;
+                            }
+                            for my $id (@package_ids) {
+                                s/^\s*\Q$id\E \/\* .*? \*\/ = \{\n\s*isa = XCRemoteSwiftPackageReference;.*?applovin-max-swift-package.*?^\s*\};\n//gmsi;
+                                s/^\s*\Q$id\E \/\* .*? \*\/,?\n//gm;
+                            }
+                        ' "$pbxproj_path"
+
+                        if grep -Fq 'applovin-max-swift-package' "$pbxproj_path"; then
+                            echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
+                            exit 1
+                        fi
+                        echo 'Removed duplicate AppLovin Swift Package Manager dependency; using CocoaPods AppLovinSDK.'
+                    '''
+                }
+            }
+
             stage('Archive and Export IPA') {
                 when { expression { !buildToDevice } }
                 options { timeout(time: 45, unit: 'MINUTES') }

@@ -1,8 +1,5 @@
-<b>{{PLATFORM}} BUILD {{RESULT}}</b>
+<b>{{PLATFORM}} BUILD</b>
 ━━━━━━━━━━━━━━━━━━
-<b>Job:</b> {{JOB}}
-<b>Build URL:</b> {{BUILD_URL}}
-<b>Result:</b> {{RESULT}}
 <b>PearzCI:</b> {{PEARZ_CI_VERSION}}
 ━━━━━━━━━━━━━━━━━━
 {{ERROR_SECTION}}
@@ -18,15 +15,9 @@
 <b>Orientation:</b> {{ORIENTATION}}
 <b>Unity:</b> {{UNITY_VERSION}}
 ━━━━━━━━━━━━━━━━━━
-<b>Build Time:</b> {{BUILD_TIME}}
-<b>Upload Time:</b> {{UPLOAD_TIME}}
-<b>Total Time:</b> {{TOTAL_TIME}}
-━━━━━━━━━━━━━━━━━━
-<b>Drive Folder:</b> {{DRIVE_FOLDER_URL}}
-<b>Drive Root:</b> {{DRIVE_ROOT_URL}}
+<b>Build Info:</b> {{BUILD_INFO_URL}}
 <b>APK:</b> {{APK}}
 <b>AAB:</b> {{AAB}}
 <b>mapping.txt:</b> {{MAPPING}}
 {{DEFINE_SYMBOLS_SECTION}}
 {{CHANGES_SECTION}}
-{{JENKINS_LOGS_SECTION}}
