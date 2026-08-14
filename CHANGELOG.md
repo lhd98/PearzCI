@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.26] - 2026-08-14
+
+### Fixed
+
+- Run the duplicate AppLovin Swift Package cleanup in the shared iOS release
+  pipeline, before Xcode starts archiving the exported project.
+
 ## [0.6.25] - 2026-08-14
 
 ### Fixed
