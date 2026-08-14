@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.33] - 2026-08-14
+
+### Changed
+
+- Telegram notification titles carry the build result, for example
+  `ANDROID BUILD SUCCESS` or `IOS DEVICE BUILD FAILED`. Results other than
+  success and failure keep their own name (`UNSTABLE`, `ABORTED`) instead of
+  being reported as a failure.
+
 ## [0.6.32] - 2026-08-14
 
 ### Changed

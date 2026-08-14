@@ -1223,6 +1223,14 @@ def createRcloneLink(String remotePath) {
     }
 }
 
+// Tiêu đề phải nói ngay build đậu hay hỏng. Không rút mọi kết quả khác
+// SUCCESS thành FAILED: build bị abort hoặc UNSTABLE mà báo "FAILED" là sai
+// sự thật, và UNSTABLE chính là trạng thái khi gửi Telegram bị lỗi.
+def telegramBuildStatus() {
+    def result = currentBuild.currentResult ?: 'SUCCESS'
+    return result == 'FAILURE' ? 'FAILED' : result
+}
+
 def buildTelegramMessage() {
     // Kết quả của Jenkins mới là kết quả thật: Unity có thể build xong
     // nhưng upload lên Drive vẫn hỏng sau đó.
@@ -1283,6 +1291,7 @@ def buildTelegramMessage() {
 
     def values = [
         PLATFORM: 'ANDROID',
+        STATUS: telegramBuildStatus(),
         JOB_NAME: telegramHtmlEscape(env.JOB_NAME),
         BUILD_NUMBER: telegramHtmlEscape(env.BUILD_NUMBER),
         PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
@@ -1344,16 +1353,17 @@ def buildIosTelegramMessage(boolean deviceBuild) {
     def errorSection = ''
 
     if (!succeeded) {
+        // Tiêu đề đã nói kết quả rồi, ở đây chỉ cần lý do.
         def reason = deviceBuild
             ? 'The app was not installed on the connected device.'
             : 'The IPA was not produced.'
         errorSection = '<blockquote><b>Error</b>\n' +
-            "${telegramHtmlEscape(result)} - ${telegramHtmlEscape(reason)}" +
-            '</blockquote>'
+            telegramHtmlEscape(reason) + '</blockquote>'
     }
 
     def values = [
         PLATFORM: deviceBuild ? 'IOS DEVICE' : 'IOS',
+        STATUS: telegramBuildStatus(),
         PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
         VERSION: telegramHtmlEscape(versionParts.join(' / ')),
         PRODUCT_NAME: telegramHtmlEscape(params.PRODUCT_NAME),

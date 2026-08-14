@@ -1,4 +1,4 @@
-<b>{{PLATFORM}} BUILD</b>
+<b>{{PLATFORM}} BUILD {{STATUS}}</b>
 ━━━━━━━━━━━━━━━━━━
 <b>PearzCI:</b> {{PEARZ_CI_VERSION}}
 ━━━━━━━━━━━━━━━━━━
