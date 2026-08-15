@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.42] - 2026-08-15
+
+### Changed
+
+- The device build passes `-destination-timeout` to `xcodebuild`, defaulting to
+  300 seconds instead of Xcode's 30. A phone still running "Preparing device
+  for development" — common right after an iOS update — became available later
+  than the default allowed, so the build failed with `Timed out waiting for all
+  destinations` even though the device was fine a minute later. Override with
+  `iosDestinationTimeoutSeconds`. This does not rescue a genuinely broken
+  pairing; that still has to be fixed on the Mac.
+
 ## [0.6.41] - 2026-08-15
 
 ### Fixed

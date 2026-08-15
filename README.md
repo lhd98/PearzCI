@@ -606,6 +606,17 @@ PearzCI builds the exported Xcode project for that device and installs the app
 with `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`,
 create an IPA, or upload to Drive. The connected device must be trusted and
 visible to the Jenkins macOS user through `xcrun devicectl list devices`.
+
+`xcodebuild` waits up to `iosDestinationTimeoutSeconds` (default 300) for the
+device to become an available destination, rather than Xcode's own 30-second
+default. A phone that is still running *Preparing device for development* —
+which Xcode does after an iOS update — can take longer than 30 seconds, and the
+build would otherwise fail with `Timed out waiting for all destinations` even
+though the device is ready shortly afterwards. When the failure message also
+says the device *may need to be unlocked to recover from previously reported
+preparation errors*, no timeout helps: check the device state on the Mac with
+`xcrun devicectl list devices`, or re-pair it in **Xcode > Window > Devices and
+Simulators**.
 When `TELEGRAM_CHANNEL` is configured and `SEND_NOTIFICATIONS` is enabled,
 PearzCI also sends a success or failure notification for this device build,
 including the Jenkins and build-log links.

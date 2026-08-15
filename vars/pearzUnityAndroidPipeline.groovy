@@ -675,6 +675,16 @@ def call(Map config = [:]) {
                             'iosProvisioningProfileSpecifier',
                             params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
                         ).toString().trim()
+                        def destinationTimeout = config.get(
+                            'iosDestinationTimeoutSeconds', 300
+                        ).toString().trim()
+
+                        if (!(destinationTimeout ==~ /[1-9][0-9]*/)) {
+                            error(
+                                'iosDestinationTimeoutSeconds must be a ' +
+                                'positive integer, for example 300.'
+                            )
+                        }
 
                         if (!deviceUdid) {
                             error('IOS_DEVICE_UDID is required when IOS_BUILD_TO_DEVICE=true.')
@@ -690,7 +700,8 @@ def call(Map config = [:]) {
                             "IOS_DEVICE_UDID=${deviceUdid}",
                             "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
                             "XCODE_CONFIGURATION=${xcodeConfiguration}",
-                            "IOS_PROFILE_SPECIFIER=${profileSpecifier}"
+                            "IOS_PROFILE_SPECIFIER=${profileSpecifier}",
+                            "IOS_DESTINATION_TIMEOUT=${destinationTimeout}"
                         ]) {
                             sh '''
                                 set -eu
@@ -717,8 +728,13 @@ def call(Map config = [:]) {
                                             "$entitlements_path" >/dev/null 2>&1 || true
                                     done
 
+                                # Mặc định của Xcode chỉ chờ destination 30 giây. Máy đang
+                                # ở giữa bước "Preparing device for development" - hay gặp
+                                # sau khi cập nhật iOS - thì quá ngắn, build hỏng dù một
+                                # phút sau máy đã sẵn sàng. Chờ lâu hơn không cứu được
+                                # ghép đôi hỏng thật, chỉ bỏ qua lúc máy chậm sẵn sàng.
                                 run_xcodebuild_unsigned() {
-                                    xcodebuild_args="-scheme Unity-iPhone -configuration $XCODE_CONFIGURATION -destination id=$IOS_DEVICE_UDID -derivedDataPath $DERIVED_DATA_PATH CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build"
+                                    xcodebuild_args="-scheme Unity-iPhone -configuration $XCODE_CONFIGURATION -destination id=$IOS_DEVICE_UDID -destination-timeout $IOS_DESTINATION_TIMEOUT -derivedDataPath $DERIVED_DATA_PATH CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build"
                                     if [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" ]; then
                                         xcodebuild -workspace "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" $xcodebuild_args > "$XCODEBUILD_LOG_PATH" 2>&1
                                     else

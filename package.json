@@ -1,7 +1,7 @@
 {
   "name": "com.pearz.ci",
   "displayName": "Pearz CI",
-  "version": "0.6.41",
+  "version": "0.6.42",
   "unity": "6000.3",
   "description": "Cross-platform Unity build entry points and Jenkins pipelines for Windows and macOS.",
   "keywords": [
