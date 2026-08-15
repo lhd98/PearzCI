@@ -200,6 +200,12 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def startedAt = System.currentTimeMillis()
+                        // Giống shared graph: để trống thì Unity giữ nguyên
+                        // CFBundleVersion của project, và mọi bản build đều
+                        // mang cùng một số.
+                        def iosBuildNumber =
+                            params.IOS_BUILD_NUMBER?.toString()?.trim() ?:
+                            env.BUILD_NUMBER
                         try {
                             withEnv([
                                 "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
@@ -208,7 +214,7 @@ def call(Map config = [:]) {
                                 'BUNDLE_IDENTIFIER=',
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                 "APP_VERSION=${params.APP_VERSION ?: ''}",
-                                "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IOS_BUILD_NUMBER=${iosBuildNumber}",
                                 "IOS_BUILD_TO_DEVICE=${buildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                 "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",

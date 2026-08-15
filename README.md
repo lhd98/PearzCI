@@ -337,7 +337,10 @@ message can contain:
 
 - Full Jenkins job name, build number, result, and `BUILD_URL`.
 - Version name, Android version code, product name, bundle ID, and generated
-  Google Play URL.
+  Google Play URL. Android reads these from `build-metadata.json`; iOS reads
+  `CFBundleShortVersionString` and `CFBundleVersion` from the `Info.plist` of
+  the exported Xcode project, so the reported version is the one actually
+  built rather than the one requested.
 - Scripting backend, managed stripping level, orientation, and Unity version.
 - Jenkins build, upload, and total durations.
 - APK or AAB public link and size.
@@ -518,7 +521,8 @@ The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
 `GIT_BRANCH`, and `PRODUCT_NAME`. Add these iOS parameters under **This project
 is parameterized**:
 
-- String `IOS_BUILD_NUMBER` (for example `42`)
+- String `IOS_BUILD_NUMBER` (for example `42`; when left empty, the Jenkins
+  `BUILD_NUMBER` is used)
 - String `IOS_DEVELOPMENT_TEAM` (Apple Developer Team ID)
 - String `IOS_PROVISIONING_PROFILE_SPECIFIER` (profile name; leave empty when
   the Xcode project is configured for automatic signing)
@@ -574,6 +578,14 @@ pearzUnityPipeline(
 `private_keys` directory, so the pipeline copies the credential into
 `$WORKSPACE/private_keys` for the duration of the upload and removes it
 immediately afterwards, including when the upload fails.
+
+App Store Connect rejects a build whose `CFBundleVersion` matches one already
+uploaded, so `IOS_BUILD_NUMBER` defaults to the Jenkins `BUILD_NUMBER` when the
+parameter is empty. `APP_VERSION` is deliberately **not** filled in the same
+way: it becomes `CFBundleShortVersionString`, which Apple requires to be
+period-separated numbers, so the `<version>-<build>` form used for Android
+version names and Drive folders would be rejected. Leave `APP_VERSION` empty to
+keep the marketing version set in the Unity project.
 
 The export options plist must be configured for App Store distribution
 (`<key>method</key><string>app-store</string>`); a development or ad-hoc export

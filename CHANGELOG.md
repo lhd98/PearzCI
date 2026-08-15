@@ -2,6 +2,27 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.41] - 2026-08-15
+
+### Fixed
+
+- iOS notifications lost the `Version` line whenever `APP_VERSION` and
+  `IOS_BUILD_NUMBER` were both empty, because the message was built from those
+  parameters alone. It now reads `CFBundleShortVersionString` and
+  `CFBundleVersion` from the `Info.plist` of the exported Xcode project, so it
+  reports the version that was actually built; the parameters remain the
+  fallback for a build that fails before the export.
+
+### Changed
+
+- `IOS_BUILD_NUMBER` defaults to the Jenkins `BUILD_NUMBER` when the parameter
+  is empty. Unity previously kept the project's own `CFBundleVersion`, so every
+  iOS build carried the same one and App Store Connect would reject the second
+  and later TestFlight uploads as duplicates. `APP_VERSION` is left alone on
+  purpose: it becomes `CFBundleShortVersionString`, which Apple requires to be
+  period-separated numbers, so the `<version>-<build>` form used for Android
+  and for Drive folder names cannot be reused there.
+
 ## [0.6.40] - 2026-08-15
 
 ### Changed

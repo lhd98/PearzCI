@@ -527,6 +527,16 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def startedAt = System.currentTimeMillis()
+                        // CFBundleVersion phải tăng sau mỗi lần nộp, nếu không
+                        // App Store Connect từ chối vì trùng build. Param để
+                        // trống thì Unity giữ nguyên số của project, nên lấy
+                        // BUILD_NUMBER của Jenkins làm mặc định.
+                        // APP_VERSION thì không ép: CFBundleShortVersionString
+                        // chỉ được gồm số và dấu chấm, mà BUILD_VERSION có
+                        // dạng 1.0.0-42 nên sẽ bị Apple loại.
+                        def iosBuildNumber =
+                            params.IOS_BUILD_NUMBER?.toString()?.trim() ?:
+                            env.ARTIFACT_BUILD_NUMBER
                         try {
                             withEnv([
                                 "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
@@ -534,7 +544,7 @@ def call(Map config = [:]) {
                                 'BUNDLE_IDENTIFIER=',
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                 "APP_VERSION=${params.APP_VERSION ?: ''}",
-                                "IOS_BUILD_NUMBER=${params.IOS_BUILD_NUMBER ?: ''}",
+                                "IOS_BUILD_NUMBER=${iosBuildNumber}",
                                 "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                 "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
@@ -563,6 +573,8 @@ def call(Map config = [:]) {
                                     exit "$result"
                                 '''
                             }
+
+                            readIosVersionFromXcodeProject()
                         } finally {
                             env.BUILD_TIME_MILLIS = (System.currentTimeMillis() - startedAt).toString()
                         }
@@ -1307,6 +1319,49 @@ def createRcloneLink(String remotePath) {
     }
 }
 
+// iOS không có build-metadata.json để đọc ngược như Android, nên version thật
+// của bản build nằm trong Info.plist mà Unity vừa sinh ra. Đọc từ đó thay vì
+// suy từ tham số job: tham số để trống thì Unity giữ nguyên giá trị của
+// project, và message sẽ nói sai nếu đoán theo tham số.
+def readIosVersionFromXcodeProject() {
+    def plistPath = "${env.IOS_PROJECT_PATH}/Info.plist"
+
+    if (!fileExists(plistPath)) {
+        echo(
+            "Optional iOS Info.plist not found at ${plistPath}; the " +
+            'notification will fall back to the job parameters.'
+        )
+        return
+    }
+
+    withEnv(["IOS_INFO_PLIST=${plistPath}"]) {
+        env.IOS_VERSION_NAME = readPlistValue('CFBundleShortVersionString')
+        env.IOS_BUILD_NUMBER_BUILT = readPlistValue('CFBundleVersion')
+    }
+
+    echo(
+        "iOS version built: ${env.IOS_VERSION_NAME} " +
+        "(build ${env.IOS_BUILD_NUMBER_BUILT})"
+    )
+}
+
+// PlistBuddy trả về mã lỗi khi khoá không tồn tại; thiếu một khoá không đáng
+// làm hỏng build, chỉ là message mất một mẩu thông tin.
+def readPlistValue(String key) {
+    def value = ''
+
+    withEnv(["IOS_PLIST_KEY=${key}"]) {
+        value = sh(
+            script:
+                '/usr/libexec/PlistBuddy -c ' +
+                '"Print :$IOS_PLIST_KEY" "$IOS_INFO_PLIST" 2>/dev/null || true',
+            returnStdout: true
+        ).trim()
+    }
+
+    return value
+}
+
 // altool chỉ nhận private key qua file có tên cố định AuthKey_<KeyID>.p8 nằm
 // trong ./private_keys, ~/private_keys, ~/.private_keys hoặc
 // ~/.appstoreconnect/private_keys. Nên phải chép credential ra đĩa; trap xoá
@@ -1520,8 +1575,12 @@ def buildIosTelegramMessage(boolean deviceBuild) {
     def result = currentBuild.currentResult ?: 'SUCCESS'
     boolean succeeded = result == 'SUCCESS'
     def versionParts = []
-    def appVersion = params.APP_VERSION?.toString()?.trim()
-    def iosBuildNumber = params.IOS_BUILD_NUMBER?.toString()?.trim()
+    // Ưu tiên giá trị đọc từ Info.plist của bản vừa build; tham số job chỉ là
+    // dự phòng cho lúc build hỏng trước khi Xcode project kịp sinh ra.
+    def appVersion = env.IOS_VERSION_NAME?.trim() ?:
+        params.APP_VERSION?.toString()?.trim()
+    def iosBuildNumber = env.IOS_BUILD_NUMBER_BUILT?.trim() ?:
+        params.IOS_BUILD_NUMBER?.toString()?.trim()
 
     if (appVersion) {
         versionParts << appVersion
