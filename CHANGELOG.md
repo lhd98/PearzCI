@@ -2,6 +2,31 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.40] - 2026-08-15
+
+### Changed
+
+- Google Drive is now split by artifact type and then by version:
+  `<driveRoot>/<jobName>/{apk,aab,ios}/<version>/`. APK and AAB no longer share
+  a version folder, and iOS gets version folders instead of one flat job folder
+  where every build overwrote the one before it. Each folder holds the artifact
+  and its `<PRODUCT_NAME>_BUILD_INFO.txt`.
+- The iOS build info file drops the build-number suffix added in 0.6.39; its
+  version folder now keeps builds apart.
+
+### Added
+
+- `UPLOAD_TO_TESTFLIGHT` submits the exported IPA to App Store Connect with
+  `xcrun altool --upload-app`, after the Drive upload so a failed submission
+  still leaves a downloadable build. It authenticates with an App Store Connect
+  API key from a Jenkins **Secret file** credential
+  (`appStoreConnectApiKeyCredentialsId`, default `appstore-connect-api-key`)
+  plus `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`. The key is
+  copied into `$WORKSPACE/private_keys` only for the duration of the upload,
+  because `altool` reads it only from a file named `AuthKey_<KeyID>.p8`.
+- Telegram shows a `TestFlight` line for iOS builds that ran the upload, and a
+  failed upload is reported as such rather than as a missing IPA.
+
 ## [0.6.39] - 2026-08-15
 
 ### Added

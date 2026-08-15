@@ -149,8 +149,16 @@ def call(Map config = [:]) {
                             "${env.WORKSPACE}/Builds/iOS/upload.log"
                         env.PIPELINE_START_MILLIS =
                             System.currentTimeMillis().toString()
+                        // Cùng bố cục Drive với shared graph:
+                        // <job>/ios/<version>, để job iOS riêng không đổ IPA
+                        // lẫn vào gốc thư mục job.
+                        def buildVersion = params.APP_VERSION?.trim()
+                            ? "${params.APP_VERSION.trim()}-${env.BUILD_NUMBER}"
+                            : env.BUILD_NUMBER
+                        env.BUILD_VERSION = buildVersion
                         env.DRIVE_DIRECTORY =
-                            "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
+                            "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/" +
+                            "${env.JOB_BASE_NAME}/ios/${buildVersion}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.OUTPUT_FILE_NAME}"
                     }

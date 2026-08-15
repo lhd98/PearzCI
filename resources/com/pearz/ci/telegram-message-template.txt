@@ -13,6 +13,7 @@
 <b>APK:</b> {{APK}}
 <b>AAB:</b> {{AAB}}
 <b>IPA:</b> {{IPA}}
+<b>TestFlight:</b> {{TESTFLIGHT}}
 <b>mapping.txt:</b> {{MAPPING}}
 <b>Install:</b> {{INSTALL_STATUS}}
 {{CHANGES_SECTION}}

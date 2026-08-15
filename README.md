@@ -218,8 +218,9 @@ also gets a visible version for use through Unity `Application.version`:
 After an APK has been tested, set `RELEASE_BUILD_NUMBER` to that APK's Jenkins
 build number when creating its AAB. For example, an APK from build `157` and an
 AAB built later with `RELEASE_BUILD_NUMBER=157` both use version `157` (or
-`<APP_VERSION>-157`), so they are uploaded to the same Google Drive folder.
-The AAB's Google Play version code remains independently managed.
+`<APP_VERSION>-157`), so their Google Drive folders carry the same version name
+and the pair stays easy to match. The AAB's Google Play version code remains
+independently managed.
 
 The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
 after a successful export. PearzCI verifies and archives that file, uploads it
@@ -234,13 +235,27 @@ levels deep — first for the exact `<PRODUCT_NAME>_BUILD_INFO.txt`, then for an
 `*_BUILD_INFO.txt` in case the job's `PRODUCT_NAME` differs from the Unity
 product name — and copies what it finds into `Builds/iOS`. A missing file does
 not fail an iOS build; the `Build Info` line falls back to the Drive folder
-link. iOS uploads the file as `<PRODUCT_NAME>-<artifact build number>_BUILD_INFO.txt`
-because the iOS Drive folder is not split per version.
+link.
 
-Google Drive keeps each Android build in its own version folder:
-`<driveRoot>/<jobName>/<APP_VERSION>-<artifact build number>/`. When
-`APP_VERSION` is empty, the folder name is the artifact build number. For an
-AAB, this is `RELEASE_BUILD_NUMBER` when supplied; otherwise it is the current
+#### Google Drive layout
+
+Every build goes into its own version folder, grouped by artifact type:
+
+```text
+<driveRoot>/<jobName>/apk/<version>/
+<driveRoot>/<jobName>/aab/<version>/
+<driveRoot>/<jobName>/ios/<version>/
+```
+
+For example, `JenkinsBuild/FoodSort/apk/1.0.0-157/` holds
+`FoodSort-157.apk` and `FoodSort_BUILD_INFO.txt`, and the matching AAB lands in
+`JenkinsBuild/FoodSort/aab/1.0.0-157/`. APK and AAB are kept apart because they
+travel different routes — testers and Google Play — while the shared version
+name still pairs them.
+
+`<version>` is `<APP_VERSION>-<artifact build number>`, or just the artifact
+build number when `APP_VERSION` is empty. The artifact build number is
+`RELEASE_BUILD_NUMBER` for an AAB that supplies it; otherwise it is the current
 Jenkins `BUILD_NUMBER`.
 
 ### Configure the shared GitHub webhook
@@ -330,6 +345,7 @@ message can contain:
   `Build Info` line opens the text file itself instead of the folder that
   contains it. An iOS build that has no such file falls back to the Drive
   folder link.
+- TestFlight upload status when `UPLOAD_TO_TESTFLIGHT` is enabled.
 - `mapping.txt` public link and size when Unity reports a mapping file.
 - Every commit (short hash, author, and subject) since the previous
   **successful** Jenkins build, up to the 10 most recent, followed by a count
@@ -376,7 +392,7 @@ Available placeholders are:
 {{ORIENTATION}} {{UNITY_VERSION}}
 {{BUILD_TIME}} {{UPLOAD_TIME}} {{TOTAL_TIME}}
 {{BUILD_INFO_URL}}
-{{APK}} {{AAB}} {{MAPPING}}
+{{APK}} {{AAB}} {{IPA}} {{TESTFLIGHT}} {{MAPPING}} {{INSTALL_STATUS}}
 {{ERROR_SECTION}} {{CHANGES_SECTION}}
 {{JENKINS_LOGS_SECTION}}
 ```
@@ -510,6 +526,9 @@ is parameterized**:
 - Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
 - Boolean `IOS_BUILD_TO_DEVICE` (default: false)
 - String `IOS_DEVICE_UDID` (required when building to a device)
+- Boolean `UPLOAD_TO_TESTFLIGHT` (default: false)
+- String `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`
+  (required when `UPLOAD_TO_TESTFLIGHT` is enabled)
 
 The remaining shared optional values are also supported: `SCRIPTING_DEFINE_SYMBOLS`,
 `APP_VERSION`, `IL2CPP_CODE_GENERATION`,
@@ -520,6 +539,47 @@ The pipeline first exports `Unity-iPhone.xcodeproj`, then invokes
 `xcodebuild archive` and `xcodebuild -exportArchive`. The final signed IPA,
 Unity log, and Xcode log are archived in Jenkins and uploaded to the configured
 Google Drive remote just like Android artifacts.
+
+### Upload to TestFlight
+
+Set `UPLOAD_TO_TESTFLIGHT` to `true` to submit the exported IPA to App Store
+Connect with `xcrun altool --upload-app`. The stage runs only for iOS IPA builds
+(never for connected-device builds) and only after the IPA has already been
+uploaded to Google Drive, so a rejected submission still leaves a downloadable
+build and a working link in the Telegram message. A failed upload fails the
+build, and the Telegram `Error` block says the IPA was built but the upload
+failed, so it is not confused with a broken build.
+
+Authentication uses an App Store Connect API key. In App Store Connect, open
+**Users and Access > Integrations > App Store Connect API**, create a key with
+the **App Manager** role, and download the `.p8` file — Apple allows that
+download only once. Then, in Jenkins, create a **Secret file** credential
+holding the `.p8`:
+
+- ID: `appstore-connect-api-key` (override with `appStoreConnectApiKeyCredentialsId`)
+
+The Key ID and Issuer ID are identifiers rather than secrets, so they are passed
+as job parameters (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`) or
+as call options:
+
+```groovy
+pearzUnityPipeline(
+    uploadToTestFlight: true,
+    appStoreConnectKeyId: 'ABCD1234EF',
+    appStoreConnectIssuerId: '69a6de70-0000-0000-0000-000000000000'
+)
+```
+
+`altool` only reads the private key from a file named `AuthKey_<KeyID>.p8` in a
+`private_keys` directory, so the pipeline copies the credential into
+`$WORKSPACE/private_keys` for the duration of the upload and removes it
+immediately afterwards, including when the upload fails.
+
+The export options plist must be configured for App Store distribution
+(`<key>method</key><string>app-store</string>`); a development or ad-hoc export
+is rejected by App Store Connect. App Store Connect keeps processing the build
+after `altool` returns, so the Telegram message reports the upload as accepted,
+not as ready for testers.
 
 ### Build directly to a connected iPhone
 

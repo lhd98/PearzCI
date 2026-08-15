@@ -6,6 +6,23 @@ def call(Map config = [:]) {
     def iosBuildToDevice = config.get(
         'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
     ).toString().trim().toBoolean()
+    // Mặc định tắt: một job iOS đang chạy sẽ không tự nhiên bắt đầu đẩy build
+    // lên App Store Connect chỉ vì nâng phiên bản thư viện.
+    def uploadToTestFlight = config.get(
+        'uploadToTestFlight', params.UPLOAD_TO_TESTFLIGHT ?: false
+    ).toString().trim().toBoolean()
+    def appStoreConnectApiKeyCredentialsId = config.get(
+        'appStoreConnectApiKeyCredentialsId',
+        'appstore-connect-api-key'
+    ).toString().trim()
+    // Key ID và Issuer ID là định danh, không phải bí mật, nên nhận thẳng từ
+    // config/tham số job thay vì bắt tạo thêm hai credential.
+    def appStoreConnectKeyId = config.get(
+        'appStoreConnectKeyId', params.APP_STORE_CONNECT_KEY_ID ?: ''
+    ).toString().trim()
+    def appStoreConnectIssuerId = config.get(
+        'appStoreConnectIssuerId', params.APP_STORE_CONNECT_ISSUER_ID ?: ''
+    ).toString().trim()
     // iOS bắt buộc chạy trên macOS; Android giữ nguyên "any" như trước để
     // không đổi cách chọn node của các job Android đang chạy. Nhãn rỗng
     // tương đương `agent any`.
@@ -288,23 +305,26 @@ def call(Map config = [:]) {
                             env.XCODEBUILD_LOG_PATH = "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
                             env.DERIVED_DATA_PATH = "${env.WORKSPACE}/Builds/iOS/DerivedData"
                         }
-                        def androidBuildVersion = params.APP_VERSION?.trim()
+                        def buildVersion = params.APP_VERSION?.trim()
                             ? "${params.APP_VERSION.trim()}-${artifactBuildNumber}"
                             : artifactBuildNumber
-                        env.BUILD_VERSION = androidBuildVersion
-                        env.DRIVE_DIRECTORY = isAndroid
-                            ? "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}/${androidBuildVersion}"
-                            : "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
+                        env.BUILD_VERSION = buildVersion
+                        // Drive được chia hai cấp dưới tên job: loại artifact
+                        // rồi tới version, ví dụ FoodSort/apk/1.0.0-157. APK và
+                        // AAB tách hẳn nhau vì chúng đi hai đường khác nhau
+                        // (tester và Google Play), còn iOS trước đây đổ chung
+                        // một thư mục nên mỗi build lại đè lên build trước.
+                        env.DRIVE_ARTIFACT_FOLDER = isIos
+                            ? 'ios'
+                            : env.OUTPUT_EXTENSION
+                        env.DRIVE_DIRECTORY =
+                            "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/" +
+                            "${env.JOB_BASE_NAME}/${env.DRIVE_ARTIFACT_FOLDER}/" +
+                            "${buildVersion}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.DRIVE_OUTPUT_FILE_NAME}"
-                        // Thư mục Drive của iOS không tách theo version như
-                        // Android, nên tên file build info phải kèm số build
-                        // để bản mới không ghi đè mất bản cũ.
-                        env.DRIVE_BUILD_INFO_FILE_NAME = isIos
-                            ? "${outputName}-${artifactBuildNumber}_BUILD_INFO.txt"
-                            : env.BUILD_INFO_FILE_NAME
                         env.DRIVE_BUILD_INFO_PATH =
-                            "${env.DRIVE_DIRECTORY}/${env.DRIVE_BUILD_INFO_FILE_NAME}"
+                            "${env.DRIVE_DIRECTORY}/${env.BUILD_INFO_FILE_NAME}"
                         env.DRIVE_MAPPING_PATH =
                             "${env.DRIVE_DIRECTORY}/mapping-${artifactBuildNumber}.txt"
 
@@ -368,6 +388,7 @@ def call(Map config = [:]) {
                         if (isIos) {
                             echo "XCODE_CONFIGURATION = ${params.XCODE_CONFIGURATION}"
                             echo "IOS_BUILD_TO_DEVICE = ${env.IOS_BUILD_TO_DEVICE}"
+                            echo "UPLOAD_TO_TESTFLIGHT = ${uploadToTestFlight}"
                         }
 
                         def telegramConfig =
@@ -1108,6 +1129,26 @@ def call(Map config = [:]) {
                 }
             }
 
+            // Chạy sau khi IPA đã nằm trên Drive: upload TestFlight hỏng thì
+            // vẫn còn bản build tải về được, và message Telegram vẫn có link.
+            stage('Upload to TestFlight') {
+                when {
+                    expression {
+                        isIos && !iosBuildToDevice && uploadToTestFlight
+                    }
+                }
+                options { timeout(time: 60, unit: 'MINUTES') }
+                steps {
+                    script {
+                        uploadIpaToTestFlight(
+                            appStoreConnectApiKeyCredentialsId,
+                            appStoreConnectKeyId,
+                            appStoreConnectIssuerId
+                        )
+                    }
+                }
+            }
+
             stage('Archive Notification Artifacts') {
                 when { expression { !isIos || !iosBuildToDevice } }
                 steps {
@@ -1263,6 +1304,70 @@ def createRcloneLink(String remotePath) {
             exception.message
         )
         return ''
+    }
+}
+
+// altool chỉ nhận private key qua file có tên cố định AuthKey_<KeyID>.p8 nằm
+// trong ./private_keys, ~/private_keys, ~/.private_keys hoặc
+// ~/.appstoreconnect/private_keys. Nên phải chép credential ra đĩa; trap xoá
+// ngay khi lệnh kết thúc, kể cả lúc hỏng, để key không nằm lại trên agent.
+def uploadIpaToTestFlight(
+    String apiKeyCredentialsId,
+    String keyId,
+    String issuerId
+) {
+    if (!apiKeyCredentialsId) {
+        error(
+            'appStoreConnectApiKeyCredentialsId is required when ' +
+            'UPLOAD_TO_TESTFLIGHT is enabled.'
+        )
+    }
+
+    if (!keyId || !issuerId) {
+        error(
+            'APP_STORE_CONNECT_KEY_ID and APP_STORE_CONNECT_ISSUER_ID are ' +
+            'required when UPLOAD_TO_TESTFLIGHT is enabled.'
+        )
+    }
+
+    try {
+        withCredentials([
+            file(
+                credentialsId: apiKeyCredentialsId,
+                variable: 'ASC_API_KEY_FILE'
+            )
+        ]) {
+            withEnv([
+                "ASC_KEY_ID=${keyId}",
+                "ASC_ISSUER_ID=${issuerId}"
+            ]) {
+                sh '''
+                    set -eu
+
+                    key_dir="$WORKSPACE/private_keys"
+                    rm -rf "$key_dir"
+                    mkdir -p "$key_dir"
+                    trap 'rm -rf "$key_dir"' EXIT INT TERM
+                    chmod 700 "$key_dir"
+                    cp "$ASC_API_KEY_FILE" "$key_dir/AuthKey_$ASC_KEY_ID.p8"
+                    chmod 600 "$key_dir/AuthKey_$ASC_KEY_ID.p8"
+
+                    cd "$WORKSPACE"
+                    xcrun altool --upload-app -f "$OUTPUT_PATH" -t ios \
+                        --apiKey "$ASC_KEY_ID" \
+                        --apiIssuer "$ASC_ISSUER_ID"
+                '''
+            }
+        }
+
+        // App Store Connect còn xử lý tiếp sau khi altool trả về, nên đây là
+        // "đã nhận", chưa phải "tester tải được".
+        env.TESTFLIGHT_STATUS =
+            'Uploaded; App Store Connect is still processing the build.'
+        echo 'IPA uploaded to App Store Connect for TestFlight.'
+    } catch (Exception exception) {
+        env.TESTFLIGHT_STATUS = 'Upload failed.'
+        throw exception
     }
 }
 
@@ -1430,10 +1535,17 @@ def buildIosTelegramMessage(boolean deviceBuild) {
     def errorSection = ''
 
     if (!succeeded) {
-        // Tiêu đề đã nói kết quả rồi, ở đây chỉ cần lý do.
-        def reason = deviceBuild
-            ? 'The app was not installed on the connected device.'
-            : 'The IPA was not produced.'
+        // Tiêu đề đã nói kết quả rồi, ở đây chỉ cần lý do. IPA hỏng và
+        // TestFlight hỏng là hai chuyện khác nhau: bản build vẫn tải được
+        // từ Drive khi chỉ mỗi bước upload lên App Store Connect thất bại.
+        def reason = 'The IPA was not produced.'
+
+        if (deviceBuild) {
+            reason = 'The app was not installed on the connected device.'
+        } else if (env.TESTFLIGHT_STATUS == 'Upload failed.') {
+            reason = 'The IPA was built but the TestFlight upload failed.'
+        }
+
         errorSection = '<blockquote><b>Error</b>\n' +
             telegramHtmlEscape(reason) + '</blockquote>'
     }
@@ -1449,6 +1561,9 @@ def buildIosTelegramMessage(boolean deviceBuild) {
             deviceBuild ? '' : (env.BUILD_INFO_URL ?: env.DRIVE_FOLDER_URL)
         ),
         IPA: telegramHtmlEscape(deviceBuild ? '' : env.DOWNLOAD_URL),
+        TESTFLIGHT: telegramHtmlEscape(
+            deviceBuild ? '' : env.TESTFLIGHT_STATUS
+        ),
         INSTALL_STATUS: deviceBuild
             ? (succeeded
                 ? 'Installed on the connected device.'
