@@ -629,12 +629,17 @@ Android and iOS IPA builds, so the Jenkins Stage View layout does not change
 when `IOS_BUILD_TO_DEVICE` is toggled. A separate `pearzUnityIosPipeline()` job
 remains optional.
 
-For a development-only device build, set `IOS_BUILD_TO_DEVICE=true`, provide
-`IOS_DEVICE_UDID` and `IOS_DEVELOPMENT_TEAM`, and normally select `Debug`.
-PearzCI builds the exported Xcode project for that device and installs the app
-with `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`,
-create an IPA, or upload to Drive. The connected device must be trusted and
-visible to the Jenkins macOS user through `xcrun devicectl list devices`.
+For a development-only device build, set `IOS_BUILD_TO_DEVICE=true` and build.
+PearzCI always uses the `Debug` configuration for device builds, and
+`IOS_DEVELOPMENT_TEAM` is not needed here (it applies only to IPA export).
+Leave `IOS_DEVICE_UDID` empty to auto-detect the connected iPhone: the build
+reads `xcrun devicectl list devices` and, when exactly one wired, paired device
+is present, uses its `hardwareProperties.udid`; with zero or several devices it
+fails and prints the list so you can set `IOS_DEVICE_UDID` explicitly. PearzCI
+builds the exported Xcode project for that device and installs the app with
+`xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`, create
+an IPA, or upload to Drive. The connected device must be trusted and visible to
+the Jenkins macOS user through `xcrun devicectl list devices`.
 
 `xcodebuild` waits up to `iosDestinationTimeoutSeconds` (default 300) for the
 device to become an available destination, rather than Xcode's own 30-second
@@ -649,9 +654,14 @@ Simulators**.
 When `TELEGRAM_CHANNEL` is configured and `SEND_NOTIFICATIONS` is enabled,
 PearzCI also sends a success or failure notification for this device build,
 including the Jenkins and build-log links.
-Set `IOS_PROVISIONING_PROFILE_SPECIFIER` to an installed development profile
-name when a specific Xcode-managed profile should be selected for the device
-build.
+An installed development provisioning profile is required for device signing.
+Set it once in the job's pipeline script as `iosProvisioningProfileSpecifier`
+— for example
+`iosProvisioningProfileSpecifier: 'iOS Team Provisioning Profile: com.pg.sushi.sort'`
+— so it does not have to be typed on every build; the
+`IOS_PROVISIONING_PROFILE_SPECIFIER` parameter still works as a per-build
+override. This is the Xcode-managed profile name, which embeds the project's
+bundle id, so it differs per game.
 When the Xcode project includes In-App Purchase, this device-only flow removes
 that capability from the generated export so a free Apple Personal Team can
 sign it. In-App Purchase is therefore unavailable in that test build; normal

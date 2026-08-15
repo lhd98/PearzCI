@@ -656,12 +656,6 @@ def call(Map config = [:]) {
                         def deviceUdid = config.get(
                             'iosDeviceUdid', params.IOS_DEVICE_UDID ?: ''
                         ).toString().trim()
-                        def developmentTeam = config.get(
-                            'iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: ''
-                        ).toString().trim()
-                        def xcodeConfiguration = config.get(
-                            'xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Debug'
-                        ).toString().trim()
                         def profileSpecifier = config.get(
                             'iosProvisioningProfileSpecifier',
                             params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
@@ -669,6 +663,12 @@ def call(Map config = [:]) {
                         def destinationTimeout = config.get(
                             'iosDestinationTimeoutSeconds', 300
                         ).toString().trim()
+                        // Device build ký bằng 'Apple Development' + profile đã
+                        // cài và luôn ở cấu hình Debug; XCODE_CONFIGURATION chỉ
+                        // áp dụng cho export IPA. IOS_DEVELOPMENT_TEAM cũng không
+                        // được dùng trong sh của device build (chỉ export IPA
+                        // cần), nên không còn bắt buộc điền cho device.
+                        def xcodeConfiguration = 'Debug'
 
                         if (!(destinationTimeout ==~ /[1-9][0-9]*/)) {
                             error(
@@ -677,19 +677,11 @@ def call(Map config = [:]) {
                             )
                         }
 
-                        if (!deviceUdid) {
-                            error('IOS_DEVICE_UDID is required when IOS_BUILD_TO_DEVICE=true.')
-                        }
-                        if (!developmentTeam) {
-                            error('IOS_DEVELOPMENT_TEAM is required when IOS_BUILD_TO_DEVICE=true.')
-                        }
-                        if (xcodeConfiguration != 'Debug' && xcodeConfiguration != 'Release') {
-                            error('XCODE_CONFIGURATION must be Release or Debug.')
-                        }
+                        // IOS_DEVICE_UDID để trống thì sh bên dưới tự dò iPhone
+                        // đang cắm; chỉ khi 0 hoặc >1 máy mới cần điền tay.
 
                         withEnv([
                             "IOS_DEVICE_UDID=${deviceUdid}",
-                            "IOS_DEVELOPMENT_TEAM=${developmentTeam}",
                             "XCODE_CONFIGURATION=${xcodeConfiguration}",
                             "IOS_PROFILE_SPECIFIER=${profileSpecifier}",
                             "IOS_DESTINATION_TIMEOUT=${destinationTimeout}"
@@ -700,6 +692,52 @@ def call(Map config = [:]) {
                                     echo "ERROR: Unity-iPhone.xcodeproj was not exported."
                                     exit 1
                                 }
+
+                                # IOS_DEVICE_UDID trống: tự dò iPhone đang cắm dây
+                                # và đã pair. Đúng 1 máy thì dùng luôn; 0 hoặc
+                                # nhiều máy thì báo lỗi kèm danh sách để chỉ định
+                                # IOS_DEVICE_UDID. tunnelState không dùng để lọc vì
+                                # máy cắm dây vẫn hiện "disconnected" khi không
+                                # debug. Lấy hardwareProperties.udid (đúng định
+                                # dạng xcodebuild -destination id= và devicectl).
+                                if [ -z "${IOS_DEVICE_UDID:-}" ]; then
+                                    echo 'IOS_DEVICE_UDID trống — tự dò thiết bị đang cắm...'
+                                    dev_json="$(mktemp -t devicectl-devices)"
+                                    if ! xcrun devicectl list devices --json-output "$dev_json" >/dev/null 2>&1; then
+                                        rm -f "$dev_json"
+                                        echo 'ERROR: không chạy được "xcrun devicectl list devices".'
+                                        exit 1
+                                    fi
+                                    candidates="$(ruby -rjson -e '
+                                        data = (JSON.parse(File.read(ARGV[0])) rescue nil)
+                                        exit(0) unless data
+                                        (data.dig("result", "devices") || []).each do |dev|
+                                          hw = dev["hardwareProperties"] || {}
+                                          cp = dev["connectionProperties"] || {}
+                                          next unless hw["reality"] == "physical"
+                                          next unless cp["pairingState"] == "paired"
+                                          next unless cp["transportType"] == "wired"
+                                          name = (dev["deviceProperties"] || {})["name"]
+                                          puts "#{hw["udid"]}\\t#{name} (#{hw["marketingName"]})"
+                                        end
+                                    ' "$dev_json")"
+                                    rm -f "$dev_json"
+                                    count="$(echo "$candidates" | awk 'NF' | wc -l | tr -d ' ')"
+                                    if [ "$count" -eq 0 ]; then
+                                        echo 'ERROR: không thấy iPhone nào cắm dây và đã pair.'
+                                        echo 'Cắm máy + Trust trên máy, hoặc điền IOS_DEVICE_UDID. Danh sách hiện có:'
+                                        xcrun devicectl list devices || true
+                                        exit 1
+                                    fi
+                                    if [ "$count" -gt 1 ]; then
+                                        echo 'ERROR: có nhiều máy cắm cùng lúc — điền IOS_DEVICE_UDID một trong các máy sau:'
+                                        echo "$candidates"
+                                        exit 1
+                                    fi
+                                    IOS_DEVICE_UDID="$(echo "$candidates" | awk 'NF' | head -n1 | cut -f1)"
+                                    echo "Đã tự dò UDID: $IOS_DEVICE_UDID"
+                                fi
+
                                 rm -rf "$DERIVED_DATA_PATH"
                                 echo 'iOS device bundle identifier is sourced from Unity Project Settings.'
 

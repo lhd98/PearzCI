@@ -2,6 +2,27 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.44] - 2026-08-15
+
+### Changed
+
+- Simplified connected-iPhone (device) builds so a test build needs only
+  `IOS_BUILD_TO_DEVICE=true`. `IOS_DEVICE_UDID` may be left empty: the pipeline
+  auto-detects the single wired, paired device via `xcrun devicectl list
+  devices`, using its `hardwareProperties.udid`, and fails with the device list
+  when zero or several are connected so you can set `IOS_DEVICE_UDID`
+  explicitly. Device builds now always use the `Debug` configuration.
+  `IOS_PROVISIONING_PROFILE_SPECIFIER` is best set once in the job's pipeline
+  script as `iosProvisioningProfileSpecifier`; the parameter still works as a
+  per-build override.
+
+### Removed
+
+- The `IOS_DEVELOPMENT_TEAM` requirement for connected-device builds. It was
+  never used by the device build's signing (which signs with `Apple Development`
+  plus the installed provisioning profile); it is still read and used for IPA
+  export.
+
 ## [0.6.43] - 2026-08-15
 
 ### Changed
