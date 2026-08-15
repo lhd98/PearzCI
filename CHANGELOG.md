@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.43] - 2026-08-15
+
+### Changed
+
+- Consolidated the Jenkins Stage View from 18 stages to 10 without changing any
+  build behaviour. Android and iOS still share one pipeline and one Stage View;
+  only intermediate stages were folded into the adjacent stage that already ran
+  under the same condition: `Show Parameters` into `Validate Unity`; `Remove
+  duplicate AppLovin SPM dependency` into `Build Unity iOS`; `Read Build
+  Metadata` and `Archive Artifact` into a combined `Verify & Archive Artifact`;
+  and `Validate rclone`, `Verify Google Drive Upload`, `Create Public Link` and
+  `Archive Notification Artifacts` into `Upload to Google Drive`. Trade-off: a
+  failure in any Google Drive sub-step now shows on the single `Upload to Google
+  Drive` column, so read the stage log to see which step failed. README documents
+  the resulting stage list.
+
 ## [0.6.42] - 2026-08-15
 
 ### Changed

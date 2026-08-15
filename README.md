@@ -258,6 +258,35 @@ build number when `APP_VERSION` is empty. The artifact build number is
 `RELEASE_BUILD_NUMBER` for an AAB that supplies it; otherwise it is the current
 Jenkins `BUILD_NUMBER`.
 
+#### Stage View của pipeline
+
+Android và iOS **dùng chung một pipeline**, nên Stage View hiển thị chung một
+đồ thị cho mọi nền tảng; stage nào không áp dụng cho build hiện tại thì hiện ở
+trạng thái skipped. Pipeline gồm **10 stage**:
+
+| Stage | Chạy khi |
+|-------|----------|
+| Checkout | mọi build |
+| Prepare Build Variables | mọi build |
+| Validate Unity | mọi build — in tham số rồi kiểm tra Unity/Xcode |
+| Build Unity Android | Android |
+| Build Unity iOS | iOS — kèm dọn trùng dependency AppLovin SPM |
+| Archive and Export IPA | iOS, build IPA (không phải cắm máy) |
+| Build and Install on iOS Device | iOS, build cắm thẳng vào iPhone |
+| Verify & Archive Artifact | mọi build trừ iOS cắm máy — kèm đọc metadata |
+| Upload to Google Drive | mọi build trừ iOS cắm máy |
+| Upload to TestFlight | iOS IPA và `UPLOAD_TO_TESTFLIGHT=true` |
+
+Để bớt số cột, nhiều bước phụ đã được gộp vào stage liền kề thay vì tách riêng:
+`Show Parameters` gộp vào `Validate Unity`; dọn trùng AppLovin SPM gộp vào
+`Build Unity iOS`; đọc metadata và archive artifact gộp vào `Verify & Archive
+Artifact`; còn kiểm tra rclone, xác minh upload Drive, tạo public link và
+archive `upload.log` gộp hết vào `Upload to Google Drive`.
+
+Đánh đổi: khi một bước con của `Upload to Google Drive` hỏng, Stage View chỉ báo
+đỏ ở đúng cột đó chứ không chỉ ra ngay bước nào (kiểm tra rclone, upload, xác
+minh, hay tạo link) — mở log của stage để xem chi tiết.
+
 ### Configure the shared GitHub webhook
 
 For existing Pipeline jobs, first create a Jenkins **Secret text** credential:

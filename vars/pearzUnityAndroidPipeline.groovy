@@ -373,7 +373,9 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Show Parameters') {
+            // 'Show Parameters' đã gộp vào đây để bớt cột Stage View: in
+            // tham số trước, rồi validate Unity ngay trong cùng một stage.
+            stage('Validate Unity') {
                 steps {
                     echo "NODE_OS = ${env.NODE_OS}"
                     echo "PRODUCT_NAME = ${params.PRODUCT_NAME}"
@@ -400,13 +402,7 @@ def call(Map config = [:]) {
                             : 0
 
                         echo "TELEGRAM_CHANNEL targets = ${telegramTargets}"
-                    }
-                }
-            }
 
-            stage('Validate Unity') {
-                steps {
-                    script {
                         def unityExe = isUnix()
                             ? "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
                                 '/Unity.app/Contents/MacOS/Unity'
@@ -578,18 +574,13 @@ def call(Map config = [:]) {
                         } finally {
                             env.BUILD_TIME_MILLIS = (System.currentTimeMillis() - startedAt).toString()
                         }
-                    }
-                }
-            }
 
-            stage('Remove duplicate AppLovin SPM dependency') {
-                when { expression { isIos } }
-                steps {
-                    script {
-                        // Script Ruby nằm ở resources thay vì nhúng base64 vào
-                        // Groovy. Bản nhúng từng tồn tại hai bản ở hai pipeline
-                        // và lệch nhau một ký tự mà không ai đọc ra được, vì
-                        // base64 thì mắt thường không diff nổi.
+                        // 'Remove duplicate AppLovin SPM dependency' đã gộp vào
+                        // đây để bớt cột Stage View: chạy ngay sau khi Unity sinh
+                        // Xcode project, cùng điều kiện iOS. Script Ruby nằm ở
+                        // resources thay vì nhúng base64 vào Groovy — bản nhúng
+                        // từng tồn tại hai bản lệch nhau một ký tự mà không ai
+                        // đọc ra được, vì base64 thì mắt thường không diff nổi.
                         writeFile(
                             file: 'remove-applovin-spm.rb',
                             encoding: 'UTF-8',
@@ -817,7 +808,10 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Verify Artifact') {
+            // 'Read Build Metadata' và 'Archive Artifact' đã gộp vào đây để bớt
+            // cột Stage View. Read Build Metadata vốn chỉ chạy cho Android nên
+            // giữ nguyên bằng guard isAndroid bên trong.
+            stage('Verify & Archive Artifact') {
                 when { expression { !isIos || !iosBuildToDevice } }
                 steps {
                     script {
@@ -843,23 +837,11 @@ def call(Map config = [:]) {
                         }
 
                         echo "Build artifact created successfully: ${env.OUTPUT_PATH}"
-                    }
-                }
-            }
 
-            stage('Read Build Metadata') {
-                when { expression { isAndroid } }
-                steps {
-                    script {
-                        readBuildMetadata()
-                    }
-                }
-            }
+                        if (isAndroid) {
+                            readBuildMetadata()
+                        }
 
-            stage('Archive Artifact') {
-                when { expression { !isIos || !iosBuildToDevice } }
-                steps {
-                    script {
                         archiveArtifacts(
                             artifacts: isIos
                                 ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/${env.BUILD_INFO_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
@@ -872,8 +854,16 @@ def call(Map config = [:]) {
                 }
             }
 
-            stage('Validate rclone') {
+            // Các stage 'Validate rclone', 'Verify Google Drive Upload',
+            // 'Create Public Link' và 'Archive Notification Artifacts' đã gộp
+            // hết vào đây để bớt cột Stage View. Đánh đổi: hỏng ở bất kỳ bước
+            // Drive nào cũng hiện đỏ chung một cột, không định vị ngay được bước
+            // nào — xem log của stage để biết chi tiết.
+            stage('Upload to Google Drive') {
                 when { expression { !isIos || !iosBuildToDevice } }
+                options {
+                    timeout(time: 30, unit: 'MINUTES')
+                }
                 steps {
                     script {
                         if (isUnix()) {
@@ -911,18 +901,7 @@ def call(Map config = [:]) {
                                 )
                             '''
                         }
-                    }
-                }
-            }
 
-            stage('Upload Google Drive') {
-                when { expression { !isIos || !iosBuildToDevice } }
-                options {
-                    timeout(time: 30, unit: 'MINUTES')
-                }
-
-                steps {
-                    script {
                         def uploadStartedAt = System.currentTimeMillis()
 
                         try {
@@ -1036,14 +1015,7 @@ def call(Map config = [:]) {
                                 System.currentTimeMillis() - uploadStartedAt
                             ).toString()
                         }
-                    }
-                }
-            }
 
-            stage('Verify Google Drive Upload') {
-                when { expression { !isIos || !iosBuildToDevice } }
-                steps {
-                    script {
                         if (isUnix()) {
                             sh '''
                                 set -eu
@@ -1114,14 +1086,7 @@ def call(Map config = [:]) {
                                 )
                             }
                         }
-                    }
-                }
-            }
 
-            stage('Create Public Link') {
-                when { expression { !isIos || !iosBuildToDevice } }
-                steps {
-                    script {
                         env.DOWNLOAD_URL =
                             createRcloneLink(env.DRIVE_FILE_PATH)
 
@@ -1153,6 +1118,15 @@ def call(Map config = [:]) {
                         }
 
                         echo "Public download link: ${env.DOWNLOAD_URL}"
+
+                        // 'Archive Notification Artifacts' đã gộp vào đây: chỉ
+                        // upload.log là file mới sau bước upload; các file còn
+                        // lại đã archive ở 'Verify & Archive Artifact'.
+                        archiveArtifacts(
+                            artifacts: isIos ? 'Builds/iOS/upload.log' : 'Builds/Android/upload.log',
+                            allowEmptyArchive: true,
+                            fingerprint: true
+                        )
                     }
                 }
             }
@@ -1174,19 +1148,6 @@ def call(Map config = [:]) {
                             appStoreConnectIssuerId
                         )
                     }
-                }
-            }
-
-            stage('Archive Notification Artifacts') {
-                when { expression { !isIos || !iosBuildToDevice } }
-                steps {
-                    // Chỉ upload.log là file mới kể từ stage 'Archive Artifact'.
-                    // Các file còn lại đã được archive ở đó.
-                    archiveArtifacts(
-                        artifacts: isIos ? 'Builds/iOS/upload.log' : 'Builds/Android/upload.log',
-                        allowEmptyArchive: true,
-                        fingerprint: true
-                    )
                 }
             }
         }
