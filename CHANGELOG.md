@@ -13,6 +13,19 @@ All notable changes to this package are documented in this file.
   without Android blocking it as a downgrade. AAB builds are unchanged and keep
   their separate auto-incrementing per-job counter for Google Play.
 
+## [0.6.38] - 2026-08-15
+
+### Added
+
+- iOS builds now collect `<PRODUCT_NAME>_BUILD_INFO.txt` as well. The file is
+  written by the FGSDK integration in the Unity project, and on iOS it lands
+  somewhere under `Builds/iOS` rather than beside the artifact, so the pipeline
+  searches that tree — the exact name first, then any `*_BUILD_INFO.txt` — and
+  archives, uploads, and links whatever it finds. Its Drive name carries the
+  artifact build number because the iOS Drive folder is not split per version.
+  A missing file does not fail the build; the `Build Info` line falls back to
+  the Drive folder link it used before.
+
 ## [0.6.37] - 2026-08-15
 
 ### Changed

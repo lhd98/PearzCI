@@ -297,8 +297,14 @@ def call(Map config = [:]) {
                             : "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/${env.JOB_BASE_NAME}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.DRIVE_OUTPUT_FILE_NAME}"
+                        // Thư mục Drive của iOS không tách theo version như
+                        // Android, nên tên file build info phải kèm số build
+                        // để bản mới không ghi đè mất bản cũ.
+                        env.DRIVE_BUILD_INFO_FILE_NAME = isIos
+                            ? "${outputName}-${artifactBuildNumber}_BUILD_INFO.txt"
+                            : env.BUILD_INFO_FILE_NAME
                         env.DRIVE_BUILD_INFO_PATH =
-                            "${env.DRIVE_DIRECTORY}/${env.BUILD_INFO_FILE_NAME}"
+                            "${env.DRIVE_DIRECTORY}/${env.DRIVE_BUILD_INFO_FILE_NAME}"
                         env.DRIVE_MAPPING_PATH =
                             "${env.DRIVE_DIRECTORY}/mapping-${artifactBuildNumber}.txt"
 
@@ -772,10 +778,19 @@ def call(Map config = [:]) {
                             )
                         }
 
-                        if (isAndroid && !fileExists(env.BUILD_INFO_PATH)) {
-                            error(
-                                "Build info file not found: ${env.BUILD_INFO_PATH}"
-                            )
+                        env.BUILD_INFO_FOUND = 'false'
+
+                        if (isAndroid) {
+                            if (!fileExists(env.BUILD_INFO_PATH)) {
+                                error(
+                                    "Build info file not found: ${env.BUILD_INFO_PATH}"
+                                )
+                            }
+
+                            env.BUILD_INFO_FOUND = 'true'
+                        } else if (isIos) {
+                            env.BUILD_INFO_FOUND =
+                                resolveIosBuildInfo() ? 'true' : 'false'
                         }
 
                         echo "Build artifact created successfully: ${env.OUTPUT_PATH}"
@@ -798,7 +813,7 @@ def call(Map config = [:]) {
                     script {
                         archiveArtifacts(
                             artifacts: isIos
-                                ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
+                                ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/${env.BUILD_INFO_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
                                 : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
                             allowEmptyArchive: true,
                             fingerprint: true,
@@ -897,7 +912,7 @@ def call(Map config = [:]) {
                                 }
                             }
 
-                            if (isAndroid) {
+                            if (env.BUILD_INFO_FOUND == 'true') {
                                 retry(2) {
                                     if (isUnix()) {
                                         sh '''
@@ -1001,7 +1016,7 @@ def call(Map config = [:]) {
                             '''
                         }
 
-                        if (isAndroid) {
+                        if (env.BUILD_INFO_FOUND == 'true') {
                             if (isUnix()) {
                                 sh '''
                                     set -eu
@@ -1070,7 +1085,7 @@ def call(Map config = [:]) {
                         // Link ở dòng 'Build Info' phải mở thẳng file
                         // <PRODUCT_NAME>_BUILD_INFO.txt, không phải thư mục
                         // chứa nó như trước.
-                        if (isAndroid) {
+                        if (env.BUILD_INFO_FOUND == 'true') {
                             env.BUILD_INFO_URL =
                                 createRcloneLink(env.DRIVE_BUILD_INFO_PATH)
                         }
@@ -1080,8 +1095,9 @@ def call(Map config = [:]) {
                                 createRcloneLink(env.DRIVE_MAPPING_PATH)
                         }
 
-                        // iOS không sinh file BUILD_INFO nào, nên dòng
-                        // 'Build Info' của iOS vẫn trỏ vào thư mục Drive.
+                        // Dự phòng cho iOS khi không dò được file build info:
+                        // dòng 'Build Info' quay về link thư mục Drive thay vì
+                        // biến mất khỏi message.
                         if (isIos) {
                             env.DRIVE_FOLDER_URL =
                                 createRcloneLink(env.DRIVE_DIRECTORY)
@@ -1250,6 +1266,62 @@ def createRcloneLink(String remotePath) {
     }
 }
 
+// Tên file đi qua biến môi trường chứ không nội suy thẳng vào script, để
+// productName có dấu cách hay ký tự lạ không làm vỡ lệnh find.
+def findIosBuildInfo(String namePattern) {
+    def foundPath = ''
+
+    withEnv(["IOS_BUILD_INFO_NAME=${namePattern}"]) {
+        foundPath = sh(
+            script:
+                'find "$WORKSPACE/Builds/iOS" -maxdepth 3 -type f ' +
+                '-name "$IOS_BUILD_INFO_NAME" 2>/dev/null | head -n 1',
+            returnStdout: true
+        ).trim()
+    }
+
+    return foundPath
+}
+
+// FGSDK sinh file build info sau khi Unity export xong. Trên Android nó nằm
+// ngay cạnh APK/AAB nên đường dẫn dựng sẵn là đủ; trên iOS output của Unity
+// là cả thư mục Xcode, nên file có thể nằm ở Builds/iOS hoặc bên trong
+// Unity-iPhone. Dò thật rồi chép về đúng chỗ Android vẫn dùng, để các stage
+// sau không phải phân biệt hai nền tảng. Không tìm thấy thì cảnh báo chứ
+// không fail build: iOS chưa từng đòi file này.
+def resolveIosBuildInfo() {
+    if (fileExists(env.BUILD_INFO_PATH)) {
+        echo "Build info file found: ${env.BUILD_INFO_PATH}"
+        return true
+    }
+
+    def foundPath = findIosBuildInfo(env.BUILD_INFO_FILE_NAME)
+
+    // FGSDK đặt tên file theo productName của Unity, còn BUILD_INFO_FILE_NAME
+    // dựng từ tham số PRODUCT_NAME của job. Hai giá trị đó lệch nhau là
+    // chuyện có thật, nên còn một lượt dò rộng trước khi bỏ cuộc.
+    if (!foundPath) {
+        foundPath = findIosBuildInfo('*_BUILD_INFO.txt')
+    }
+
+    if (!foundPath) {
+        echo(
+            'Optional build info file not found under Builds/iOS; the ' +
+            'notification will link the Drive build folder instead.'
+        )
+        return false
+    }
+
+    // Chép chứ không đổi BUILD_INFO_PATH: archiveArtifacts nhận pattern
+    // tương đối với workspace nên file phải nằm ngay trong Builds/iOS.
+    withEnv(["IOS_BUILD_INFO_SOURCE=${foundPath}"]) {
+        sh 'cp "$IOS_BUILD_INFO_SOURCE" "$BUILD_INFO_PATH"'
+    }
+
+    echo "Build info file found: ${foundPath}"
+    return true
+}
+
 // Tiêu đề phải nói ngay build đậu hay hỏng. Không rút mọi kết quả khác
 // SUCCESS thành FAILED: build bị abort hoặc UNSTABLE mà báo "FAILED" là sai
 // sự thật, và UNSTABLE chính là trạng thái khi gửi Telegram bị lỗi.
@@ -1374,7 +1446,7 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         PRODUCT_NAME: telegramHtmlEscape(params.PRODUCT_NAME),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
         BUILD_INFO_URL: telegramHtmlEscape(
-            deviceBuild ? '' : env.DRIVE_FOLDER_URL
+            deviceBuild ? '' : (env.BUILD_INFO_URL ?: env.DRIVE_FOLDER_URL)
         ),
         IPA: telegramHtmlEscape(deviceBuild ? '' : env.DOWNLOAD_URL),
         INSTALL_STATUS: deviceBuild

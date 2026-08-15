@@ -221,11 +221,23 @@ AAB built later with `RELEASE_BUILD_NUMBER=157` both use version `157` (or
 `<APP_VERSION>-157`), so they are uploaded to the same Google Drive folder.
 The AAB's Google Play version code remains independently managed.
 
-For Android builds, PearzCI expects the successful Unity export to include
-`Builds/Android/<PRODUCT_NAME>_BUILD_INFO.txt` beside the APK/AAB. The pipeline
-verifies and archives that file, uploads it with the artifact, and puts a direct
-link to it on the `Build Info` line of the Telegram message. Google Drive
-keeps each build in its own version folder:
+The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
+after a successful export. PearzCI verifies and archives that file, uploads it
+with the artifact, and puts a direct link to it on the `Build Info` line of the
+Telegram message.
+
+On Android the file must sit in `Builds/Android` beside the APK/AAB, and a
+missing file fails the build. On iOS the Unity output is the whole Xcode
+project, so the file can land either in `Builds/iOS` or inside
+`Builds/iOS/Unity-iPhone`. The pipeline searches `Builds/iOS` up to three
+levels deep — first for the exact `<PRODUCT_NAME>_BUILD_INFO.txt`, then for any
+`*_BUILD_INFO.txt` in case the job's `PRODUCT_NAME` differs from the Unity
+product name — and copies what it finds into `Builds/iOS`. A missing file does
+not fail an iOS build; the `Build Info` line falls back to the Drive folder
+link. iOS uploads the file as `<PRODUCT_NAME>-<artifact build number>_BUILD_INFO.txt`
+because the iOS Drive folder is not split per version.
+
+Google Drive keeps each Android build in its own version folder:
 `<driveRoot>/<jobName>/<APP_VERSION>-<artifact build number>/`. When
 `APP_VERSION` is empty, the folder name is the artifact build number. For an
 AAB, this is `RELEASE_BUILD_NUMBER` when supplied; otherwise it is the current
@@ -314,10 +326,10 @@ message can contain:
 - Scripting backend, managed stripping level, orientation, and Unity version.
 - Jenkins build, upload, and total durations.
 - APK or AAB public link and size.
-- A direct Google Drive link to `<PRODUCT_NAME>_BUILD_INFO.txt` on Android, so
-  the `Build Info` line opens the text file itself instead of the folder that
-  contains it. iOS has no such file, so its `Build Info` line still points at
-  the Drive build folder.
+- A direct Google Drive link to `<PRODUCT_NAME>_BUILD_INFO.txt`, so the
+  `Build Info` line opens the text file itself instead of the folder that
+  contains it. An iOS build that has no such file falls back to the Drive
+  folder link.
 - `mapping.txt` public link and size when Unity reports a mapping file.
 - Every commit (short hash, author, and subject) since the previous
   **successful** Jenkins build, up to the 10 most recent, followed by a count
