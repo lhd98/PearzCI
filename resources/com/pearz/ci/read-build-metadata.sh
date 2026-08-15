@@ -32,10 +32,4 @@ emit("STRIPPING_LEVEL", metadata.get("managedStrippingLevel"))
 emit("ORIENTATION", metadata.get("orientation"))
 emit("OUTPUT_SIZE_BYTES", metadata.get("outputSizeBytes"))
 emit("MAPPING_SIZE_BYTES", metadata.get("mappingSizeBytes"))
-
-for symbol in metadata.get("scriptingDefineSymbols") or []:
-    text = str(symbol).strip()
-
-    if text:
-        emit("DEFINE_SYMBOL", text)
 PY

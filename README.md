@@ -220,8 +220,9 @@ The AAB's Google Play version code remains independently managed.
 
 For Android builds, PearzCI expects the successful Unity export to include
 `Builds/Android/<PRODUCT_NAME>_BUILD_INFO.txt` beside the APK/AAB. The pipeline
-verifies and archives that file, then uploads it with the artifact. Google
-Drive keeps each build in its own version folder:
+verifies and archives that file, uploads it with the artifact, and puts a direct
+link to it on the `Build Info` line of the Telegram message. Google Drive
+keeps each build in its own version folder:
 `<driveRoot>/<jobName>/<APP_VERSION>-<artifact build number>/`. When
 `APP_VERSION` is empty, the folder name is the artifact build number. For an
 AAB, this is `RELEASE_BUILD_NUMBER` when supplied; otherwise it is the current
@@ -307,11 +308,13 @@ message can contain:
 - Full Jenkins job name, build number, result, and `BUILD_URL`.
 - Version name, Android version code, product name, bundle ID, and generated
   Google Play URL.
-- Scripting backend, managed stripping level, orientation, Unity version, and
-  scripting define symbols.
+- Scripting backend, managed stripping level, orientation, and Unity version.
 - Jenkins build, upload, and total durations.
 - APK or AAB public link and size.
-- Google Drive build-folder and root links when rclone can create them.
+- A direct Google Drive link to `<PRODUCT_NAME>_BUILD_INFO.txt` on Android, so
+  the `Build Info` line opens the text file itself instead of the folder that
+  contains it. iOS has no such file, so its `Build Info` line still points at
+  the Drive build folder.
 - `mapping.txt` public link and size when Unity reports a mapping file.
 - Every commit (short hash, author, and subject) since the previous
   **successful** Jenkins build, up to the 10 most recent, followed by a count
@@ -357,9 +360,9 @@ Available placeholders are:
 {{CONFIGURATION}} {{SCRIPTING_BACKEND}} {{STRIPPING_LEVEL}}
 {{ORIENTATION}} {{UNITY_VERSION}}
 {{BUILD_TIME}} {{UPLOAD_TIME}} {{TOTAL_TIME}}
-{{DRIVE_FOLDER_URL}} {{DRIVE_ROOT_URL}}
+{{BUILD_INFO_URL}}
 {{APK}} {{AAB}} {{MAPPING}}
-{{ERROR_SECTION}} {{DEFINE_SYMBOLS_SECTION}} {{CHANGES_SECTION}}
+{{ERROR_SECTION}} {{CHANGES_SECTION}}
 {{JENKINS_LOGS_SECTION}}
 ```
 

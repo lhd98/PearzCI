@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.37] - 2026-08-15
+
+### Changed
+
+- The Telegram `Build Info` link of an Android build now opens
+  `<PRODUCT_NAME>_BUILD_INFO.txt` directly instead of the Google Drive folder
+  that holds the APK/AAB and that file. iOS produces no such file, so its
+  `Build Info` line still links the Drive build folder.
+
+### Removed
+
+- The `Scripting Define Symbols` block is gone from the Telegram message on
+  both Android and iOS, along with the metadata plumbing that fed it. The
+  `SCRIPTING_DEFINE_SYMBOLS` parameter still applies to the build itself.
+
 ## [0.6.36] - 2026-08-14
 
 ### Fixed

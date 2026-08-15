@@ -41,9 +41,3 @@ Write-MetadataValue "STRIPPING_LEVEL" $metadata.managedStrippingLevel
 Write-MetadataValue "ORIENTATION" $metadata.orientation
 Write-MetadataValue "OUTPUT_SIZE_BYTES" $metadata.outputSizeBytes
 Write-MetadataValue "MAPPING_SIZE_BYTES" $metadata.mappingSizeBytes
-
-foreach ($symbol in @($metadata.scriptingDefineSymbols)) {
-    if (-not [string]::IsNullOrWhiteSpace([string]$symbol)) {
-        Write-MetadataValue "DEFINE_SYMBOL" ([string]$symbol).Trim()
-    }
-}

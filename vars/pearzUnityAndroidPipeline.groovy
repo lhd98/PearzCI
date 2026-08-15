@@ -1064,13 +1064,25 @@ def call(Map config = [:]) {
                             )
                         }
 
+                        // Link ở dòng 'Build Info' phải mở thẳng file
+                        // <PRODUCT_NAME>_BUILD_INFO.txt, không phải thư mục
+                        // chứa nó như trước.
+                        if (isAndroid) {
+                            env.BUILD_INFO_URL =
+                                createRcloneLink(env.DRIVE_BUILD_INFO_PATH)
+                        }
+
                         if (isAndroid && env.MAPPING_UPLOADED == 'true') {
                             env.MAPPING_URL =
                                 createRcloneLink(env.DRIVE_MAPPING_PATH)
                         }
 
-                        env.DRIVE_FOLDER_URL =
-                            createRcloneLink(env.DRIVE_DIRECTORY)
+                        // iOS không sinh file BUILD_INFO nào, nên dòng
+                        // 'Build Info' của iOS vẫn trỏ vào thư mục Drive.
+                        if (isIos) {
+                            env.DRIVE_FOLDER_URL =
+                                createRcloneLink(env.DRIVE_DIRECTORY)
+                        }
 
                         echo "Public download link: ${env.DOWNLOAD_URL}"
                     }
@@ -1289,16 +1301,6 @@ def buildTelegramMessage() {
         }
     }
 
-    def symbols = env.META_DEFINE_SYMBOLS
-        ?.readLines()
-        ?.collect { it.trim() }
-        ?.findAll { it }
-
-    def symbolsSection = symbols
-        ? '<b>Scripting Define Symbols:</b>\n' +
-            symbols.collect { "• <code>${telegramHtmlEscape(it)}</code>" }
-                .join('\n')
-        : ''
     def changeDescription = env.GIT_CHANGES?.trim()
 
     def values = [
@@ -1314,11 +1316,10 @@ def buildTelegramMessage() {
         BUNDLE_ID: telegramHtmlEscape(env.META_BUNDLE_IDENTIFIER),
         GOOGLE_PLAY_URL: telegramHtmlEscape(googlePlayUrl),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
-        BUILD_INFO_URL: telegramHtmlEscape(env.DRIVE_FOLDER_URL),
+        BUILD_INFO_URL: telegramHtmlEscape(env.BUILD_INFO_URL),
         APK: telegramHtmlEscape(apkDescription),
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
-        DEFINE_SYMBOLS_SECTION: symbolsSection,
         ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
             ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
             : '',
@@ -1350,17 +1351,6 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         versionParts << "build ${iosBuildNumber}"
     }
 
-    def symbols = params.SCRIPTING_DEFINE_SYMBOLS
-        ?.toString()
-        ?.split(';')
-        ?.collect { it.trim() }
-        ?.findAll { it }
-
-    def symbolsSection = symbols
-        ? '<b>Scripting Define Symbols:</b>\n' +
-            symbols.collect { "• <code>${telegramHtmlEscape(it)}</code>" }
-                .join('\n')
-        : ''
     def changeDescription = env.GIT_CHANGES?.trim()
     def errorSection = ''
 
@@ -1389,7 +1379,6 @@ def buildIosTelegramMessage(boolean deviceBuild) {
                 ? 'Installed on the connected device.'
                 : 'Not installed.')
             : '',
-        DEFINE_SYMBOLS_SECTION: symbolsSection,
         ERROR_SECTION: errorSection,
         CHANGES_SECTION: changeDescription
             ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
@@ -1435,7 +1424,6 @@ def readBuildMetadata() {
     env.METADATA_READ = 'true'
 
     def metadata = [:]
-    def symbols = []
     def metadataPath = env.METADATA_PATH?.trim()
 
     if (metadataPath && fileExists(metadataPath)) {
@@ -1481,11 +1469,7 @@ def readBuildMetadata() {
                     def key = line.substring(0, separatorIndex)
                     def value = line.substring(separatorIndex + 1)
 
-                    if (key == 'DEFINE_SYMBOL') {
-                        symbols << value
-                    } else {
-                        metadata[key] = value
-                    }
+                    metadata[key] = value
                 }
             }
         } catch (Exception exception) {
@@ -1518,10 +1502,6 @@ def readBuildMetadata() {
         metadata.OUTPUT_SIZE_BYTES?.toString() ?: ''
     env.META_MAPPING_SIZE_BYTES =
         metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
-    env.META_DEFINE_SYMBOLS = symbols
-        .collect { it?.toString()?.trim() }
-        .findAll { it }
-        .join('\n')
 }
 
 def sendTelegramNotification(String telegramCredentialsId) {

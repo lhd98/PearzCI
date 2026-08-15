@@ -15,5 +15,4 @@
 <b>IPA:</b> {{IPA}}
 <b>mapping.txt:</b> {{MAPPING}}
 <b>Install:</b> {{INSTALL_STATUS}}
-{{DEFINE_SYMBOLS_SECTION}}
 {{CHANGES_SECTION}}
