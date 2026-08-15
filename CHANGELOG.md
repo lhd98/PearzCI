@@ -2,18 +2,7 @@
 
 All notable changes to this package are documented in this file.
 
-## [0.6.38] - 2026-08-15
-
-### Changed
-
-- Android APK builds now use a fixed Android version code of `1` instead of the
-  Jenkins `BUILD_NUMBER`. Testers identify a build by its version name
-  (`<BUILD_NUMBER>` or `<APP_VERSION>-<BUILD_NUMBER>`), so the code does not need
-  to increase; keeping it constant also lets any APK be reinstalled over another
-  without Android blocking it as a downgrade. AAB builds are unchanged and keep
-  their separate auto-incrementing per-job counter for Google Play.
-
-## [0.6.38] - 2026-08-15
+## [0.6.39] - 2026-08-15
 
 ### Added
 
@@ -25,6 +14,17 @@ All notable changes to this package are documented in this file.
   artifact build number because the iOS Drive folder is not split per version.
   A missing file does not fail the build; the `Build Info` line falls back to
   the Drive folder link it used before.
+
+## [0.6.38] - 2026-08-15
+
+### Changed
+
+- Android APK builds now use a fixed Android version code of `1` instead of the
+  Jenkins `BUILD_NUMBER`. Testers identify a build by its version name
+  (`<BUILD_NUMBER>` or `<APP_VERSION>-<BUILD_NUMBER>`), so the code does not need
+  to increase; keeping it constant also lets any APK be reinstalled over another
+  without Android blocking it as a downgrade. AAB builds are unchanged and keep
+  their separate auto-incrementing per-job counter for Google Play.
 
 ## [0.6.37] - 2026-08-15
 
