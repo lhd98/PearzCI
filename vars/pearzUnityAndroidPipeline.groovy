@@ -415,7 +415,7 @@ def call(Map config = [:]) {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
                         def ciAppVersion = env.BUILD_VERSION
-                        def androidVersionCode = env.BUILD_NUMBER
+                        def androidVersionCode = '1'
 
                         if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
                             androidVersionCode = readNextAabVersionCode().toString()
@@ -430,7 +430,10 @@ def call(Map config = [:]) {
                         echo "Android version code passed to Unity: ${androidVersionCode}"
 
                         try {
-                            // APK dùng BUILD_NUMBER để tester nhận biết bản đang cài.
+                            // APK để version code cố định = 1. Tester nhận biết
+                            // bản đang cài qua version name (BUILD_VERSION), không
+                            // cần code tăng dần; code cố định còn cho cài đè qua lại
+                            // giữa các bản APK mà không bị Android chặn downgrade.
                             // AAB dùng bộ đếm riêng, không bị các APK test xen kẽ
                             // làm nhảy version code trên Google Play.
                             withEnv([
