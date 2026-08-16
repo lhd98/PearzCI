@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.47] - 2026-08-16
+
+### Added
+
+- `iosDeviceProvisioningProfileSpecifier` config key for connected-device
+  builds. IPA export needs a distribution profile while a device build needs a
+  development one, so the two now have separate keys and can both be pinned in
+  the job's pipeline script. The device key falls back to
+  `iosProvisioningProfileSpecifier`, then to the
+  `IOS_PROVISIONING_PROFILE_SPECIFIER` parameter, when unset.
+
+### Removed
+
+- The stale `pearzUnityIosPipeline` entry point. It predated the shared
+  Android/iOS graph's connected-device improvements (auto-detected UDID, no
+  required development team) and still forced `IOS_DEVICE_UDID` and
+  `IOS_DEVELOPMENT_TEAM`. Build iOS through `pearzUnityPipeline(platform:
+  'iOS')` (or `pearzUnityAndroidPipeline(mobilePlatform: 'iOS')`), which covers
+  IPA export, TestFlight upload, and connected-device installs in one job.
+
 ## [0.6.46] - 2026-08-16
 
 ### Removed

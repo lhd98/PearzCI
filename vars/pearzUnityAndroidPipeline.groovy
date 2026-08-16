@@ -641,9 +641,17 @@ def call(Map config = [:]) {
                         def deviceUdid = config.get(
                             'iosDeviceUdid', params.IOS_DEVICE_UDID ?: ''
                         ).toString().trim()
+                        // Device build cần profile DEVELOPMENT, còn export IPA
+                        // cần profile DISTRIBUTION — hai loại khác nhau. Nên có
+                        // key riêng iosDeviceProvisioningProfileSpecifier để set
+                        // sẵn cả hai trong script; nếu không đặt thì lùi về key
+                        // chung iosProvisioningProfileSpecifier rồi tới param.
                         def profileSpecifier = config.get(
-                            'iosProvisioningProfileSpecifier',
-                            params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
+                            'iosDeviceProvisioningProfileSpecifier',
+                            config.get(
+                                'iosProvisioningProfileSpecifier',
+                                params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: ''
+                            )
                         ).toString().trim()
                         def destinationTimeout = config.get(
                             'iosDestinationTimeoutSeconds', 300

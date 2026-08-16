@@ -527,29 +527,37 @@ builds share one fixed Jenkins Stage View; stages that do not apply to the run
 are shown as skipped, so changing `BUILD_PLATFORM` or `IOS_BUILD_TO_DEVICE` does
 not replace the graph layout. iOS runs are pinned to the `macos` agent label
 (override with `macAgentLabel`), while Android keeps running on any available
-agent. To keep Android and iOS as separate Jenkins jobs instead, create a second
-Pipeline job with this script:
-
-```groovy
-pearzUnityIosPipeline()
-```
+agent. One job covers Android and iOS: select `iOS` from `BUILD_PLATFORM`.
 
 The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
-`GIT_BRANCH`, and `PRODUCT_NAME`. Add these iOS parameters under **This project
-is parameterized**:
+`GIT_BRANCH`, and `PRODUCT_NAME`. iOS runs read these additional values; keep
+the stable ones in the job's pipeline script (see the config keys below) and
+leave only the per-build toggles as job parameters:
 
 - String `IOS_BUILD_NUMBER` (for example `42`; when left empty, the Jenkins
   `BUILD_NUMBER` is used)
-- String `IOS_DEVELOPMENT_TEAM` (Apple Developer Team ID)
+- String `IOS_DEVELOPMENT_TEAM` (Apple Developer Team ID) — IPA export only
 - String `IOS_PROVISIONING_PROFILE_SPECIFIER` (profile name; leave empty when
   the Xcode project is configured for automatic signing)
 - String `IOS_EXPORT_OPTIONS_PLIST_PATH` (absolute, readable path on the Mac)
-- Choice `XCODE_CONFIGURATION`: `Release` or `Debug`
+- Choice `XCODE_CONFIGURATION`: `Release` or `Debug` (IPA export only; a
+  connected-device build always uses `Debug`)
 - Boolean `IOS_BUILD_TO_DEVICE` (default: false)
-- String `IOS_DEVICE_UDID` (required when building to a device)
+- String `IOS_DEVICE_UDID` (leave empty to auto-detect the single wired,
+  paired device)
 - Boolean `UPLOAD_TO_TESTFLIGHT` (default: false)
 - String `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`
   (required when `UPLOAD_TO_TESTFLIGHT` is enabled)
+
+Because IPA export needs a **distribution** provisioning profile while a
+connected-device build needs a **development** one, set them separately in the
+pipeline script rather than retyping a parameter each build:
+
+- `iosProvisioningProfileSpecifier` — distribution profile, used for IPA
+  export / TestFlight
+- `iosDeviceProvisioningProfileSpecifier` — development profile, used for
+  connected-device builds; falls back to `iosProvisioningProfileSpecifier`,
+  then to the `IOS_PROVISIONING_PROFILE_SPECIFIER` parameter, when unset
 
 The remaining shared optional values are also supported: `SCRIPTING_DEFINE_SYMBOLS`,
 `APP_VERSION`, `IL2CPP_CODE_GENERATION`, `MANAGED_STRIPPING_LEVEL`, and
@@ -613,8 +621,7 @@ not as ready for testers.
 
 `pearzUnityPipeline()` runs this mode through the same shared stage graph as
 Android and iOS IPA builds, so the Jenkins Stage View layout does not change
-when `IOS_BUILD_TO_DEVICE` is toggled. A separate `pearzUnityIosPipeline()` job
-remains optional.
+when `IOS_BUILD_TO_DEVICE` is toggled.
 
 For a development-only device build, set `IOS_BUILD_TO_DEVICE=true` and build.
 PearzCI always uses the `Debug` configuration for device builds, and
@@ -642,13 +649,16 @@ When `TELEGRAM_CHANNEL` is configured and `SEND_NOTIFICATIONS` is enabled,
 PearzCI also sends a success or failure notification for this device build,
 including the Jenkins and build-log links.
 An installed development provisioning profile is required for device signing.
-Set it once in the job's pipeline script as `iosProvisioningProfileSpecifier`
-— for example
-`iosProvisioningProfileSpecifier: 'iOS Team Provisioning Profile: com.pg.sushi.sort'`
-— so it does not have to be typed on every build; the
-`IOS_PROVISIONING_PROFILE_SPECIFIER` parameter still works as a per-build
-override. This is the Xcode-managed profile name, which embeds the project's
-bundle id, so it differs per game.
+Set it once in the job's pipeline script as
+`iosDeviceProvisioningProfileSpecifier` — for example
+`iosDeviceProvisioningProfileSpecifier: 'iOS Team Provisioning Profile: com.pg.sushi.sort'`
+— so it does not have to be typed on every build. This is a **development**
+profile, distinct from the **distribution** profile that IPA export uses
+(`iosProvisioningProfileSpecifier`), which is why the two have separate keys.
+When `iosDeviceProvisioningProfileSpecifier` is unset it falls back to
+`iosProvisioningProfileSpecifier`, then to the
+`IOS_PROVISIONING_PROFILE_SPECIFIER` parameter. This is the Xcode-managed
+profile name, which embeds the project's bundle id, so it differs per game.
 When the Xcode project includes In-App Purchase, this device-only flow removes
 that capability from the generated export so a free Apple Personal Team can
 sign it. In-App Purchase is therefore unavailable in that test build; normal
@@ -682,12 +692,18 @@ Apple account/team access for the Jenkins macOS user in Xcode. In both cases,
 run the job once manually before enabling its webhook to confirm that the IPA
 is signed by the expected team.
 
-To use another macOS node or nonstandard paths:
+To use another macOS node or nonstandard paths, and to pin the iOS signing
+values so they need not be entered per build:
 
 ```groovy
-pearzUnityIosPipeline(
+pearzUnityPipeline(
+    platform: 'iOS',
     macAgentLabel: 'mac-mini',
     macUnityHubRoot: '/Applications/Unity/Hub/Editor',
-    macRcloneExe: 'rclone'
+    macRcloneExe: 'rclone',
+    iosExportOptionsPlistPath: '/Users/jenkins/ci/ExportOptions.plist',
+    iosDevelopmentTeam: 'ABCDE12345',
+    iosProvisioningProfileSpecifier: 'FoodSort App Store',
+    iosDeviceProvisioningProfileSpecifier: 'FoodSort Dev'
 )
 ```
