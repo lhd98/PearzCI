@@ -646,6 +646,9 @@ def call(Map config = [:]) {
                         // key riêng iosDeviceProvisioningProfileSpecifier để set
                         // sẵn cả hai trong script; nếu không đặt thì lùi về key
                         // chung iosProvisioningProfileSpecifier rồi tới param.
+                        // Cả ba đều trống thì để rỗng: sh bên dưới tự suy tên
+                        // profile Xcode-managed từ bundle id, nên job thường
+                        // không cần khai báo profile ở đâu cả.
                         def profileSpecifier = config.get(
                             'iosDeviceProvisioningProfileSpecifier',
                             config.get(
@@ -765,11 +768,9 @@ def call(Map config = [:]) {
                                 }
 
                                 set +e
+                                # Để trống cũng được: sau khi build xong sẽ tự suy
+                                # tên profile development từ bundle id của app.
                                 profile_specifier="${IOS_PROFILE_SPECIFIER:-}"
-                                [ -n "$profile_specifier" ] || {
-                                    echo 'ERROR: IOS_PROVISIONING_PROFILE_SPECIFIER is required for an iOS device build.'
-                                    exit 2
-                                }
 
                                 # Build unsigned first. Xcode 26 performs provisioning validation
                                 # before it builds and rejects Personal Team profiles for Unity IAP,
@@ -788,6 +789,26 @@ def call(Map config = [:]) {
                                     exit 1
                                 }
                                 echo "Built iOS app: $app_path"
+
+                                # Chưa chỉ định profile thì tự suy tên profile
+                                # development Xcode-managed từ bundle id của app —
+                                # luôn có dạng "iOS Team Provisioning Profile:
+                                # <bundle id>". Bundle id lấy từ Info.plist của .app
+                                # vừa build (đã resolve, đúng cho từng game), nên mỗi
+                                # job khỏi khai báo profile trong pipeline script.
+                                if [ -z "$profile_specifier" ]; then
+                                    bundle_id="$(/usr/libexec/PlistBuddy \\
+                                        -c 'Print :CFBundleIdentifier' \\
+                                        "$app_path/Info.plist" 2>/dev/null || true)"
+                                    [ -n "$bundle_id" ] || {
+                                        echo 'ERROR: không đọc được CFBundleIdentifier để tự suy provisioning profile.'
+                                        echo 'Khắc phục: điền iosDeviceProvisioningProfileSpecifier trong pipeline script hoặc param IOS_PROVISIONING_PROFILE_SPECIFIER.'
+                                        exit 2
+                                    }
+                                    profile_specifier="iOS Team Provisioning Profile: $bundle_id"
+                                    echo "Tự suy provisioning profile theo bundle id: $profile_specifier"
+                                fi
+
                                 profile_path=''
                                 for profiles_dir in \\
                                     "$HOME/Library/MobileDevice/Provisioning Profiles" \\
@@ -805,6 +826,7 @@ def call(Map config = [:]) {
                                 done
                                 [ -n "$profile_path" ] || {
                                     echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
+                                    echo 'Với game lần đầu build device trên máy Mac này: mở Xcode project export ra, chọn Team + Automatically manage signing rồi build lên iPhone 1 lần để Xcode sinh và cài profile. Sau đó CI chạy tự động.'
                                     exit 3
                                 }
 

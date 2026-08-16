@@ -649,16 +649,23 @@ When `TELEGRAM_CHANNEL` is configured and `SEND_NOTIFICATIONS` is enabled,
 PearzCI also sends a success or failure notification for this device build,
 including the Jenkins and build-log links.
 An installed development provisioning profile is required for device signing.
-Set it once in the job's pipeline script as
-`iosDeviceProvisioningProfileSpecifier` — for example
-`iosDeviceProvisioningProfileSpecifier: 'iOS Team Provisioning Profile: com.pg.sushi.sort'`
-— so it does not have to be typed on every build. This is a **development**
-profile, distinct from the **distribution** profile that IPA export uses
-(`iosProvisioningProfileSpecifier`), which is why the two have separate keys.
-When `iosDeviceProvisioningProfileSpecifier` is unset it falls back to
-`iosProvisioningProfileSpecifier`, then to the
-`IOS_PROVISIONING_PROFILE_SPECIFIER` parameter. This is the Xcode-managed
-profile name, which embeds the project's bundle id, so it differs per game.
+**By default no configuration is needed:** when no profile is set, PearzCI
+derives the Xcode-managed name `iOS Team Provisioning Profile: <bundle id>`
+from the built app's bundle identifier and signs with the matching installed
+profile. So a device-only job's script stays as short as
+`pearzUnityPipeline(macRcloneExe: '…')` with no iOS signing lines.
+
+This works for any game whose development profile is already installed on the
+Mac agent (see [Onboarding a new iOS game](#onboarding-a-new-ios-game)). To
+override the derived name — a custom profile, or a non-standard setup — set it
+in the pipeline script as `iosDeviceProvisioningProfileSpecifier`, for example
+`iosDeviceProvisioningProfileSpecifier: 'iOS Team Provisioning Profile: com.pg.sushi.sort'`.
+This is a **development** profile, distinct from the **distribution** profile
+that IPA export uses (`iosProvisioningProfileSpecifier`), which is why the two
+have separate keys. When `iosDeviceProvisioningProfileSpecifier` is unset it
+falls back to `iosProvisioningProfileSpecifier`, then to the
+`IOS_PROVISIONING_PROFILE_SPECIFIER` parameter, and finally to the derived
+name.
 When the Xcode project includes In-App Purchase, this device-only flow removes
 that capability from the generated export so a free Apple Personal Team can
 sign it. In-App Purchase is therefore unavailable in that test build; normal
@@ -667,6 +674,25 @@ IPA export leaves the capability unchanged.
 This is compatible with an Xcode Personal Team for temporary local testing.
 Personal Team provisioning expires frequently and is not appropriate for
 TestFlight, App Store, or general distribution.
+
+#### Onboarding a new iOS game
+
+Auto-derivation only computes the profile *name*; the profile *file* must
+already exist on the Mac agent. Apple generates it once, per game, when Xcode
+signs that bundle id for the first time. So the first time a new game builds to
+a device on this Mac, do this one-time step as the Jenkins macOS account:
+
+1. Open the Unity-exported Xcode project (`Builds/iOS/Unity-iPhone`) in Xcode.
+2. Select the signing **Team** and enable **Automatically manage signing**.
+3. Plug in the iPhone and build/run to it once.
+
+Xcode then creates `iOS Team Provisioning Profile: <bundle id>`, registers the
+device, and installs the profile into
+`~/Library/MobileDevice/Provisioning Profiles`. After that, CI device builds
+for that game run with no signing configuration. A game that already builds to
+a device (for example FoodSort) has completed this step and needs nothing more.
+On a **Personal Team** the development profile expires after 7 days and Xcode
+regenerates it the next time you build there; the derived name never changes.
 
 ### Signing setup on the Mac agent
 

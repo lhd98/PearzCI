@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.49] - 2026-08-16
+
+### Added
+
+- Auto-derivation of the connected-device provisioning profile. When no device
+  profile is configured, PearzCI derives the Xcode-managed name `iOS Team
+  Provisioning Profile: <bundle id>` from the built app's bundle identifier, so
+  a device-only job needs no iOS signing lines in its pipeline script. An
+  explicit `iosDeviceProvisioningProfileSpecifier`,
+  `iosProvisioningProfileSpecifier`, or `IOS_PROVISIONING_PROFILE_SPECIFIER`
+  still overrides it. The profile file must already be installed on the Mac
+  (a one-time Xcode signing step per new game — see the README).
+
+### Changed
+
+- The connected-device build no longer requires a provisioning-profile
+  specifier up front. When the installed profile is not found, the error now
+  explains the one-time Xcode provisioning step for a new game.
+
 ## [0.6.48] - 2026-08-16
 
 ### Changed
