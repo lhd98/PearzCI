@@ -6,14 +6,14 @@ def call(Map config = [:]) {
 
     switch (platform.toLowerCase(Locale.ROOT)) {
         case 'android':
-            pearzUnityAndroidPipeline(config + [mobilePlatform: platform])
+            pearzUnityMobilePipeline(config + [mobilePlatform: platform])
             break
         case 'ios':
             // Android and iOS intentionally share one Declarative Pipeline.
             // The shared graph also covers connected-device builds, so the
             // Stage View layout stays identical across BUILD_PLATFORM and
             // IOS_BUILD_TO_DEVICE; irrelevant stages are shown as skipped.
-            pearzUnityAndroidPipeline(config + [mobilePlatform: platform])
+            pearzUnityMobilePipeline(config + [mobilePlatform: platform])
             break
         case 'windows':
         case 'windows64':

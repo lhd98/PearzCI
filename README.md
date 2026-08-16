@@ -443,7 +443,7 @@ The Jenkins agent user must have:
 Platform paths can be overridden when calling the pipeline:
 
 ```groovy
-pearzUnityAndroidPipeline(
+pearzUnityMobilePipeline(
     windowsUnityHubRoot: 'C:\\Program Files\\Unity\\Hub\\Editor',
     windowsRcloneExe: 'D:\\Tools\\rclone\\rclone.exe',
     macUnityHubRoot: '/Applications/Unity/Hub/Editor',
@@ -455,7 +455,7 @@ For a single Mac Mini Jenkins installation, the standard one-line call remains
 enough:
 
 ```groovy
-pearzUnityAndroidPipeline()
+pearzUnityMobilePipeline()
 ```
 
 ### Build retention
@@ -466,7 +466,7 @@ controller permanently. Override the limits per job when a project needs a
 longer history:
 
 ```groovy
-pearzUnityAndroidPipeline(
+pearzUnityMobilePipeline(
     buildsToKeep: 30,
     artifactBuildsToKeep: 10
 )
@@ -475,7 +475,7 @@ pearzUnityAndroidPipeline(
 ### Telegram commit list
 
 The commit limit is configurable per pipeline job and defaults to 10.
-Example: pearzUnityAndroidPipeline(telegramMaxCommits: 10)
+Example: pearzUnityMobilePipeline(telegramMaxCommits: 10)
 
 The Jenkins log reports the baseline source, total commits found, visible commits,
 and hidden commits.

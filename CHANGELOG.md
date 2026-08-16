@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.48] - 2026-08-16
+
+### Changed
+
+- Renamed the shared build pipeline from `pearzUnityAndroidPipeline` to
+  `pearzUnityMobilePipeline`, since it builds both Android and iOS (Windows has
+  its own `pearzUnityWindowsPipeline`). Jobs that use the recommended
+  `pearzUnityPipeline()` dispatcher need no change. **Breaking** only for jobs
+  that call `pearzUnityAndroidPipeline(...)` directly in their pipeline script:
+  update the name to `pearzUnityMobilePipeline(...)`.
+
 ## [0.6.47] - 2026-08-16
 
 ### Added
