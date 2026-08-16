@@ -262,27 +262,15 @@ def call(Map config = [:]) {
                             '_'
                         )
 
-                        def requestedReleaseBuildNumber = isAndroid &&
-                            params.BUILD_APP_BUNDLE?.toString()?.toBoolean()
-                            ? params.RELEASE_BUILD_NUMBER?.toString()?.trim()
-                            : ''
-                        if (requestedReleaseBuildNumber &&
-                            !(requestedReleaseBuildNumber ==~ /[1-9][0-9]*/)) {
-                            error(
-                                'RELEASE_BUILD_NUMBER must be a positive ' +
-                                'integer, for example 157.'
-                            )
-                        }
-                        def artifactBuildNumber =
-                            requestedReleaseBuildNumber ?: env.BUILD_NUMBER
+                        def artifactBuildNumber = env.BUILD_NUMBER
                         env.ARTIFACT_BUILD_NUMBER = artifactBuildNumber
 
                         env.OUTPUT_EXTENSION = isIos
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
                         // Giữ một APK duy nhất trong workspace để mỗi build
-                        // Android mới ghi đè APK của build trước. AAB có thể
-                        // dùng RELEASE_BUILD_NUMBER để ghép với APK đã duyệt.
+                        // Android mới ghi đè APK của build trước. APK, AAB và iOS
+                        // nằm ở các thư mục Drive riêng nên không cần ghép số build.
                         env.OUTPUT_FILE_NAME = !isIos &&
                             env.OUTPUT_EXTENSION == 'apk'
                             ? "${outputName}.apk"

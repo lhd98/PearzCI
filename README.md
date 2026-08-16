@@ -175,8 +175,7 @@ Common optional parameters:
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
   `CLEAN_WORKSPACE`, and `SEND_NOTIFICATIONS`
-- String `APP_VERSION`, `KEY_ALIAS_NAME`, and optional
-  `RELEASE_BUILD_NUMBER` for an AAB that accompanies a tested APK
+- String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
   `Config/<BundleIdentifier>.keystore` location
@@ -213,13 +212,6 @@ also gets a visible version for use through Unity `Application.version`:
 `APP_VERSION` parameter is set. For example, Jenkins build `67` with
 `APP_VERSION=1.0.0` is shown in-game as `Build 1.0.0-67`.
 
-After an APK has been tested, set `RELEASE_BUILD_NUMBER` to that APK's Jenkins
-build number when creating its AAB. For example, an APK from build `157` and an
-AAB built later with `RELEASE_BUILD_NUMBER=157` both use version `157` (or
-`<APP_VERSION>-157`), so their Google Drive folders carry the same version name
-and the pair stays easy to match. The AAB's Google Play version code remains
-independently managed.
-
 The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
 after a successful export. PearzCI verifies and archives that file, uploads it
 with the artifact, and puts a direct link to it on the `Build Info` line of the
@@ -248,13 +240,11 @@ Every build goes into its own version folder, grouped by artifact type:
 For example, `JenkinsBuild/FoodSort/apk/1.0.0-157/` holds
 `FoodSort-157.apk` and `FoodSort_BUILD_INFO.txt`, and the matching AAB lands in
 `JenkinsBuild/FoodSort/aab/1.0.0-157/`. APK and AAB are kept apart because they
-travel different routes — testers and Google Play — while the shared version
-name still pairs them.
+travel different routes — testers and Google Play.
 
 `<version>` is `<APP_VERSION>-<artifact build number>`, or just the artifact
-build number when `APP_VERSION` is empty. The artifact build number is
-`RELEASE_BUILD_NUMBER` for an AAB that supplies it; otherwise it is the current
-Jenkins `BUILD_NUMBER`.
+build number when `APP_VERSION` is empty. The artifact build number is the
+current Jenkins `BUILD_NUMBER`.
 
 #### Stage View của pipeline
 

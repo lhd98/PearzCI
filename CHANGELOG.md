@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.46] - 2026-08-16
+
+### Removed
+
+- The `RELEASE_BUILD_NUMBER` parameter. It let an AAB reuse a tested APK's
+  Jenkins build number so the pair shared one version name/Drive folder. Now
+  that APK, AAB, and iOS artifacts each go to their own Drive folder, every
+  build simply uses the current `BUILD_NUMBER`. The AAB Google Play version
+  code is still managed independently by the per-job counter.
+
 ## [0.6.45] - 2026-08-16
 
 ### Removed
