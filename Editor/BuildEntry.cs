@@ -62,7 +62,7 @@ public static class BuildEntry
                 locationPathName = configuration.OutputPath,
                 target           = BuildTarget.Android,
                 targetGroup      = BuildTargetGroup.Android,
-                options          = GetBuildOptions(configuration)
+                options          = BuildOptions.None
             };
 
             Log("Calling BuildPipeline.BuildPlayer...");
@@ -141,24 +141,13 @@ public static class BuildEntry
             PrepareIosOutputDirectory(configuration.OutputPath);
             ApplyIosSettings(configuration);
 
-            BuildOptions options = BuildOptions.None;
-            if (configuration.UnityDevelopmentBuild)
-                options |= BuildOptions.Development;
-            if (configuration.ScriptDebugging)
-            {
-                if (!configuration.UnityDevelopmentBuild)
-                    throw new InvalidOperationException(
-                        "SCRIPT_DEBUGGING=true yêu cầu UNITY_DEVELOPMENT_BUILD=true.");
-                options |= BuildOptions.AllowDebugging;
-            }
-
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes,
                 locationPathName = configuration.OutputPath,
                 target = BuildTarget.iOS,
                 targetGroup = BuildTargetGroup.iOS,
-                options = options
+                options = BuildOptions.None
             });
 
             PrintBuildSummary(report.summary);
@@ -217,8 +206,7 @@ public static class BuildEntry
                 locationPathName = configuration.OutputPath,
                 target = BuildTarget.StandaloneWindows64,
                 targetGroup = BuildTargetGroup.Standalone,
-                options = GetBuildOptions(configuration.UnityDevelopmentBuild,
-                    configuration.ScriptDebugging)
+                options = BuildOptions.None
             });
 
             PrintBuildSummary(report.summary);
@@ -304,16 +292,8 @@ public static class BuildEntry
         return new BuildConfiguration
         {
             OutputPath        = outputPath,
-            UnityDevelopmentBuild =
-                GetBooleanEnvironmentVariable(
-                    "UNITY_DEVELOPMENT_BUILD",
-                    false),
-            ScriptDebugging =
-                GetBooleanEnvironmentVariable("SCRIPT_DEBUGGING", false),
             BuildAppBundle = buildAppBundle,
 
-            TargetArchitectures =
-                GetEnvironmentVariable("TARGET_ARCHITECTURES"),
             Il2CppCodeGeneration =
                 GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
             ManagedStrippingLevel =
@@ -352,10 +332,6 @@ public static class BuildEntry
         return new IosBuildConfiguration
         {
             OutputPath = outputPath,
-            UnityDevelopmentBuild = GetBooleanEnvironmentVariable(
-                "UNITY_DEVELOPMENT_BUILD", false),
-            ScriptDebugging = GetBooleanEnvironmentVariable(
-                "SCRIPT_DEBUGGING", false),
             ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
             BundleIdentifier = GetEnvironmentVariable("BUNDLE_IDENTIFIER"),
             ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
@@ -377,9 +353,6 @@ public static class BuildEntry
         return new WindowsBuildConfiguration
         {
             OutputPath = Path.ChangeExtension(outputPath, ".exe"),
-            UnityDevelopmentBuild = GetBooleanEnvironmentVariable(
-                "UNITY_DEVELOPMENT_BUILD", false),
-            ScriptDebugging = GetBooleanEnvironmentVariable("SCRIPT_DEBUGGING", false),
             ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
             ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
             AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
@@ -538,11 +511,11 @@ public static class BuildEntry
     private static void ApplySizeOptimizationSettings(
         BuildConfiguration configuration)
     {
-        if (!string.IsNullOrWhiteSpace(configuration.TargetArchitectures))
-        {
-            PlayerSettings.Android.targetArchitectures =
-                ParseTargetArchitectures(configuration.TargetArchitectures);
-        }
+        // Luôn build cả ARMv7 lẫn ARM64. TARGET_ARCHITECTURES từng cho chọn
+        // ARM64-only, nhưng thực tế mọi build đều cần cả hai để phủ máy cũ,
+        // nên bỏ tham số và ép cứng ở đây.
+        PlayerSettings.Android.targetArchitectures =
+            AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
 
         if (!string.IsNullOrWhiteSpace(configuration.Il2CppCodeGeneration))
         {
@@ -570,28 +543,6 @@ public static class BuildEntry
         {
             PlayerSettings.Android.minifyRelease =
                 configuration.MinifyRelease.Value;
-        }
-    }
-
-    private static AndroidArchitecture ParseTargetArchitectures(string value)
-    {
-        string normalized = NormalizeChoice(value);
-
-        switch (normalized)
-        {
-            case "ARM64":
-                return AndroidArchitecture.ARM64;
-
-            case "ARMV7ARM64":
-            case "ARM64ARMV7":
-            case "BOTH":
-                return AndroidArchitecture.ARMv7 |
-                       AndroidArchitecture.ARM64;
-
-            default:
-                throw new ArgumentException(
-                    $"TARGET_ARCHITECTURES không hợp lệ: '{value}'. " +
-                    "Giá trị hợp lệ: ARM64 hoặc ARMV7_ARM64.");
         }
     }
 
@@ -643,52 +594,6 @@ public static class BuildEntry
                 .Where(char.IsLetterOrDigit)
                 .Select(char.ToUpperInvariant)
                 .ToArray());
-    }
-
-    private static BuildOptions GetBuildOptions(
-        BuildConfiguration configuration)
-    {
-        return GetBuildOptions(
-            configuration.UnityDevelopmentBuild,
-            configuration.ScriptDebugging);
-    }
-
-    private static BuildOptions GetBuildOptions(
-        bool unityDevelopmentBuild,
-        bool scriptDebugging)
-    {
-        if (scriptDebugging && !unityDevelopmentBuild)
-        {
-            throw new InvalidOperationException(
-                "SCRIPT_DEBUGGING=true yêu cầu " +
-                "UNITY_DEVELOPMENT_BUILD=true.");
-        }
-
-        if (unityDevelopmentBuild)
-        {
-            Log("Unity Development Build: enabled");
-
-            BuildOptions options = BuildOptions.Development;
-
-            if (scriptDebugging)
-            {
-                Log("Script Debugging: enabled");
-                options |= BuildOptions.AllowDebugging;
-            }
-            else
-            {
-                Log("Script Debugging: disabled");
-            }
-
-            return options;
-        }
-
-        Log("Unity Development Build: disabled");
-        Log("Script Debugging: disabled");
-
-        // Không ép LZ4/LZ4HC để release dùng compression trong Build Profile,
-        // giống thao tác Build trực tiếp trong Unity.
-        return BuildOptions.None;
     }
 
     private static void ConfigureKeystore(
@@ -803,15 +708,9 @@ public static class BuildEntry
     {
         Log("Build configuration:");
         Log($"Output: {configuration.OutputPath}");
-        Log($"Unity Development Build: {configuration.UnityDevelopmentBuild}");
-        Log($"Script debugging: {configuration.ScriptDebugging}");
         Log($"App version: {configuration.AppVersion}");
         Log($"Version code: {configuration.AndroidVersionCode}");
         Log($"App Bundle: {configuration.BuildAppBundle}");
-
-        Log(
-            "Target architectures override: " +
-            DisplayOverride(configuration.TargetArchitectures));
 
         Log(
             "IL2CPP code generation override: " +
@@ -1309,11 +1208,8 @@ public static class BuildEntry
     private sealed class BuildConfiguration
     {
         public string OutputPath            { get; set; }
-        public bool   UnityDevelopmentBuild { get; set; }
-        public bool   ScriptDebugging       { get; set; }
         public bool   BuildAppBundle        { get; set; }
 
-        public string TargetArchitectures   { get; set; }
         public string Il2CppCodeGeneration  { get; set; }
         public string ManagedStrippingLevel { get; set; }
         public bool?  StripEngineCode       { get; set; }
@@ -1334,8 +1230,6 @@ public static class BuildEntry
     private sealed class IosBuildConfiguration
     {
         public string OutputPath { get; set; }
-        public bool UnityDevelopmentBuild { get; set; }
-        public bool ScriptDebugging { get; set; }
         public string ProductName { get; set; }
         public string BundleIdentifier { get; set; }
         public string ScriptingDefineSymbols { get; set; }
@@ -1349,8 +1243,6 @@ public static class BuildEntry
     private sealed class WindowsBuildConfiguration
     {
         public string OutputPath { get; set; }
-        public bool UnityDevelopmentBuild { get; set; }
-        public bool ScriptDebugging { get; set; }
         public string ProductName { get; set; }
         public string ScriptingDefineSymbols { get; set; }
         public string AppVersion { get; set; }

@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.45] - 2026-08-16
+
+### Removed
+
+- The `TARGET_ARCHITECTURES` parameter. Android builds now always target both
+  `ARMv7` and `ARM64` instead of offering an `ARM64`-only choice, so there is
+  no architecture parameter left to configure.
+- The `UNITY_DEVELOPMENT_BUILD` and `SCRIPT_DEBUGGING` parameters across the
+  Android, iOS, and Windows pipelines. PearzCI produces release/distribution
+  artifacts (tester APK, Play AAB, App Store/TestFlight IPA, device dev-install)
+  that never used Unity development builds, so both builds always run with
+  `BuildOptions.None`.
+
 ## [0.6.44] - 2026-08-15
 
 ### Changed

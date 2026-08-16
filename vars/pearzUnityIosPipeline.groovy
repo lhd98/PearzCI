@@ -218,9 +218,7 @@ def call(Map config = [:]) {
                                 "IOS_BUILD_TO_DEVICE=${buildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                 "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
-                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}",
-                                "UNITY_DEVELOPMENT_BUILD=${params.UNITY_DEVELOPMENT_BUILD}",
-                                "SCRIPT_DEBUGGING=${params.SCRIPT_DEBUGGING}"
+                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}"
                             ]) {
                                 sh '''
                                     set +e

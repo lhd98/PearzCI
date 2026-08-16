@@ -78,13 +78,15 @@ are:
 - `SCRIPTING_DEFINE_SYMBOLS`
 - `APP_VERSION`
 - `ANDROID_VERSION_CODE`
-- `TARGET_ARCHITECTURES`
 - `KEYSTORE_PATH` (optional path override)
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS_NAME`
 - `KEY_ALIAS_PASSWORD`
 
 See `BuildEntry.cs` for the complete list and accepted values.
+
+Android builds always target both `ARMv7` and `ARM64`; there is no
+architecture parameter to configure.
 
 When Android signing credentials are provided without `KEYSTORE_PATH`, PearzCI
 loads the keystore from the project convention below:
@@ -113,10 +115,8 @@ Unity runtime files. Keep the whole folder together when distributing or
 running the game; the `.exe` alone is not a runnable Unity player.
 
 Supported optional settings are `PRODUCT_NAME`, `APP_VERSION`,
-`SCRIPTING_DEFINE_SYMBOLS`, `UNITY_DEVELOPMENT_BUILD`, `SCRIPT_DEBUGGING`,
-`IL2CPP_CODE_GENERATION`, `MANAGED_STRIPPING_LEVEL`, and
-`STRIP_ENGINE_CODE`. `SCRIPT_DEBUGGING=true` requires
-`UNITY_DEVELOPMENT_BUILD=true`.
+`SCRIPTING_DEFINE_SYMBOLS`, `IL2CPP_CODE_GENERATION`,
+`MANAGED_STRIPPING_LEVEL`, and `STRIP_ENGINE_CODE`.
 
 ## Jenkins Shared Library
 
@@ -171,12 +171,10 @@ Common optional parameters:
 - String `TELEGRAM_CHANNEL` using
   `botToken|chatId|messageThreadId`; separate targets with semicolons
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
-- Choice `TARGET_ARCHITECTURES`: `ARM64` or `ARMV7_ARM64`
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
-- Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `SCRIPT_DEBUGGING`,
-  `UNITY_DEVELOPMENT_BUILD`, `BUILD_APP_BUNDLE`, `CLEAN_WORKSPACE`, and
-  `SEND_NOTIFICATIONS`
+- Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
+  `CLEAN_WORKSPACE`, and `SEND_NOTIFICATIONS`
 - String `APP_VERSION`, `KEY_ALIAS_NAME`, and optional
   `RELEASE_BUILD_NUMBER` for an AAB that accompanies a tested APK
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
@@ -564,9 +562,8 @@ is parameterized**:
   (required when `UPLOAD_TO_TESTFLIGHT` is enabled)
 
 The remaining shared optional values are also supported: `SCRIPTING_DEFINE_SYMBOLS`,
-`APP_VERSION`, `IL2CPP_CODE_GENERATION`,
-`MANAGED_STRIPPING_LEVEL`, `STRIP_ENGINE_CODE`, `UNITY_DEVELOPMENT_BUILD`, and
-`SCRIPT_DEBUGGING`.
+`APP_VERSION`, `IL2CPP_CODE_GENERATION`, `MANAGED_STRIPPING_LEVEL`, and
+`STRIP_ENGINE_CODE`.
 
 The pipeline first exports `Unity-iPhone.xcodeproj`, then invokes
 `xcodebuild archive` and `xcodebuild -exportArchive`. The final signed IPA,
