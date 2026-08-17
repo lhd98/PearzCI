@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.50] - 2026-08-17
+
+### Fixed
+
+- Android Jenkins builds now use the Unity Project Settings version as their
+  base version when `APP_VERSION` is empty, and append the Jenkins build number
+  in both cases. For example, Project Settings version `1.0.0` on build `67`
+  is exposed through `Application.version` as `1.0.0-67`.
+
 ## [0.6.49] - 2026-08-16
 
 ### Added

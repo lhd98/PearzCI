@@ -308,9 +308,9 @@ public static class BuildEntry
             ScriptingDefineSymbols =
                 GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
 
-            AppVersion = GetEnvironmentVariable(
-                "APP_VERSION",
-                PlayerSettings.bundleVersion),
+            AppVersion = BuildAndroidAppVersion(
+                GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+                GetEnvironmentVariable("CI_BUILD_NUMBER")),
 
             AndroidVersionCode = GetIntegerEnvironmentVariable(
                 "ANDROID_VERSION_CODE",
@@ -990,6 +990,18 @@ public static class BuildEntry
         return string.IsNullOrWhiteSpace(value)
             ? defaultValue
             : value.Trim();
+    }
+
+    private static string BuildAndroidAppVersion(
+        string baseVersion,
+        string ciBuildNumber)
+    {
+        if (string.IsNullOrWhiteSpace(ciBuildNumber))
+            return baseVersion;
+
+        return string.IsNullOrWhiteSpace(baseVersion)
+            ? ciBuildNumber
+            : $"{baseVersion}-{ciBuildNumber}";
     }
 
     private static int GetIntegerEnvironmentVariable(

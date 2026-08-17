@@ -424,7 +424,11 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
-                        def ciAppVersion = env.BUILD_VERSION
+                        // APP_VERSION là base version tuỳ chọn từ Jenkins. Khi
+                        // để trống, Unity sẽ lấy base version trong Project
+                        // Settings; CI_BUILD_NUMBER luôn được nối vào để tester
+                        // nhận biết chính xác bản build.
+                        def ciAppVersion = params.APP_VERSION?.toString()?.trim() ?: ''
                         def androidVersionCode = '1'
 
                         if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
@@ -436,7 +440,8 @@ def call(Map config = [:]) {
                             )
                         }
 
-                        echo "Android APP_VERSION passed to Unity: ${ciAppVersion}"
+                        echo "Android APP_VERSION base passed to Unity: ${ciAppVersion ?: '(Project Settings)'}"
+                        echo "Android CI build number passed to Unity: ${env.ARTIFACT_BUILD_NUMBER}"
                         echo "Android version code passed to Unity: ${androidVersionCode}"
 
                         try {
@@ -449,6 +454,7 @@ def call(Map config = [:]) {
                             withEnv([
                                 "OUTPUT_PATH=${env.OUTPUT_PATH}",
                                 "APP_VERSION=${ciAppVersion}",
+                                "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
                                 "ANDROID_VERSION_CODE=${androidVersionCode}",
                                 // Bundle ID is always sourced from Unity Project Settings.
                                 'BUNDLE_IDENTIFIER='
