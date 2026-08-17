@@ -609,8 +609,30 @@ def call(Map config = [:]) {
                         def developmentTeam = config.get('iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: '').toString().trim()
                         def profileSpecifier = config.get('iosProvisioningProfileSpecifier', params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: '').toString().trim()
                         def xcodeConfiguration = config.get('xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Release').toString().trim()
-                        if (!exportOptionsPath || !fileExists(exportOptionsPath)) {
-                            error('A readable IOS_EXPORT_OPTIONS_PLIST_PATH is required for IPA export.')
+                        if (exportOptionsPath && !fileExists(exportOptionsPath)) {
+                            error("IOS_EXPORT_OPTIONS_PLIST_PATH is not readable: ${exportOptionsPath}")
+                        }
+                        if (!exportOptionsPath) {
+                            // Automatic signing resolves the provisioning profile from
+                            // the project's bundle ID. This generic export file is safe
+                            // to share across every app in the same Apple organization.
+                            exportOptionsPath = 'PearzCI-ExportOptions-Automatic.plist'
+                            writeFile(
+                                file: exportOptionsPath,
+                                encoding: 'UTF-8',
+                                text: '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store</string>
+    <key>signingStyle</key>
+    <string>automatic</string>
+</dict>
+</plist>
+'''
+                            )
+                            echo "No IOS_EXPORT_OPTIONS_PLIST_PATH set; using generated automatic-signing options: ${exportOptionsPath}"
                         }
                         withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}", "IOS_DEVELOPMENT_TEAM=${developmentTeam}", "IOS_PROFILE_SPECIFIER=${profileSpecifier}", "XCODE_CONFIGURATION=${xcodeConfiguration}"]) {
                             sh '''
