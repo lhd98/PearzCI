@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.51] - 2026-08-18
+
+### Fixed
+
+- Connected-iPhone auto-detection now supports CoreDevice's current
+  `properties` JSON schema as well as its legacy fields. It also accepts
+  exactly one physical device reported as `connected` when its wired/pairing
+  details are unavailable, so a newly trusted iPhone is not treated as absent.
+
 ## [0.6.50] - 2026-08-17
 
 ### Fixed

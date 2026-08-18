@@ -717,13 +717,18 @@ def call(Map config = [:]) {
                                     exit 1
                                 }
 
-                                # IOS_DEVICE_UDID trống: tự dò iPhone đang cắm dây
-                                # và đã pair. Đúng 1 máy thì dùng luôn; 0 hoặc
-                                # nhiều máy thì báo lỗi kèm danh sách để chỉ định
-                                # IOS_DEVICE_UDID. tunnelState không dùng để lọc vì
-                                # máy cắm dây vẫn hiện "disconnected" khi không
-                                # debug. Lấy hardwareProperties.udid (đúng định
-                                # dạng xcodebuild -destination id= và devicectl).
+                                # IOS_DEVICE_UDID trống: tự dò iPhone đã kết nối.
+                                # Ưu tiên máy cắm dây, đã pair. Một số phiên bản
+                                # CoreDevice mới đưa các trường này vào properties
+                                # (thay cho các trường *Properties cũ). Hỗ trợ cả
+                                # hai schema, và fallback State=connected khi các
+                                # chi tiết pair/transport không có. Đúng 1 máy thì
+                                # dùng luôn; 0 hoặc nhiều máy thì báo lỗi kèm danh
+                                # sách để chỉ định UDID.
+                                # tunnelState không dùng để lọc vì máy cắm dây vẫn
+                                # hiện "disconnected" khi không debug. Lấy
+                                # hardwareProperties.udid (đúng định dạng
+                                # xcodebuild -destination id= và devicectl).
                                 if [ -z "${IOS_DEVICE_UDID:-}" ]; then
                                     echo 'IOS_DEVICE_UDID trống — tự dò thiết bị đang cắm...'
                                     dev_json="$(mktemp -t devicectl-devices)"
@@ -735,13 +740,31 @@ def call(Map config = [:]) {
                                     candidates="$(ruby -rjson -e '
                                         data = (JSON.parse(File.read(ARGV[0])) rescue nil)
                                         exit(0) unless data
-                                        (data.dig("result", "devices") || []).each do |dev|
-                                          hw = dev["hardwareProperties"] || {}
-                                          cp = dev["connectionProperties"] || {}
-                                          next unless hw["reality"] == "physical"
-                                          next unless cp["pairingState"] == "paired"
-                                          next unless cp["transportType"] == "wired"
-                                          name = (dev["deviceProperties"] || {})["name"]
+                                        devices = data.dig("result", "devices") || []
+                                        strict = devices.select do |dev|
+                                          properties = dev["properties"] || {}
+                                          hw = properties["hardware"] || dev["hardwareProperties"] || {}
+                                          cp = properties["connection"] || dev["connectionProperties"] || {}
+                                          hw["reality"] == "physical" &&
+                                            cp["pairingState"] == "paired" &&
+                                            cp["transportType"] == "wired"
+                                        end
+                                        # Xcode/CoreDevice can omit the two connection
+                                        # fields after a newly trusted device is attached.
+                                        # A physical device reported as connected is still a
+                                        # valid devicectl/xcodebuild target.
+                                        connected = devices.select do |dev|
+                                          properties = dev["properties"] || {}
+                                          hw = properties["hardware"] || dev["hardwareProperties"] || {}
+                                          cp = properties["connection"] || dev["connectionProperties"] || {}
+                                          state = cp["state"] || dev["state"] || dev.dig("deviceProperties", "state")
+                                          hw["reality"] == "physical" && state == "connected"
+                                        end
+                                        (strict.empty? ? connected : strict).each do |dev|
+                                          properties = dev["properties"] || {}
+                                          hw = properties["hardware"] || dev["hardwareProperties"] || {}
+                                          state = properties["state"] || dev["deviceProperties"] || {}
+                                          name = state["name"]
                                           puts "#{hw["udid"]}\\t#{name} (#{hw["marketingName"]})"
                                         end
                                     ' "$dev_json")"

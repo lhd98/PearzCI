@@ -629,8 +629,11 @@ PearzCI always uses the `Debug` configuration for device builds, and
 `IOS_DEVELOPMENT_TEAM` is not needed here (it applies only to IPA export).
 Leave `IOS_DEVICE_UDID` empty to auto-detect the connected iPhone: the build
 reads `xcrun devicectl list devices` and, when exactly one wired, paired device
-is present, uses its `hardwareProperties.udid`; with zero or several devices it
-fails and prints the list so you can set `IOS_DEVICE_UDID` explicitly. PearzCI
+is present, uses its UDID. It supports both the legacy CoreDevice JSON fields
+and the current `properties` schema. When connection details are unavailable,
+it falls back to exactly one physical device reported as `connected`; with zero
+or several devices it fails and prints the list so you can set
+`IOS_DEVICE_UDID` explicitly. PearzCI
 builds the exported Xcode project for that device and installs the app with
 `xcrun devicectl`; it does not require `IOS_EXPORT_OPTIONS_PLIST_PATH`, create
 an IPA, or upload to Drive. The connected device must be trusted and visible to
