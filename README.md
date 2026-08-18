@@ -174,7 +174,7 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
-  `CLEAN_WORKSPACE`, and `SEND_NOTIFICATIONS`
+  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, and `PROFILE_GRADLE`
 - String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
@@ -197,6 +197,13 @@ trước; không bật nếu cần giữ file cục bộ chưa được commit t
 `SEND_NOTIFICATIONS` mặc định là `true`. Tắt nó để bỏ qua toàn bộ thông báo
 sau build (hiện tại là Telegram); cờ này cũng áp dụng cho Discord, Lark hoặc
 nền tảng khác khi được bổ sung sau này.
+
+`PROFILE_GRADLE` mặc định là `false` và chỉ dùng cho Android build trên macOS.
+Khi bật, sau khi Unity tạo APK/AAB, PearzCI chạy lại Gradle với `--rerun-tasks`
+và tạo Gradle profile HTML. Tải `Builds/Android/gradle-profile/` và
+`gradle-profile.log` từ Jenkins artifacts để xem task Gradle nào chậm. Chế độ
+này có thể làm build chẩn đoán lâu thêm gần bằng một lần Gradle build, nhưng
+không thay đổi source project, artifact chính, hoặc AAB version-code counter.
 
 `ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
 parameter. APK builds use a fixed version code of `1`, because testers identify

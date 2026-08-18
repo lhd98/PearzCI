@@ -606,6 +606,88 @@ def call(Map config = [:]) {
                 }
             }
 
+            // Gradle được Unity gọi nội bộ nên log Unity chỉ cho biết tổng thời
+            // gian, không nêu task nào chậm. Chế độ này chạy lại đúng Gradle
+            // project Unity vừa sinh, ép các task chạy lại một lần để Gradle
+            // tạo profile HTML. Chỉ dùng để chẩn đoán vì sẽ tăng thời gian của
+            // riêng build đó; không thay đổi source hay artifact chính.
+            stage('Profile Android Gradle') {
+                when {
+                    expression {
+                        isAndroid && isUnix() &&
+                            params.PROFILE_GRADLE?.toString()?.toBoolean()
+                    }
+                }
+                options { timeout(time: 30, unit: 'MINUTES') }
+                steps {
+                    script {
+                        env.GRADLE_PROFILE_LOG_PATH =
+                            "${env.WORKSPACE}/Builds/Android/gradle-profile.log"
+                        env.GRADLE_PROFILE_DIRECTORY =
+                            "${env.WORKSPACE}/Builds/Android/gradle-profile"
+                        env.GRADLE_PROFILE_TASK =
+                            params.BUILD_APP_BUNDLE?.toString()?.toBoolean()
+                                ? 'bundleRelease'
+                                : 'assembleRelease'
+
+                        def profileStatus = sh(
+                            returnStatus: true,
+                            script: '''
+                                set +e
+                                gradle_root="$WORKSPACE/Library/Bee/Android/Prj/IL2CPP/Gradle"
+                                gradle_launcher="$UNITY_HUB_ROOT/$UNITY_VERSION/PlaybackEngines/AndroidPlayer/Tools/gradle/lib/gradle-launcher-8.13.jar"
+                                java_exe="$UNITY_HUB_ROOT/$UNITY_VERSION/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java"
+
+                                mkdir -p "$GRADLE_PROFILE_DIRECTORY"
+                                rm -f "$GRADLE_PROFILE_LOG_PATH"
+
+                                if [ ! -d "$gradle_root/launcher" ] || [ ! -f "$gradle_launcher" ] || [ ! -x "$java_exe" ]; then
+                                    echo 'ERROR: Unity-generated Android Gradle project or bundled Gradle runtime was not found.' \
+                                        > "$GRADLE_PROFILE_LOG_PATH"
+                                    exit 2
+                                fi
+
+                                (
+                                    cd "$gradle_root/launcher" || exit 2
+                                    "$java_exe" \
+                                        -classpath "$gradle_launcher" \
+                                        org.gradle.launcher.GradleMain \
+                                        '-Dorg.gradle.jvmargs=-Xmx4096m' \
+                                        "$GRADLE_PROFILE_TASK" \
+                                        --rerun-tasks \
+                                        --profile \
+                                        --info
+                                ) > "$GRADLE_PROFILE_LOG_PATH" 2>&1
+                                result=$?
+
+                                for report_root in \
+                                    "$gradle_root/build/reports/profile" \
+                                    "$gradle_root/launcher/build/reports/profile"; do
+                                    [ ! -d "$report_root" ] || \
+                                        find "$report_root" -maxdepth 1 -type f -name '*.html' -exec cp {} "$GRADLE_PROFILE_DIRECTORY/" \\;
+                                done
+
+                                cat "$GRADLE_PROFILE_LOG_PATH"
+                                exit "$result"
+                            '''
+                        )
+
+                        if (profileStatus != 0) {
+                            echo(
+                                'WARNING: Gradle profiling failed, but the ' +
+                                'Unity artifact remains valid. See ' +
+                                'Builds/Android/gradle-profile.log.'
+                            )
+                        } else {
+                            echo(
+                                'Gradle profile completed. Download the HTML ' +
+                                'report from the Jenkins build artifacts.'
+                            )
+                        }
+                    }
+                }
+            }
+
             stage('Archive and Export IPA') {
                 when { expression { isIos && !iosBuildToDevice } }
                 options { timeout(time: 45, unit: 'MINUTES') }
@@ -949,7 +1031,7 @@ def call(Map config = [:]) {
                         archiveArtifacts(
                             artifacts: isIos
                                 ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/${env.BUILD_INFO_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
-                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
+                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log,Builds/Android/gradle-profile.log,Builds/Android/gradle-profile/**",
                             allowEmptyArchive: true,
                             fingerprint: true,
                             onlyIfSuccessful: true
@@ -1286,7 +1368,7 @@ def call(Map config = [:]) {
                 archiveArtifacts(
                     artifacts: isIos
                         ? 'Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log,Builds/iOS/upload.log'
-                        : 'Builds/Android/build-metadata.json,Builds/Android/unity-build.log,Builds/Android/upload.log',
+                        : 'Builds/Android/build-metadata.json,Builds/Android/unity-build.log,Builds/Android/upload.log,Builds/Android/gradle-profile.log,Builds/Android/gradle-profile/**',
                     allowEmptyArchive: true
                 )
 

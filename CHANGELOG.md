@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.52] - 2026-08-19
+
+### Added
+
+- Optional `PROFILE_GRADLE` Android/macOS diagnostic parameter. When enabled,
+  PearzCI reruns the Unity-generated Gradle project with Gradle profiling and
+  archives the HTML report plus `gradle-profile.log`, without affecting the
+  build artifact or the AAB version-code counter.
+
 ## [0.6.51] - 2026-08-18
 
 ### Fixed
@@ -19,7 +28,6 @@ All notable changes to this package are documented in this file.
   base version when `APP_VERSION` is empty, and append the Jenkins build number
   in both cases. For example, Project Settings version `1.0.0` on build `67`
   is exposed through `Application.version` as `1.0.0-67`.
-
 ## [0.6.49] - 2026-08-16
 
 ### Added
