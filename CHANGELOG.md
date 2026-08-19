@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.53] - 2026-08-19
+
+### Removed
+
+- The optional Android Gradle profiling stage. It reran the Unity-generated
+  Gradle project with `--rerun-tasks`, unnecessarily adding several minutes to
+  profiled CI builds.
+
 ## [0.6.52] - 2026-08-19
 
 ### Added
