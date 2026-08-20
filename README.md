@@ -214,11 +214,13 @@ after a successful AAB pipeline, so APK test builds do not consume Google Play
 version codes. The
 counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
 which is retained even when `CLEAN_WORKSPACE` is enabled. Every Android build
-also gets a visible version for use through Unity `Application.version`:
-`<base version>-<BUILD_NUMBER>`. The base version comes from the optional
-Jenkins `APP_VERSION` parameter; when that parameter is empty, it comes from
-Unity Project Settings. For example, with Project Settings version `1.0.0`,
-Jenkins build `67` is shown in-game as `Build 1.0.0-67`.
+uses an APK/AAB version name of `<base version>-<BUILD_NUMBER>`. The base
+version comes from the optional Jenkins `APP_VERSION` parameter; when that
+parameter is empty, it comes from Unity Project Settings. For example, with
+Project Settings version `1.0.0`, Jenkins build `67` is written to the Android
+APK/AAB version name as `1.0.0-67`. `Application.version` remains the stable
+Project Settings base version so changing the Jenkins build number does not
+invalidate Unity's incremental player-data cache.
 
 The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
 after a successful export. PearzCI verifies and archives that file, uploads it

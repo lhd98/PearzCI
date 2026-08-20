@@ -56,6 +56,13 @@ public static class BuildEntry
             ApplyAndroidSettings(configuration);
             ConfigureKeystore(configuration);
 
+            // The Android version name changes for every CI run. Applying it
+            // through PlayerSettings would dirty ProjectSettings.asset, which
+            // in turn invalidates Unity's player-data and Gradle incremental
+            // caches. Apply it to the generated launcher project instead.
+            AndroidVersionNamePostProcessor.SetVersionName(
+                configuration.AppVersion);
+
             BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
             {
                 scenes           = scenes,
@@ -67,7 +74,14 @@ public static class BuildEntry
 
             Log("Calling BuildPipeline.BuildPlayer...");
 
-            report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+            try
+            {
+                report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+            }
+            finally
+            {
+                AndroidVersionNamePostProcessor.ClearVersionName();
+            }
             BuildSummary summary = report.summary;
 
             PrintBuildSummary(summary);
@@ -308,6 +322,9 @@ public static class BuildEntry
             ScriptingDefineSymbols =
                 GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
 
+            ProjectBundleVersion = GetEnvironmentVariable(
+                "APP_VERSION",
+                PlayerSettings.bundleVersion),
             AppVersion = BuildAndroidAppVersion(
                 GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
                 GetEnvironmentVariable("CI_BUILD_NUMBER")),
@@ -473,9 +490,9 @@ public static class BuildEntry
                 configuration.ScriptingDefineSymbols);
         }
 
-        if (!string.IsNullOrWhiteSpace(configuration.AppVersion))
+        if (!string.IsNullOrWhiteSpace(configuration.ProjectBundleVersion))
         {
-            PlayerSettings.bundleVersion = configuration.AppVersion;
+            PlayerSettings.bundleVersion = configuration.ProjectBundleVersion;
         }
 
         if (configuration.AndroidVersionCode <= 0)
@@ -491,6 +508,7 @@ public static class BuildEntry
         Log($"Product name: {PlayerSettings.productName}");
         Log($"Application identifier: {GetAndroidApplicationIdentifier()}");
         Log($"Bundle version: {PlayerSettings.bundleVersion}");
+        Log($"Android package version name: {configuration.AppVersion}");
         Log($"Android version code: {PlayerSettings.Android.bundleVersionCode}");
         Log($"Build App Bundle: {EditorUserBuildSettings.buildAppBundle}");
         Log($"Target architectures: {PlayerSettings.Android.targetArchitectures}");
@@ -805,7 +823,9 @@ public static class BuildEntry
                 errorMessage = errorMessage ?? string.Empty,
                 productName = PlayerSettings.productName,
                 bundleIdentifier = GetAndroidApplicationIdentifier(),
-                versionName = PlayerSettings.bundleVersion,
+                versionName = configuration != null
+                    ? configuration.AppVersion
+                    : PlayerSettings.bundleVersion,
                 androidVersionCode =
                     PlayerSettings.Android.bundleVersionCode,
                 unityVersion = Application.unityVersion,
@@ -1231,6 +1251,7 @@ public static class BuildEntry
         public string BundleIdentifier       { get; set; }
         public string ScriptingDefineSymbols { get; set; }
 
+        public string ProjectBundleVersion { get; set; }
         public string AppVersion         { get; set; }
         public int    AndroidVersionCode { get; set; }
 
@@ -1281,6 +1302,94 @@ public static class BuildEntry
         public int warningCount;
         public int errorCount;
         public string generatedAtUtc;
+    }
+}
+
+/// <summary>
+/// Changes only the generated Android launcher project's versionName. Keeping
+/// this out of PlayerSettings avoids invalidating Unity player data whenever
+/// Jenkins advances the build number.
+/// </summary>
+internal sealed class AndroidVersionNamePostProcessor :
+    UnityEditor.Android.IPostGenerateGradleAndroidProject
+{
+    private static string versionName;
+
+    public int callbackOrder => int.MaxValue;
+
+    internal static void SetVersionName(string value)
+    {
+        versionName = value;
+    }
+
+    internal static void ClearVersionName()
+    {
+        versionName = null;
+    }
+
+    public void OnPostGenerateGradleAndroidProject(string path)
+    {
+        if (string.IsNullOrWhiteSpace(versionName))
+            return;
+
+        if (versionName.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+        {
+            throw new InvalidOperationException(
+                "Android version name must not contain a line break.");
+        }
+
+        string generatedProjectPath = Path.GetFullPath(path);
+        string launcherBuildGradlePath = Path.Combine(
+            generatedProjectPath,
+            "..",
+            "launcher",
+            "build.gradle");
+
+        if (!File.Exists(launcherBuildGradlePath))
+        {
+            launcherBuildGradlePath = Path.Combine(
+                generatedProjectPath,
+                "launcher",
+                "build.gradle");
+        }
+
+        if (!File.Exists(launcherBuildGradlePath))
+        {
+            throw new FileNotFoundException(
+                "Could not find the generated Android launcher build.gradle.",
+                launcherBuildGradlePath);
+        }
+
+        string contents = File.ReadAllText(launcherBuildGradlePath);
+        string escapedVersionName = versionName
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"");
+
+        Regex versionNamePattern = new Regex(
+            @"(?m)^(?<indent>\s*)versionName\s+.+$",
+            RegexOptions.CultureInvariant);
+
+        int replacementCount = 0;
+        string updatedContents = versionNamePattern.Replace(
+            contents,
+            match =>
+            {
+                replacementCount++;
+                return match.Groups["indent"].Value +
+                    "versionName \"" + escapedVersionName + "\"";
+            });
+
+        if (replacementCount != 1)
+        {
+            throw new InvalidOperationException(
+                "Expected exactly one versionName entry in the generated " +
+                $"launcher build.gradle, but found {replacementCount}.");
+        }
+
+        File.WriteAllText(launcherBuildGradlePath, updatedContents);
+        Debug.Log(
+            "[Pearz.CI] Applied Android package version name to generated " +
+            $"Gradle project: {versionName}");
     }
 }
 }

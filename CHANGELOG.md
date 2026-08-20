@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.56] - 2026-08-21
+
+### Fixed
+
+- Android CI builds no longer write the Jenkins build number into
+  `PlayerSettings.bundleVersion` before Unity creates player data. That write
+  dirtied `ProjectSettings.asset` on every run and forced a costly Gradle
+  rebuild. The generated Android launcher project now receives the version
+  name immediately before Gradle runs, preserving Unity's incremental
+  player-data cache while APK/AAB version names still use
+  `<base version>-<build number>`.
+
 ## [0.6.55] - 2026-08-20
 
 ### Fixed
@@ -29,7 +41,6 @@ All notable changes to this package are documented in this file.
 - The optional Android Gradle profiling stage. It reran the Unity-generated
   Gradle project with `--rerun-tasks`, unnecessarily adding several minutes to
   profiled CI builds.
-
 ## [0.6.52] - 2026-08-19
 
 ### Added
