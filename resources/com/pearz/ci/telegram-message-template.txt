@@ -9,10 +9,10 @@
 <b>Google Play:</b> {{GOOGLE_PLAY_URL}}
 <b>Branch:</b> <code>{{BRANCH}}</code>
 ━━━━━━━━━━━━━━━━━━
-<b>Build Info:</b> {{BUILD_INFO_URL}}
 <b>APK:</b> {{APK}}
 <b>AAB:</b> {{AAB}}
 <b>IPA:</b> {{IPA}}
+<b>Build Info:</b> {{BUILD_INFO_URL}}
 <b>TestFlight:</b> {{TESTFLIGHT}}
 <b>mapping.txt:</b> {{MAPPING}}
 <b>Install:</b> {{INSTALL_STATUS}}

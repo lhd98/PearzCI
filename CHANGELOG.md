@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.54] - 2026-08-20
+
+### Fixed
+
+- Telegram build notifications now list APK, AAB, and IPA download links before
+  the Build Info link.
+
 ## [0.6.53] - 2026-08-19
 
 ### Removed
