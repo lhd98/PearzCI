@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.55] - 2026-08-20
+
+### Fixed
+
+- Concurrent Jenkins jobs building on the same agent no longer break each
+  other's Gradle builds. They shared `~/.gradle`, so when one job's Unity
+  teardown ran `gradle --stop` it stopped the busy Gradle daemon of another
+  job mid-R8, failing that build with `Gradle build daemon has been stopped:
+  stop command received`. `GRADLE_USER_HOME` now points at the per-job
+  `$WORKSPACE/.gradle`, isolating each job's daemons and caches so a stop from
+  one job cannot reach another; a job also reuses its own warm daemon across
+  builds instead of starting a cold one whenever a shared daemon is busy.
+
 ## [0.6.54] - 2026-08-20
 
 ### Fixed
