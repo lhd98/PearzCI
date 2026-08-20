@@ -276,12 +276,12 @@ def call(Map config = [:]) {
                         env.OUTPUT_EXTENSION = isIos
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
-                        // Giữ một APK duy nhất trong workspace để mỗi build
-                        // Android mới ghi đè APK của build trước. APK, AAB và iOS
-                        // nằm ở các thư mục Drive riêng nên không cần ghép số build.
-                        env.OUTPUT_FILE_NAME = !isIos &&
-                            env.OUTPUT_EXTENSION == 'apk'
-                            ? "${outputName}.apk"
+                        // Giữ một artifact Android duy nhất trong workspace để
+                        // mỗi APK/AAB mới ghi đè file trước. Drive và Jenkins
+                        // archive dùng DRIVE_OUTPUT_FILE_NAME có BUILD_NUMBER,
+                        // nên vẫn giữ được đầy đủ lịch sử phát hành.
+                        env.OUTPUT_FILE_NAME = !isIos
+                            ? "${outputName}.${env.OUTPUT_EXTENSION}"
                             : "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
                         env.DRIVE_OUTPUT_FILE_NAME =
                             "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
@@ -1356,7 +1356,7 @@ def call(Map config = [:]) {
                     if (isAndroid) {
                         echo(
                             'Keeping Builds/Android in the workspace; the ' +
-                            'next APK build replaces the existing APK.'
+                            'next Android build replaces the existing APK/AAB.'
                         )
                     } else if (fileExists('Builds')) {
                         echo 'Cleaning build output...'

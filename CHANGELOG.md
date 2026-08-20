@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.57] - 2026-08-21
+
+### Fixed
+
+- Android AAB output now uses a stable local filename just like APK output, so
+  each new AAB replaces the previous workspace artifact instead of accumulating
+  one file per Jenkins build. Jenkins archives and Google Drive uploads still
+  use build-numbered names, preserving release history.
+
 ## [0.6.56] - 2026-08-21
 
 ### Fixed
