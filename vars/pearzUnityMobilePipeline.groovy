@@ -136,6 +136,14 @@ def call(Map config = [:]) {
         }
 
         environment {
+            // Cô lập Gradle theo workspace của từng job. Nhiều job build song
+            // song trên cùng agent vốn dùng chung ~/.gradle, nên khi một job
+            // gọi `gradle --stop` (Unity gọi lúc dọn dẹp cuối build) sẽ giết
+            // luôn daemon đang minify R8 của job khác, làm build hỏng với lỗi
+            // "Gradle build daemon has been stopped: stop command received".
+            // Mỗi job có GRADLE_USER_HOME riêng thì lệnh stop không ảnh hưởng
+            // chéo. Unity spawn tiến trình Gradle kế thừa biến môi trường này.
+            GRADLE_USER_HOME = "${env.WORKSPACE}/.gradle"
             PEARZ_CI_VERSION = "${pearzCiVersion}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
