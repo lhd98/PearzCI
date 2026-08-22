@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.62] - 2026-08-22
+
+### Fixed
+
+- Added the missing `.meta` files for the `Runtime/` folder, the
+  `Pearz.CI` assembly definition and `PearzBuildInfo.cs`. Without them
+  Unity treated the new runtime helper from 0.6.61 as immutable-folder
+  assets and logged `has no meta file, but it's in an immutable folder.
+  The asset will be ignored.`, so `PearzBuildInfo` never compiled into
+  the game.
+
 ## [0.6.61] - 2026-08-22
 
 ### Added
