@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.59] - 2026-08-22
+
+### Changed
+
+- Android package `versionName` is no longer suffixed with the Jenkins build
+  number. It stays at the base value from `PlayerSettings.bundleVersion`
+  (e.g. `1.0.0`), matching pre-v0.6.20 behaviour. The `AndroidVersionName`
+  post-processor introduced in 0.6.56 rewrote `launcher/build.gradle` on
+  every build, which invalidated Gradle's configuration cache and slowed
+  large projects with many dependencies by 1–2 minutes per build. Testers
+  still identify the exact build through the file name on Google Drive
+  (`<product>-<build>.apk` / `.aab`) and through `build-metadata.json`.
+
 ## [0.6.58] - 2026-08-22
 
 ### Fixed
