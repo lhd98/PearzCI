@@ -64,6 +64,14 @@ public static class BuildEntry
             // bundleVersion (ví dụ "1.0.0"), đúng như trước v0.6.20. Số build
             // vẫn nhận diện được qua tên file APK/AAB trên Drive (đã có suffix
             // -<build>) và qua build-metadata.json.
+            //
+            // Ngoài ra, chèn "1.0.0-<build>" vào APK dưới dạng asset
+            // pearz-build-info.txt (nằm trong StreamingAssets). Chỉ đụng vào
+            // sau khi Bee sinh Gradle project, nên không invalid configuration
+            // cache; game runtime có thể đọc để hiển thị build tester đang
+            // dùng. Chỉ ghi khi nội dung thay đổi, để `mergeReleaseAssets`
+            // được UP-TO-DATE giữa các build cùng build number.
+            AndroidBuildInfoPostProcessor.SetBuildInfo(configuration.AppVersion);
 
             BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
             {
@@ -76,7 +84,14 @@ public static class BuildEntry
 
             Log("Calling BuildPipeline.BuildPlayer...");
 
-            report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+            try
+            {
+                report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+            }
+            finally
+            {
+                AndroidBuildInfoPostProcessor.ClearBuildInfo();
+            }
             BuildSummary summary = report.summary;
 
             PrintBuildSummary(summary);
@@ -1297,6 +1312,84 @@ public static class BuildEntry
         public int warningCount;
         public int errorCount;
         public string generatedAtUtc;
+    }
+}
+
+/// <summary>
+/// Writes the CI build info (e.g. "1.0.0-244") into the generated Android
+/// project as a StreamingAssets file, so the game can display exactly which
+/// Jenkins build the tester is running without stamping the AndroidManifest
+/// versionName (which invalidates Gradle's configuration cache).
+/// </summary>
+internal sealed class AndroidBuildInfoPostProcessor :
+    UnityEditor.Android.IPostGenerateGradleAndroidProject
+{
+    // File asset chèn vào StreamingAssets. Game đọc qua UnityWebRequest tại
+    // Path.Combine(Application.streamingAssetsPath, "pearz-build-info.txt").
+    internal const string BuildInfoAssetName = "pearz-build-info.txt";
+
+    private static string buildInfo;
+
+    // Chạy sau cùng (int.MaxValue) để nếu có post-processor khác đang
+    // regenerate assets/, ta ghi sau chúng và giá trị của ta thắng.
+    public int callbackOrder => int.MaxValue;
+
+    internal static void SetBuildInfo(string value)
+    {
+        buildInfo = value;
+    }
+
+    internal static void ClearBuildInfo()
+    {
+        buildInfo = null;
+    }
+
+    public void OnPostGenerateGradleAndroidProject(string path)
+    {
+        if (string.IsNullOrWhiteSpace(buildInfo))
+            return;
+
+        string generatedProjectPath = Path.GetFullPath(path);
+
+        // path đã là unityLibrary; assets nằm ở src/main/assets.
+        string assetsDir = Path.Combine(
+            generatedProjectPath, "src", "main", "assets");
+
+        if (!Directory.Exists(assetsDir))
+        {
+            // Một số phiên bản Unity gọi callback với đường dẫn root Gradle,
+            // lúc đó unityLibrary là thư mục con.
+            string alt = Path.Combine(
+                generatedProjectPath, "unityLibrary", "src", "main", "assets");
+            if (Directory.Exists(alt))
+                assetsDir = alt;
+            else
+                Directory.CreateDirectory(assetsDir);
+        }
+
+        string assetPath = Path.Combine(assetsDir, BuildInfoAssetName);
+
+        // UTF-8 không BOM; StreamingAssets đọc thô nên viết plain text.
+        string newContent = buildInfo.Trim();
+
+        // Chỉ ghi khi nội dung khác — giữ mergeReleaseAssets UP-TO-DATE giữa
+        // các build có cùng build number (ví dụ retry sau khi lỗi Gradle).
+        if (File.Exists(assetPath))
+        {
+            string existing = File.ReadAllText(assetPath);
+            if (string.Equals(existing, newContent, StringComparison.Ordinal))
+            {
+                Debug.Log(
+                    "[Pearz.CI] Android build info asset already matches: " +
+                    newContent);
+                return;
+            }
+        }
+
+        File.WriteAllText(assetPath, newContent);
+        Debug.Log(
+            "[Pearz.CI] Wrote Android build info asset " +
+            $"({BuildInfoAssetName}): {newContent}");
     }
 }
 }

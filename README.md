@@ -213,14 +213,51 @@ use a separate, per-job persistent counter starting at `1`; it advances only
 after a successful AAB pipeline, so APK test builds do not consume Google Play
 version codes. The
 counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
-which is retained even when `CLEAN_WORKSPACE` is enabled. Every Android build
-uses an APK/AAB version name of `<base version>-<BUILD_NUMBER>`. The base
-version comes from the optional Jenkins `APP_VERSION` parameter; when that
-parameter is empty, it comes from Unity Project Settings. For example, with
-Project Settings version `1.0.0`, Jenkins build `67` is written to the Android
-APK/AAB version name as `1.0.0-67`. `Application.version` remains the stable
-Project Settings base version so changing the Jenkins build number does not
-invalidate Unity's incremental player-data cache.
+which is retained even when `CLEAN_WORKSPACE` is enabled.
+
+Android `versionName` (what Android exposes as `Application.version` and in
+system settings) stays at Unity's `PlayerSettings.bundleVersion` (e.g.
+`1.0.0`) across every CI build. Stamping the Jenkins build number into
+`versionName` — either directly through `PlayerSettings` (pre-0.6.56) or by
+rewriting the generated `launcher/build.gradle` (0.6.56–0.6.58) — invalidated
+Gradle's configuration cache on every run and added minutes on large projects,
+so it is not done anymore.
+
+Testers still see the exact Jenkins build through three channels:
+
+- **Artifact filenames on Google Drive**: `<product>-<BUILD_NUMBER>.apk` /
+  `<product>-<BUILD_NUMBER>.aab`. The workspace copy uses a stable name so
+  each new build overwrites the previous one; Drive keeps the full history.
+- **`build-metadata.json`**: written next to the APK/AAB, contains the full
+  `versionName` (e.g. `1.0.0-67`) and other build identifiers.
+- **`StreamingAssets/pearz-build-info.txt`**: PearzCI injects a plain-text
+  file into the APK's StreamingAssets containing the full CI version string
+  (e.g. `1.0.0-67`). Read it from the game with `UnityWebRequest` (required
+  on Android because StreamingAssets lives inside the APK):
+
+  ```csharp
+  using System.Collections;
+  using System.IO;
+  using UnityEngine;
+  using UnityEngine.Networking;
+
+  IEnumerator LoadPearzBuildInfo()
+  {
+      string url = Path.Combine(
+          Application.streamingAssetsPath, "pearz-build-info.txt");
+      using UnityWebRequest www = UnityWebRequest.Get(url);
+      yield return www.SendWebRequest();
+      if (www.result == UnityWebRequest.Result.Success)
+      {
+          string ciVersion = www.downloadHandler.text.Trim();
+          // e.g. "1.0.0-67" — show in debug UI / crash reports.
+      }
+  }
+  ```
+
+  The file is written by an `IPostGenerateGradleAndroidProject` callback
+  after Unity's Bee generates the Gradle project, so it does not invalidate
+  the Gradle configuration cache.
 
 The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
 after a successful export. PearzCI verifies and archives that file, uploads it

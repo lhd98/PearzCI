@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.60] - 2026-08-22
+
+### Added
+
+- Android CI builds now embed a `pearz-build-info.txt` file inside the APK's
+  StreamingAssets containing the full CI version string (e.g. `1.0.0-244`).
+  Game code can read it at runtime via `UnityWebRequest` on
+  `Path.Combine(Application.streamingAssetsPath, "pearz-build-info.txt")` and
+  display exactly which Jenkins build the tester is running, without having
+  to stamp the AndroidManifest `versionName` (which invalidates Gradle's
+  configuration cache). The file is only rewritten when the content changes,
+  so `mergeReleaseAssets` stays UP-TO-DATE for retries of the same build
+  number.
+
 ## [0.6.59] - 2026-08-22
 
 ### Changed
