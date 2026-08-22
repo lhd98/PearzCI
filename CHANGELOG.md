@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.58] - 2026-08-22
+
+### Fixed
+
+- Android Gradle cache is no longer wiped every time the Jenkins workspace is
+  cleaned or rotated. `GRADLE_USER_HOME` moved from `$WORKSPACE/.gradle` to a
+  per-job directory outside the workspace
+  (`$HOME/.gradle-jenkins/$JOB_BASE_NAME`, `$USERPROFILE` on Windows agents),
+  so `CLEAN_WORKSPACE=true` and Jenkins workspace switches (`@2`, `@tmp`) keep
+  the warm AGP/Kotlin/dependency caches and R8/AAPT2 state intact. Jobs stay
+  isolated from each other, so the concurrent `gradle --stop` protection from
+  0.6.55 still holds.
+
 ## [0.6.57] - 2026-08-21
 
 ### Fixed

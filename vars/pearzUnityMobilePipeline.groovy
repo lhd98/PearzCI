@@ -136,14 +136,20 @@ def call(Map config = [:]) {
         }
 
         environment {
-            // Cô lập Gradle theo workspace của từng job. Nhiều job build song
-            // song trên cùng agent vốn dùng chung ~/.gradle, nên khi một job
-            // gọi `gradle --stop` (Unity gọi lúc dọn dẹp cuối build) sẽ giết
-            // luôn daemon đang minify R8 của job khác, làm build hỏng với lỗi
-            // "Gradle build daemon has been stopped: stop command received".
-            // Mỗi job có GRADLE_USER_HOME riêng thì lệnh stop không ảnh hưởng
-            // chéo. Unity spawn tiến trình Gradle kế thừa biến môi trường này.
-            GRADLE_USER_HOME = "${env.WORKSPACE}/.gradle"
+            // Cô lập Gradle theo từng job (không theo workspace). Nhiều job
+            // build song song trên cùng agent vốn dùng chung ~/.gradle, nên
+            // khi một job gọi `gradle --stop` (Unity gọi lúc dọn dẹp cuối
+            // build) sẽ giết luôn daemon đang minify R8 của job khác, làm
+            // build hỏng với lỗi "Gradle build daemon has been stopped: stop
+            // command received". Mỗi job có GRADLE_USER_HOME riêng thì lệnh
+            // stop không ảnh hưởng chéo. Trước đây cache đặt trong
+            // $WORKSPACE/.gradle nên `CLEAN_WORKSPACE=true` hoặc Jenkins đổi
+            // workspace (`@2`, `@tmp`) là mất cache, khiến build kế tiếp cold
+            // từ đầu (tải lại toàn bộ AGP/Kotlin/deps, warm-up R8/AAPT2).
+            // Đặt ngoài workspace, gắn với JOB_BASE_NAME, để cache giữ nguyên
+            // qua các lần checkout mà vẫn cô lập giữa các job. Unity spawn
+            // tiến trình Gradle kế thừa biến môi trường này.
+            GRADLE_USER_HOME = "${env.HOME ?: env.USERPROFILE}/.gradle-jenkins/${env.JOB_BASE_NAME}"
             PEARZ_CI_VERSION = "${pearzCiVersion}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
