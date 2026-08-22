@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.61] - 2026-08-22
+
+### Added
+
+- Runtime helper `Pearz.CI.PearzBuildInfo` (new `Pearz.CI` runtime assembly)
+  auto-loads `StreamingAssets/pearz-build-info.txt` at
+  `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)` and exposes it
+  synchronously: `PearzBuildInfo.Version` returns the loaded string,
+  `PearzBuildInfo.VersionOrFallback` falls back to `Application.version` when
+  the file has not loaded yet (e.g. in the Editor, or for the very first
+  frames on Android while the `UnityWebRequest` load is in flight). Game
+  code no longer needs its own coroutine to read the CI build number
+  injected in 0.6.60.
+
 ## [0.6.60] - 2026-08-22
 
 ### Added

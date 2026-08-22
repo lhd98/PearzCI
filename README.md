@@ -232,28 +232,23 @@ Testers still see the exact Jenkins build through three channels:
   `versionName` (e.g. `1.0.0-67`) and other build identifiers.
 - **`StreamingAssets/pearz-build-info.txt`**: PearzCI injects a plain-text
   file into the APK's StreamingAssets containing the full CI version string
-  (e.g. `1.0.0-67`). Read it from the game with `UnityWebRequest` (required
-  on Android because StreamingAssets lives inside the APK):
+  (e.g. `1.0.0-67`). Use the built-in `Pearz.CI.PearzBuildInfo` helper — it
+  auto-loads the file at `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)` and
+  exposes it synchronously:
 
   ```csharp
-  using System.Collections;
-  using System.IO;
+  using Pearz.CI;
   using UnityEngine;
-  using UnityEngine.Networking;
 
-  IEnumerator LoadPearzBuildInfo()
-  {
-      string url = Path.Combine(
-          Application.streamingAssetsPath, "pearz-build-info.txt");
-      using UnityWebRequest www = UnityWebRequest.Get(url);
-      yield return www.SendWebRequest();
-      if (www.result == UnityWebRequest.Result.Success)
-      {
-          string ciVersion = www.downloadHandler.text.Trim();
-          // e.g. "1.0.0-67" — show in debug UI / crash reports.
-      }
-  }
+  fpsText.text =
+      $"FPS: {fps} | Build {PearzBuildInfo.VersionOrFallback}";
   ```
+
+  `VersionOrFallback` returns the CI version if loaded, otherwise falls back
+  to `Application.version` (useful in Editor and for the very first frames
+  after startup while the async load on Android is in flight). Use
+  `PearzBuildInfo.Version` directly if you want the empty-string state to be
+  visible (e.g. for logging).
 
   The file is written by an `IPostGenerateGradleAndroidProject` callback
   after Unity's Bee generates the Gradle project, so it does not invalidate
