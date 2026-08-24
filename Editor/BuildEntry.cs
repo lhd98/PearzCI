@@ -71,7 +71,8 @@ public static class BuildEntry
             // dùng. Chỉ ghi khi nội dung thay đổi, để `mergeReleaseAssets`
             // được UP-TO-DATE giữa các build cùng build number.
             AndroidBuildInfoPostProcessor.SetBuildInfo(configuration.AppVersion);
-            AndroidBuildInfoPostProcessor.SetAabVersionName(
+            AndroidBuildInfoPostProcessor.SetAndroidVersionNames(
+                configuration.ProjectBundleVersion,
                 configuration.BuildAppBundle
                     ? BuildAndroidAabVersionName(
                         configuration.ProjectBundleVersion,
@@ -95,8 +96,18 @@ public static class BuildEntry
             }
             finally
             {
-                AndroidBuildInfoPostProcessor.ClearBuildInfo();
-                AndroidBuildInfoPostProcessor.ClearAabVersionName();
+                try
+                {
+                    // Gradle đã dùng AAB versionName ở thời điểm này. Trả
+                    // generated project về base version trước khi Jenkins
+                    // chạy build APK tiếp theo để cache không bị kế thừa.
+                    AndroidBuildInfoPostProcessor.RestoreBaseVersionName();
+                }
+                finally
+                {
+                    AndroidBuildInfoPostProcessor.ClearBuildInfo();
+                    AndroidBuildInfoPostProcessor.ClearAndroidVersionNames();
+                }
             }
             BuildSummary summary = report.summary;
 
@@ -1348,7 +1359,9 @@ internal sealed class AndroidBuildInfoPostProcessor :
     internal const string BuildInfoAssetName = "pearz-build-info.txt";
 
     private static string buildInfo;
+    private static string baseVersionName;
     private static string aabVersionName;
+    private static string aabVersionNameRestorePath;
 
     // Chạy sau cùng (int.MaxValue) để nếu có post-processor khác đang
     // regenerate assets/, ta ghi sau chúng và giá trị của ta thắng.
@@ -1364,14 +1377,33 @@ internal sealed class AndroidBuildInfoPostProcessor :
         buildInfo = null;
     }
 
-    internal static void SetAabVersionName(string value)
+    internal static void SetAndroidVersionNames(
+        string baseValue,
+        string aabValue)
     {
-        aabVersionName = value;
+        baseVersionName = baseValue;
+        aabVersionName = aabValue;
     }
 
-    internal static void ClearAabVersionName()
+    internal static void RestoreBaseVersionName()
     {
+        if (string.IsNullOrWhiteSpace(aabVersionNameRestorePath) ||
+            string.IsNullOrWhiteSpace(baseVersionName))
+        {
+            return;
+        }
+
+        SetGeneratedVersionName(
+            aabVersionNameRestorePath,
+            baseVersionName,
+            "Restored Android Gradle project version name");
+    }
+
+    internal static void ClearAndroidVersionNames()
+    {
+        baseVersionName = null;
         aabVersionName = null;
+        aabVersionNameRestorePath = null;
     }
 
     public void OnPostGenerateGradleAndroidProject(string path)
@@ -1381,8 +1413,24 @@ internal sealed class AndroidBuildInfoPostProcessor :
         if (!string.IsNullOrWhiteSpace(buildInfo))
             WriteBuildInfoAsset(generatedProjectPath);
 
-        if (!string.IsNullOrWhiteSpace(aabVersionName))
-            PatchAabVersionName(generatedProjectPath, aabVersionName);
+        if (!string.IsNullOrWhiteSpace(baseVersionName))
+        {
+            string versionName = string.IsNullOrWhiteSpace(aabVersionName)
+                ? baseVersionName
+                : aabVersionName;
+            string launcherBuildGradlePath = GetLauncherBuildGradlePath(
+                generatedProjectPath);
+
+            SetGeneratedVersionName(
+                launcherBuildGradlePath,
+                versionName,
+                string.IsNullOrWhiteSpace(aabVersionName)
+                    ? "Verified Android APK version name"
+                    : "Applied Android AAB version name");
+
+            if (!string.IsNullOrWhiteSpace(aabVersionName))
+                aabVersionNameRestorePath = launcherBuildGradlePath;
+        }
     }
 
     private static void WriteBuildInfoAsset(string generatedProjectPath)
@@ -1429,16 +1477,8 @@ internal sealed class AndroidBuildInfoPostProcessor :
             $"({BuildInfoAssetName}): {newContent}");
     }
 
-    private static void PatchAabVersionName(
-        string generatedProjectPath,
-        string versionName)
+    private static string GetLauncherBuildGradlePath(string generatedProjectPath)
     {
-        if (versionName.IndexOfAny(new[] { '\r', '\n' }) >= 0)
-        {
-            throw new InvalidOperationException(
-                "Android AAB versionName must not contain a line break.");
-        }
-
         string launcherBuildGradlePath = Path.Combine(
             generatedProjectPath, "..", "launcher", "build.gradle");
 
@@ -1453,6 +1493,20 @@ internal sealed class AndroidBuildInfoPostProcessor :
             throw new FileNotFoundException(
                 "Could not find the generated Android launcher build.gradle.",
                 launcherBuildGradlePath);
+        }
+
+        return launcherBuildGradlePath;
+    }
+
+    private static void SetGeneratedVersionName(
+        string launcherBuildGradlePath,
+        string versionName,
+        string logAction)
+    {
+        if (versionName.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+        {
+            throw new InvalidOperationException(
+                "Android AAB versionName must not contain a line break.");
         }
 
         string contents = File.ReadAllText(launcherBuildGradlePath);
@@ -1481,10 +1535,15 @@ internal sealed class AndroidBuildInfoPostProcessor :
                 $"launcher build.gradle, but found {replacementCount}.");
         }
 
+        if (string.Equals(contents, updatedContents, StringComparison.Ordinal))
+        {
+            Debug.Log($"[Pearz.CI] {logAction}: already matches {versionName}");
+            return;
+        }
+
         File.WriteAllText(launcherBuildGradlePath, updatedContents);
         Debug.Log(
-            "[Pearz.CI] Applied Android AAB version name to generated " +
-            $"Gradle project: {versionName}");
+            $"[Pearz.CI] {logAction}: {versionName}");
     }
 }
 }

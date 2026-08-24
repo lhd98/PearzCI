@@ -227,8 +227,10 @@ with version code `13`. It does not write that generated value to
 `ProjectSettings`, so a Store AAB does not make the following APK build slow.
 Each AAB does have its own Gradle configuration-cache miss because its package
 version changes, which is necessary for Google Play to show a different
-version. The base version is `APP_VERSION` when supplied by Jenkins; otherwise
-it is `PlayerSettings.bundleVersion`.
+version. As soon as the AAB has been built and signed, PearzCI restores the
+generated Gradle project to the base version; APK builds also verify that base
+value before Gradle starts. The base version is `APP_VERSION` when supplied by
+Jenkins; otherwise it is `PlayerSettings.bundleVersion`.
 
 Testers still see the exact Jenkins build through three channels:
 

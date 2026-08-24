@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.64] - 2026-08-24
+
+### Fixed
+
+- After an AAB is built, PearzCI now restores the generated Gradle project's
+  `versionName` to the base version before the pipeline archives or uploads the
+  AAB. APK builds also verify that generated project is at the base version
+  before Gradle runs. This prevents an AAB's `<base>.<versionCode>` value from
+  persisting in `Library/Bee` and invalidating the cache used by later APK
+  builds. The generated AAB is already complete and signed before restoration.
+
 ## [0.6.63] - 2026-08-24
 
 ### Changed
