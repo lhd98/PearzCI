@@ -56,14 +56,13 @@ public static class BuildEntry
             ApplyAndroidSettings(configuration);
             ConfigureKeystore(configuration);
 
-            // Trước v0.6.56 CI ghi "1.0.0-<build>" vào versionName, làm dirty
-            // ProjectSettings.asset. v0.6.56 chuyển sang patch launcher/
-            // build.gradle sau khi Bee sinh, nhưng lại làm invalid Gradle
-            // configuration cache mỗi build → chậm hẳn trên project lớn nhiều
-            // dependency. Nay giữ versionName cố định = PlayerSettings.
-            // bundleVersion (ví dụ "1.0.0"), đúng như trước v0.6.20. Số build
-            // vẫn nhận diện được qua tên file APK/AAB trên Drive (đã có suffix
-            // -<build>) và qua build-metadata.json.
+            // APK giữ versionName cố định = PlayerSettings.bundleVersion để
+            // Gradle configuration cache không bị đổi theo từng Jenkins build.
+            // Riêng AAB dùng để đưa lên Google Play cần versionName phân biệt
+            // được từng package: patch Gradle sau khi Bee sinh thành
+            // "<base version>.<AAB versionCode>" (ví dụ "1.0.0.13"). Không
+            // sửa ProjectSettings theo versionCode, nên cache APK không bị ảnh
+            // hưởng bởi một AAB phát hành trước đó.
             //
             // Ngoài ra, chèn "1.0.0-<build>" vào APK dưới dạng asset
             // pearz-build-info.txt (nằm trong StreamingAssets). Chỉ đụng vào
@@ -72,6 +71,12 @@ public static class BuildEntry
             // dùng. Chỉ ghi khi nội dung thay đổi, để `mergeReleaseAssets`
             // được UP-TO-DATE giữa các build cùng build number.
             AndroidBuildInfoPostProcessor.SetBuildInfo(configuration.AppVersion);
+            AndroidBuildInfoPostProcessor.SetAabVersionName(
+                configuration.BuildAppBundle
+                    ? BuildAndroidAabVersionName(
+                        configuration.ProjectBundleVersion,
+                        configuration.AndroidVersionCode)
+                    : null);
 
             BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
             {
@@ -91,6 +96,7 @@ public static class BuildEntry
             finally
             {
                 AndroidBuildInfoPostProcessor.ClearBuildInfo();
+                AndroidBuildInfoPostProcessor.ClearAabVersionName();
             }
             BuildSummary summary = report.summary;
 
@@ -1034,6 +1040,19 @@ public static class BuildEntry
             : $"{baseVersion}-{ciBuildNumber}";
     }
 
+    private static string BuildAndroidAabVersionName(
+        string baseVersion,
+        int versionCode)
+    {
+        if (string.IsNullOrWhiteSpace(baseVersion))
+        {
+            throw new InvalidOperationException(
+                "Không thể tạo Android AAB versionName khi base version trống.");
+        }
+
+        return $"{baseVersion.Trim()}.{versionCode}";
+    }
+
     private static int GetIntegerEnvironmentVariable(
         string name,
         int defaultValue)
@@ -1317,9 +1336,9 @@ public static class BuildEntry
 
 /// <summary>
 /// Writes the CI build info (e.g. "1.0.0-244") into the generated Android
-/// project as a StreamingAssets file, so the game can display exactly which
-/// Jenkins build the tester is running without stamping the AndroidManifest
-/// versionName (which invalidates Gradle's configuration cache).
+/// project as a StreamingAssets file. For AAB builds it also patches only the
+/// generated launcher Gradle project to give Google Play a version name based
+/// on its version code, without changing ProjectSettings.
 /// </summary>
 internal sealed class AndroidBuildInfoPostProcessor :
     UnityEditor.Android.IPostGenerateGradleAndroidProject
@@ -1329,6 +1348,7 @@ internal sealed class AndroidBuildInfoPostProcessor :
     internal const string BuildInfoAssetName = "pearz-build-info.txt";
 
     private static string buildInfo;
+    private static string aabVersionName;
 
     // Chạy sau cùng (int.MaxValue) để nếu có post-processor khác đang
     // regenerate assets/, ta ghi sau chúng và giá trị của ta thắng.
@@ -1344,12 +1364,29 @@ internal sealed class AndroidBuildInfoPostProcessor :
         buildInfo = null;
     }
 
+    internal static void SetAabVersionName(string value)
+    {
+        aabVersionName = value;
+    }
+
+    internal static void ClearAabVersionName()
+    {
+        aabVersionName = null;
+    }
+
     public void OnPostGenerateGradleAndroidProject(string path)
     {
-        if (string.IsNullOrWhiteSpace(buildInfo))
-            return;
-
         string generatedProjectPath = Path.GetFullPath(path);
+
+        if (!string.IsNullOrWhiteSpace(buildInfo))
+            WriteBuildInfoAsset(generatedProjectPath);
+
+        if (!string.IsNullOrWhiteSpace(aabVersionName))
+            PatchAabVersionName(generatedProjectPath, aabVersionName);
+    }
+
+    private static void WriteBuildInfoAsset(string generatedProjectPath)
+    {
 
         // path đã là unityLibrary; assets nằm ở src/main/assets.
         string assetsDir = Path.Combine(
@@ -1390,6 +1427,64 @@ internal sealed class AndroidBuildInfoPostProcessor :
         Debug.Log(
             "[Pearz.CI] Wrote Android build info asset " +
             $"({BuildInfoAssetName}): {newContent}");
+    }
+
+    private static void PatchAabVersionName(
+        string generatedProjectPath,
+        string versionName)
+    {
+        if (versionName.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+        {
+            throw new InvalidOperationException(
+                "Android AAB versionName must not contain a line break.");
+        }
+
+        string launcherBuildGradlePath = Path.Combine(
+            generatedProjectPath, "..", "launcher", "build.gradle");
+
+        if (!File.Exists(launcherBuildGradlePath))
+        {
+            launcherBuildGradlePath = Path.Combine(
+                generatedProjectPath, "launcher", "build.gradle");
+        }
+
+        if (!File.Exists(launcherBuildGradlePath))
+        {
+            throw new FileNotFoundException(
+                "Could not find the generated Android launcher build.gradle.",
+                launcherBuildGradlePath);
+        }
+
+        string contents = File.ReadAllText(launcherBuildGradlePath);
+        string escapedVersionName = versionName
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"");
+
+        Regex versionNamePattern = new Regex(
+            @"(?m)^(?<indent>\s*)versionName\s+.+$",
+            RegexOptions.CultureInvariant);
+
+        int replacementCount = 0;
+        string updatedContents = versionNamePattern.Replace(
+            contents,
+            match =>
+            {
+                replacementCount++;
+                return match.Groups["indent"].Value +
+                    "versionName \"" + escapedVersionName + "\"";
+            });
+
+        if (replacementCount != 1)
+        {
+            throw new InvalidOperationException(
+                "Expected exactly one versionName entry in the generated " +
+                $"launcher build.gradle, but found {replacementCount}.");
+        }
+
+        File.WriteAllText(launcherBuildGradlePath, updatedContents);
+        Debug.Log(
+            "[Pearz.CI] Applied Android AAB version name to generated " +
+            $"Gradle project: {versionName}");
     }
 }
 }

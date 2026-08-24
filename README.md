@@ -215,13 +215,20 @@ version codes. The
 counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
 which is retained even when `CLEAN_WORKSPACE` is enabled.
 
-Android `versionName` (what Android exposes as `Application.version` and in
-system settings) stays at Unity's `PlayerSettings.bundleVersion` (e.g.
-`1.0.0`) across every CI build. Stamping the Jenkins build number into
-`versionName` — either directly through `PlayerSettings` (pre-0.6.56) or by
-rewriting the generated `launcher/build.gradle` (0.6.56–0.6.58) — invalidated
-Gradle's configuration cache on every run and added minutes on large projects,
-so it is not done anymore.
+APK `versionName` (what Android exposes as `Application.version` and in system
+settings) stays at Unity's `PlayerSettings.bundleVersion` (e.g. `1.0.0`) so
+ordinary tester builds retain a warm Gradle configuration cache.
+
+For an AAB, PearzCI uses the AAB version code already reserved by its persistent
+Jenkins counter to patch only the generated `launcher/build.gradle` immediately
+before Gradle packages it. Google Play therefore receives a readable
+`versionName` of `<base version>.<AAB versionCode>` — for example `1.0.0.13`
+with version code `13`. It does not write that generated value to
+`ProjectSettings`, so a Store AAB does not make the following APK build slow.
+Each AAB does have its own Gradle configuration-cache miss because its package
+version changes, which is necessary for Google Play to show a different
+version. The base version is `APP_VERSION` when supplied by Jenkins; otherwise
+it is `PlayerSettings.bundleVersion`.
 
 Testers still see the exact Jenkins build through three channels:
 

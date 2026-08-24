@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.63] - 2026-08-24
+
+### Changed
+
+- Android AAB builds now patch only the generated `launcher/build.gradle`
+  `versionName` to `<base version>.<AAB versionCode>` (for example,
+  `1.0.0.13`). This gives each Google Play upload a readable version matching
+  its package version code, without changing `ProjectSettings` per AAB build.
+  APK builds continue to use the stable base version, so an AAB release does
+  not invalidate the cache used by later APK builds. The base version remains
+  `APP_VERSION` when supplied by Jenkins, otherwise
+  `PlayerSettings.bundleVersion`; Jenkins build numbers remain in artifact
+  names and build metadata.
+
 ## [0.6.62] - 2026-08-22
 
 ### Fixed
