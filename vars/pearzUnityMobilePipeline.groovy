@@ -90,6 +90,24 @@ def call(Map config = [:]) {
         (params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch)
     )
     def webhookRepository = extractGitHubRepository(repositoryUrl)
+    def webhookRepositoryJsonPath = config.get(
+        'webhookRepositoryJsonPath',
+        '$.repository.full_name'
+    ).toString().trim()
+    def webhookProviderName = config.get(
+        'webhookProviderName',
+        'GitHub'
+    ).toString().trim()
+    if (!webhookRepositoryJsonPath) {
+        throw new IllegalArgumentException(
+            'webhookRepositoryJsonPath must not be empty.'
+        )
+    }
+    if (!webhookProviderName) {
+        throw new IllegalArgumentException(
+            'webhookProviderName must not be empty.'
+        )
+    }
     def webhookFilterExpression = webhookRepository
         ? '^' + regexEscape(webhookRepository) +
             ' refs/heads/' + regexEscape(webhookBranch) + '$'
@@ -116,7 +134,7 @@ def call(Map config = [:]) {
                 genericVariables: [
                     [
                         key: 'PEARZ_WEBHOOK_REPOSITORY',
-                        value: '$.repository.full_name'
+                        value: webhookRepositoryJsonPath
                     ],
                     [
                         key: 'PEARZ_WEBHOOK_REF',
@@ -124,7 +142,7 @@ def call(Map config = [:]) {
                     ]
                 ],
                 causeString:
-                    'Triggered by GitHub push: ' +
+                    "Triggered by ${webhookProviderName} push: " +
                     '$PEARZ_WEBHOOK_REPOSITORY $PEARZ_WEBHOOK_REF',
                 tokenCredentialId: 'pearz-github-webhook',
                 printContributedVariables: false,
