@@ -35,12 +35,6 @@ def call(Map config = [:]) {
     def androidDeviceSerial = config.get(
         'androidDeviceSerial', params.ANDROID_DEVICE_SERIAL ?: ''
     ).toString().trim()
-    // Cài không dây: danh sách host:port để `adb connect` trước khi cài.
-    // Với Wireless debugging (Android 11+) đã pair, adb thường tự kết nối qua
-    // mDNS nên có thể để trống.
-    def androidDeviceAddress = config.get(
-        'androidDeviceAddress', params.ANDROID_DEVICE_ADDRESS ?: ''
-    ).toString().trim()
     def configuredAdbExe = config.get('adbExe', '').toString().trim()
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     if (isIos && !macAgentLabel) {
@@ -988,128 +982,158 @@ def call(Map config = [:]) {
                 }
             }
 
-            // Cài APK vừa build lên máy Android qua adb (USB hoặc Wi-Fi). Lỗi ở
-            // đây (không có máy, máy chưa bật USB debugging, sai chữ ký...)
-            // chỉ đánh UNSTABLE để artifact vẫn được upload và báo Telegram.
+            // Cài APK vừa build lên máy Android qua adb (USB hoặc Wireless
+            // debugging đã pair, adb tự kết nối qua mDNS). Không có máy nào
+            // đang kết nối thì bỏ qua, build vẫn SUCCESS. Cài lỗi (sai chữ
+            // ký, máy từ chối...) chỉ đánh UNSTABLE để upload và Telegram vẫn
+            // chạy.
             stage('Install on Android Device') {
                 when { expression { isAndroid && androidInstallToDevice } }
                 options { timeout(time: 10, unit: 'MINUTES') }
                 steps {
                     script {
                         if (env.OUTPUT_EXTENSION != 'apk') {
-                            echo 'BUILD_APP_BUNDLE is enabled; an AAB cannot be ' +
-                                'installed with adb. Skipping device install.'
+                            env.ANDROID_INSTALL_STATUS =
+                                'Skipped: AAB cannot be installed with adb.'
+                            echo env.ANDROID_INSTALL_STATUS
                             return
                         }
 
                         env.ADB_EXE = resolveAdbExe(configuredAdbExe)
                         env.PEARZ_ADB_SERIALS = androidDeviceSerial
                             .replace(',', ' ')
-                        env.PEARZ_ADB_ADDRESSES = androidDeviceAddress
-                            .replace(',', ' ')
+                        env.PEARZ_ADB_RESULT_PATH =
+                            "${env.WORKSPACE}/Builds/Android/device-install.txt"
                         echo "adb path: ${env.ADB_EXE}"
 
-                        catchError(
-                            buildResult: 'UNSTABLE',
-                            stageResult: 'FAILURE'
-                        ) {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
+                        // Exit code: 0 = đã cài, 3 = không có máy, khác = lỗi.
+                        // Cookie dontKillMe giữ adb server sống qua các build
+                        // để máy không dây không phải dò lại mDNS mỗi lần.
+                        def installStatus
+                        if (isUnix()) {
+                            installStatus = sh(returnStatus: true, script: '''
+                                set -u
+                                rm -f "$PEARZ_ADB_RESULT_PATH"
 
-                                    "$ADB_EXE" start-server
+                                JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe \
+                                    "$ADB_EXE" start-server || exit 1
 
-                                    list_devices() {
-                                        "$ADB_EXE" devices |
-                                            awk 'NR > 1 && $2 == "device" { print $1 }'
-                                    }
+                                list_devices() {
+                                    "$ADB_EXE" devices |
+                                        awk 'NR > 1 && $2 == "device" { print $1 }'
+                                }
 
-                                    # Máy không dây có thể đã rớt kết nối
-                                    # (ngủ, đổi Wi-Fi): disconnect rồi connect
-                                    # lại để không dùng phiên "offline" cũ.
-                                    for address in $PEARZ_ADB_ADDRESSES; do
-                                        "$ADB_EXE" disconnect "$address" >/dev/null 2>&1 || true
-                                        output=$("$ADB_EXE" connect "$address" 2>&1 || true)
-                                        echo "$output"
-                                        case "$output" in
-                                            *"connected to"*) ;;
-                                            *) echo "WARNING: Could not connect to $address" ;;
-                                        esac
-                                    done
+                                # Server vừa khởi động cần vài giây để mDNS
+                                # kết nối lại máy Wireless debugging đã pair.
+                                attempt=0
+                                while [ -z "$(list_devices)" ] && [ "$attempt" -lt 5 ]; do
+                                    sleep 1
+                                    attempt=$((attempt + 1))
+                                done
 
-                                    # Máy đã pair Wireless debugging được adb
-                                    # tự kết nối qua mDNS sau khi server khởi
-                                    # động, nên chờ tối đa 15 giây.
-                                    attempt=0
-                                    while [ -z "$(list_devices)" ] && [ "$attempt" -lt 15 ]; do
-                                        sleep 1
-                                        attempt=$((attempt + 1))
-                                    done
+                                "$ADB_EXE" devices -l
+                                connected=$(list_devices)
 
-                                    "$ADB_EXE" devices -l
-
-                                    serials="$PEARZ_ADB_SERIALS"
-                                    if [ -z "$serials" ]; then
-                                        serials=$(list_devices)
-                                    fi
-
-                                    if [ -z "$serials" ]; then
-                                        echo "ERROR: No authorized Android device is connected."
-                                        exit 1
-                                    fi
-
-                                    failed=0
-                                    for serial in $serials; do
-                                        echo "Installing $OUTPUT_PATH on $serial"
-                                        if ! "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
-                                            echo "ERROR: Install failed on $serial"
-                                            failed=1
+                                serials=""
+                                if [ -n "$PEARZ_ADB_SERIALS" ]; then
+                                    for serial in $PEARZ_ADB_SERIALS; do
+                                        if printf '%s\\n' "$connected" | grep -Fqx "$serial"; then
+                                            serials="$serials $serial"
+                                        else
+                                            echo "Device $serial is not connected; skipped."
                                         fi
                                     done
+                                else
+                                    serials="$connected"
+                                fi
 
-                                    exit "$failed"
-                                '''
-                            } else {
-                                bat '''
-                                    @echo off
-                                    setlocal EnableDelayedExpansion
+                                if [ -z "$(echo $serials)" ]; then
+                                    echo "No Android device is connected; install skipped."
+                                    exit 3
+                                fi
 
-                                    "%ADB_EXE%" start-server || exit /b 1
+                                failed=0
+                                installed=""
+                                for serial in $serials; do
+                                    echo "Installing $OUTPUT_PATH on $serial"
+                                    if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
+                                        model=$("$ADB_EXE" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\\r')
+                                        installed="$installed, ${model:-$serial}"
+                                    else
+                                        echo "ERROR: Install failed on $serial"
+                                        failed=1
+                                    fi
+                                done
 
-                                    for %%D in (%PEARZ_ADB_ADDRESSES%) do (
-                                        "%ADB_EXE%" disconnect %%D >nul 2>&1
-                                        "%ADB_EXE%" connect %%D
+                                printf '%s' "${installed#, }" > "$PEARZ_ADB_RESULT_PATH"
+                                exit "$failed"
+                            ''')
+                        } else {
+                            installStatus = bat(returnStatus: true, script: '''
+                                @echo off
+                                setlocal EnableDelayedExpansion
+                                del /q "%PEARZ_ADB_RESULT_PATH%" 2>nul
+
+                                set JENKINS_NODE_COOKIE=dontKillMe
+                                set BUILD_ID=dontKillMe
+                                "%ADB_EXE%" start-server || exit /b 1
+                                "%ADB_EXE%" devices -l
+
+                                set "CONNECTED="
+                                for /f "skip=1 tokens=1,2" %%A in ('"%ADB_EXE%" devices') do (
+                                    if "%%B"=="device" set "CONNECTED=!CONNECTED! %%A"
+                                )
+
+                                set "SERIALS="
+                                if defined PEARZ_ADB_SERIALS (
+                                    for %%S in (%PEARZ_ADB_SERIALS%) do (
+                                        echo !CONNECTED! | findstr /c:" %%S" >nul && set "SERIALS=!SERIALS! %%S"
                                     )
-                                    if defined PEARZ_ADB_ADDRESSES timeout /t 3 /nobreak >nul
+                                ) else (
+                                    set "SERIALS=!CONNECTED!"
+                                )
 
-                                    "%ADB_EXE%" devices -l
+                                if not defined SERIALS (
+                                    echo No Android device is connected; install skipped.
+                                    exit /b 3
+                                )
 
-                                    set "SERIALS=%PEARZ_ADB_SERIALS%"
-                                    if not defined SERIALS (
-                                        for /f "skip=1 tokens=1,2" %%A in ('"%ADB_EXE%" devices') do (
-                                            if "%%B"=="device" set "SERIALS=!SERIALS! %%A"
-                                        )
+                                set FAILED=0
+                                set "INSTALLED="
+                                for %%S in (!SERIALS!) do (
+                                    echo Installing %OUTPUT_PATH% on %%S
+                                    "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
+                                    if errorlevel 1 (
+                                        echo ERROR: Install failed on %%S
+                                        set FAILED=1
+                                    ) else (
+                                        set "INSTALLED=!INSTALLED! %%S"
                                     )
+                                )
 
-                                    if not defined SERIALS (
-                                        echo ERROR: No authorized Android device is connected.
-                                        exit /b 1
-                                    )
-
-                                    set FAILED=0
-                                    for %%S in (!SERIALS!) do (
-                                        echo Installing %OUTPUT_PATH% on %%S
-                                        "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
-                                        if errorlevel 1 (
-                                            echo ERROR: Install failed on %%S
-                                            set FAILED=1
-                                        )
-                                    )
-
-                                    exit /b !FAILED!
-                                '''
-                            }
+                                if defined INSTALLED (echo !INSTALLED!)> "%PEARZ_ADB_RESULT_PATH%"
+                                exit /b !FAILED!
+                            ''')
                         }
+
+                        def installedOn = fileExists(env.PEARZ_ADB_RESULT_PATH)
+                            ? readFile(env.PEARZ_ADB_RESULT_PATH).trim()
+                            : ''
+
+                        if (installStatus == 3) {
+                            env.ANDROID_INSTALL_STATUS =
+                                'Skipped: no device connected.'
+                        } else if (installStatus == 0) {
+                            env.ANDROID_INSTALL_STATUS =
+                                "Installed on ${installedOn}."
+                        } else {
+                            env.ANDROID_INSTALL_STATUS = installedOn
+                                ? "Partially installed (${installedOn}); see log."
+                                : 'Install failed; see log.'
+                            unstable('adb install failed on at least one device.')
+                        }
+
+                        echo "Device install: ${env.ANDROID_INSTALL_STATUS}"
                     }
                 }
             }
@@ -1822,6 +1846,7 @@ def buildTelegramMessage() {
         APK: telegramHtmlEscape(apkDescription),
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
+        INSTALL_STATUS: telegramHtmlEscape(env.ANDROID_INSTALL_STATUS),
         ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
             ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
             : '',

@@ -6,18 +6,18 @@ All notable changes to this package are documented in this file.
 
 ### Added
 
-- Android APK builds can now be installed automatically on devices connected
-  to the Jenkins agent via adb. Enable the Boolean `ANDROID_INSTALL_TO_DEVICE`
-  parameter (or `androidInstallToDevice: true` in the Jenkinsfile). The
-  optional `ANDROID_DEVICE_SERIAL` selects devices by serial; when empty, the
-  APK is installed on every authorized connected device. adb is resolved from
-  `adbExe`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, Unity's bundled Android SDK,
-  then `PATH`. An install failure marks the build `UNSTABLE` without blocking
-  the Google Drive upload or notifications. AAB builds skip this stage.
-- Wireless install: the optional `ANDROID_DEVICE_ADDRESS` parameter (or
-  `androidDeviceAddress`) lists `host:port` addresses that PearzCI reconnects
-  with `adb connect` before installing. Devices paired through Android 11+
-  Wireless debugging are also picked up through adb's mDNS auto-connect.
+- Android APK builds can now be installed automatically via adb on devices
+  connected to the Jenkins agent, over USB or Android 11+ Wireless debugging
+  (paired devices are reconnected by adb's mDNS auto-connect). Enable the
+  Boolean `ANDROID_INSTALL_TO_DEVICE` parameter (or
+  `androidInstallToDevice: true`). The optional `ANDROID_DEVICE_SERIAL`
+  limits the install to specific serials. adb is resolved from `adbExe`,
+  `ANDROID_HOME`/`ANDROID_SDK_ROOT`, Unity's bundled Android SDK, then `PATH`,
+  and its server is kept alive between builds.
+- When no device is connected the install is skipped and the build stays
+  `SUCCESS`. An install failure marks the build `UNSTABLE` without blocking the
+  Google Drive upload or notifications. AAB builds skip this stage. The result
+  is shown on the Telegram `Install:` line.
 
 ## [0.6.64] - 2026-08-24
 
