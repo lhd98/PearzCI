@@ -174,7 +174,9 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
-  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, and `PROFILE_GRADLE`
+  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
+  `ANDROID_INSTALL_TO_DEVICE`
+- String `ANDROID_DEVICE_SERIAL`
 - String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
@@ -204,6 +206,16 @@ và tạo Gradle profile HTML. Tải `Builds/Android/gradle-profile/` và
 `gradle-profile.log` từ Jenkins artifacts để xem task Gradle nào chậm. Chế độ
 này có thể làm build chẩn đoán lâu thêm gần bằng một lần Gradle build, nhưng
 không thay đổi source project, artifact chính, hoặc AAB version-code counter.
+
+`ANDROID_INSTALL_TO_DEVICE` mặc định là `false`. Khi bật cho build APK,
+sau bước archive PearzCI chạy `adb install -r -d` để cài APK lên máy Android
+đang cắm vào Jenkins agent (cần bật USB debugging và đã cho phép máy tính).
+String tuỳ chọn `ANDROID_DEVICE_SERIAL` chọn máy theo serial (nhiều serial
+cách nhau bằng dấu cách hoặc dấu phẩy); để trống thì cài lên mọi máy đang ở
+trạng thái `device`. adb được dò theo thứ tự: config `adbExe`,
+`ANDROID_HOME`/`ANDROID_SDK_ROOT`, SDK đi kèm Unity, rồi `adb` trên `PATH`.
+Cài thất bại chỉ đánh build `UNSTABLE`; upload Drive và Telegram vẫn chạy.
+Build AAB bỏ qua bước này.
 
 `ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
 parameter. APK builds use a fixed version code of `1`, because testers identify

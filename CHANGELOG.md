@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.65] - 2026-09-24
+
+### Added
+
+- Android APK builds can now be installed automatically on devices connected
+  to the Jenkins agent via adb. Enable the Boolean `ANDROID_INSTALL_TO_DEVICE`
+  parameter (or `androidInstallToDevice: true` in the Jenkinsfile). The
+  optional `ANDROID_DEVICE_SERIAL` selects devices by serial; when empty, the
+  APK is installed on every authorized connected device. adb is resolved from
+  `adbExe`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, Unity's bundled Android SDK,
+  then `PATH`. An install failure marks the build `UNSTABLE` without blocking
+  the Google Drive upload or notifications. AAB builds skip this stage.
+
 ## [0.6.64] - 2026-08-24
 
 ### Fixed

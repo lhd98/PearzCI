@@ -26,6 +26,16 @@ def call(Map config = [:]) {
     // iOS bắt buộc chạy trên macOS; Android giữ nguyên "any" như trước để
     // không đổi cách chọn node của các job Android đang chạy. Nhãn rỗng
     // tương đương `agent any`.
+    // Mặc định tắt: chỉ cài APK lên máy Android cắm vào agent khi job bật rõ.
+    def androidInstallToDevice = config.get(
+        'androidInstallToDevice', params.ANDROID_INSTALL_TO_DEVICE ?: false
+    ).toString().trim().toBoolean()
+    // Để trống thì cài lên mọi máy đang ở trạng thái "device" trong
+    // `adb devices`; điền serial (cách nhau bằng dấu cách/phẩy) để chọn máy.
+    def androidDeviceSerial = config.get(
+        'androidDeviceSerial', params.ANDROID_DEVICE_SERIAL ?: ''
+    ).toString().trim()
+    def configuredAdbExe = config.get('adbExe', '').toString().trim()
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     if (isIos && !macAgentLabel) {
         throw new IllegalArgumentException(
@@ -972,6 +982,96 @@ def call(Map config = [:]) {
                 }
             }
 
+            // Cài APK vừa build lên máy Android cắm vào agent qua adb. Lỗi ở
+            // đây (không có máy, máy chưa bật USB debugging, sai chữ ký...)
+            // chỉ đánh UNSTABLE để artifact vẫn được upload và báo Telegram.
+            stage('Install on Android Device') {
+                when { expression { isAndroid && androidInstallToDevice } }
+                options { timeout(time: 10, unit: 'MINUTES') }
+                steps {
+                    script {
+                        if (env.OUTPUT_EXTENSION != 'apk') {
+                            echo 'BUILD_APP_BUNDLE is enabled; an AAB cannot be ' +
+                                'installed with adb. Skipping device install.'
+                            return
+                        }
+
+                        env.ADB_EXE = resolveAdbExe(configuredAdbExe)
+                        env.PEARZ_ADB_SERIALS = androidDeviceSerial
+                            .replace(',', ' ')
+                        echo "adb path: ${env.ADB_EXE}"
+
+                        catchError(
+                            buildResult: 'UNSTABLE',
+                            stageResult: 'FAILURE'
+                        ) {
+                            if (isUnix()) {
+                                sh '''
+                                    set -eu
+
+                                    "$ADB_EXE" start-server
+                                    "$ADB_EXE" devices -l
+
+                                    serials="$PEARZ_ADB_SERIALS"
+                                    if [ -z "$serials" ]; then
+                                        serials=$("$ADB_EXE" devices |
+                                            awk 'NR > 1 && $2 == "device" { print $1 }')
+                                    fi
+
+                                    if [ -z "$serials" ]; then
+                                        echo "ERROR: No authorized Android device is connected."
+                                        exit 1
+                                    fi
+
+                                    failed=0
+                                    for serial in $serials; do
+                                        echo "Installing $OUTPUT_PATH on $serial"
+                                        if ! "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
+                                            echo "ERROR: Install failed on $serial"
+                                            failed=1
+                                        fi
+                                    done
+
+                                    exit "$failed"
+                                '''
+                            } else {
+                                bat '''
+                                    @echo off
+                                    setlocal EnableDelayedExpansion
+
+                                    "%ADB_EXE%" start-server || exit /b 1
+                                    "%ADB_EXE%" devices -l
+
+                                    set "SERIALS=%PEARZ_ADB_SERIALS%"
+                                    if not defined SERIALS (
+                                        for /f "skip=1 tokens=1,2" %%A in ('"%ADB_EXE%" devices') do (
+                                            if "%%B"=="device" set "SERIALS=!SERIALS! %%A"
+                                        )
+                                    )
+
+                                    if not defined SERIALS (
+                                        echo ERROR: No authorized Android device is connected.
+                                        exit /b 1
+                                    )
+
+                                    set FAILED=0
+                                    for %%S in (!SERIALS!) do (
+                                        echo Installing %OUTPUT_PATH% on %%S
+                                        "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
+                                        if errorlevel 1 (
+                                            echo ERROR: Install failed on %%S
+                                            set FAILED=1
+                                        )
+                                    )
+
+                                    exit /b !FAILED!
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+
             // Các stage 'Validate rclone', 'Verify Google Drive Upload',
             // 'Create Public Link' và 'Archive Notification Artifacts' đã gộp
             // hết vào đây để bớt cột Stage View. Đánh đổi: hỏng ở bất kỳ bước
@@ -1374,6 +1474,36 @@ def call(Map config = [:]) {
             }
         }
     }
+}
+
+// Thứ tự dò adb: config `adbExe` > ANDROID_HOME/ANDROID_SDK_ROOT > SDK đi
+// kèm Unity (Android Build Support) > `adb` trên PATH.
+def resolveAdbExe(String configuredAdbExe) {
+    if (configuredAdbExe) {
+        return configuredAdbExe
+    }
+
+    def adbName = isUnix() ? 'adb' : 'adb.exe'
+    def candidates = []
+
+    [env.ANDROID_HOME, env.ANDROID_SDK_ROOT].each { sdkRoot ->
+        if (sdkRoot?.trim()) {
+            candidates << "${sdkRoot.trim()}/platform-tools/${adbName}"
+        }
+    }
+
+    def unityRoot = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}"
+    candidates << (isUnix()
+        ? "${unityRoot}/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}"
+        : "${unityRoot}/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}")
+
+    for (def candidate : candidates) {
+        if (fileExists(candidate)) {
+            return candidate
+        }
+    }
+
+    return adbName
 }
 
 def createRcloneLink(String remotePath) {
