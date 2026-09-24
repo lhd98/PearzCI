@@ -2,6 +2,30 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.65] - 2026-09-24
+
+### Added
+
+- Android APK builds can now be installed automatically via adb on devices
+  connected to the Jenkins agent, over USB or Android 11+ Wireless debugging
+  (paired devices are reconnected by adb's mDNS auto-connect). Enable the
+  Boolean `ANDROID_INSTALL_TO_DEVICE` parameter (or
+  `androidInstallToDevice: true`). The optional `ANDROID_DEVICE_SERIAL`
+  limits the install to specific serials. adb is resolved from `adbExe`,
+  `ANDROID_HOME`/`ANDROID_SDK_ROOT`, Unity's bundled Android SDK, then `PATH`,
+  and its server is kept alive between builds.
+- When no device is connected the install is skipped and the build stays
+  `SUCCESS`. An install failure marks the build `UNSTABLE` without blocking the
+  Google Drive upload or notifications. AAB builds skip this stage. The result
+  is shown on the Telegram `Install:` line.
+
+### Changed
+
+- The Generic Webhook Trigger repository JSON path and the provider name shown
+  in the build cause are configurable through `webhookRepositoryJsonPath`
+  (default `$.repository.full_name`) and `webhookProviderName` (default
+  `GitHub`).
+
 ## [0.6.64] - 2026-08-24
 
 ### Fixed

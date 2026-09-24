@@ -174,7 +174,9 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
-  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, and `PROFILE_GRADLE`
+  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
+  `ANDROID_INSTALL_TO_DEVICE`
+- String `ANDROID_DEVICE_SERIAL`
 - String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
@@ -204,6 +206,22 @@ và tạo Gradle profile HTML. Tải `Builds/Android/gradle-profile/` và
 `gradle-profile.log` từ Jenkins artifacts để xem task Gradle nào chậm. Chế độ
 này có thể làm build chẩn đoán lâu thêm gần bằng một lần Gradle build, nhưng
 không thay đổi source project, artifact chính, hoặc AAB version-code counter.
+
+`ANDROID_INSTALL_TO_DEVICE` mặc định là `false`. Khi bật cho build APK,
+sau bước archive PearzCI chạy `adb install -r -d` để cài APK lên mọi máy
+Android đang kết nối với Jenkins agent, qua USB hoặc Wireless debugging
+(Android 11+). String tuỳ chọn `ANDROID_DEVICE_SERIAL` giới hạn cài lên các
+serial chỉ định (cách nhau bằng dấu cách hoặc dấu phẩy). Không có máy nào kết
+nối thì bỏ qua, build vẫn `SUCCESS`; cài lỗi chỉ đánh `UNSTABLE`, upload Drive
+và Telegram vẫn chạy. Kết quả hiện ở dòng `Install:` của Telegram. Build AAB
+bỏ qua bước này.
+
+adb được dò theo thứ tự: config `adbExe`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`,
+SDK đi kèm Unity, rồi `adb` trên `PATH`. PearzCI giữ adb server chạy giữa các
+build. Với Wireless debugging, pair điện thoại một lần trên agent bằng đúng
+user chạy Jenkins (`adb pair <ip>:<port>` rồi nhập mã 6 số); sau đó adb tự kết
+nối lại qua mDNS, kể cả khi cổng đổi. Agent và điện thoại phải cùng mạng con
+và router phải cho multicast (mDNS) đi qua giữa mạng dây và Wi-Fi.
 
 `ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
 parameter. APK builds use a fixed version code of `1`, because testers identify
@@ -301,7 +319,7 @@ current Jenkins `BUILD_NUMBER`.
 
 Android và iOS **dùng chung một pipeline**, nên Stage View hiển thị chung một
 đồ thị cho mọi nền tảng; stage nào không áp dụng cho build hiện tại thì hiện ở
-trạng thái skipped. Pipeline gồm **10 stage**:
+trạng thái skipped. Pipeline gồm **11 stage**:
 
 | Stage | Chạy khi |
 |-------|----------|
@@ -313,6 +331,7 @@ trạng thái skipped. Pipeline gồm **10 stage**:
 | Archive and Export IPA | iOS, build IPA (không phải cắm máy) |
 | Build and Install on iOS Device | iOS, build cắm thẳng vào iPhone |
 | Verify & Archive Artifact | mọi build trừ iOS cắm máy — kèm đọc metadata |
+| Install on Android Device | Android và `ANDROID_INSTALL_TO_DEVICE=true` — không có máy kết nối thì bỏ qua |
 | Upload to Google Drive | mọi build trừ iOS cắm máy |
 | Upload to TestFlight | iOS IPA và `UPLOAD_TO_TESTFLIGHT=true` |
 

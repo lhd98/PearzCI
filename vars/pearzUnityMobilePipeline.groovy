@@ -26,6 +26,16 @@ def call(Map config = [:]) {
     // iOS bắt buộc chạy trên macOS; Android giữ nguyên "any" như trước để
     // không đổi cách chọn node của các job Android đang chạy. Nhãn rỗng
     // tương đương `agent any`.
+    // Mặc định tắt: chỉ cài APK lên máy Android cắm vào agent khi job bật rõ.
+    def androidInstallToDevice = config.get(
+        'androidInstallToDevice', params.ANDROID_INSTALL_TO_DEVICE ?: false
+    ).toString().trim().toBoolean()
+    // Để trống thì cài lên mọi máy đang ở trạng thái "device" trong
+    // `adb devices`; điền serial (cách nhau bằng dấu cách/phẩy) để chọn máy.
+    def androidDeviceSerial = config.get(
+        'androidDeviceSerial', params.ANDROID_DEVICE_SERIAL ?: ''
+    ).toString().trim()
+    def configuredAdbExe = config.get('adbExe', '').toString().trim()
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     if (isIos && !macAgentLabel) {
         throw new IllegalArgumentException(
@@ -90,6 +100,24 @@ def call(Map config = [:]) {
         (params.GIT_BRANCH?.toString()?.trim() ?: defaultGitBranch)
     )
     def webhookRepository = extractGitHubRepository(repositoryUrl)
+    def webhookRepositoryJsonPath = config.get(
+        'webhookRepositoryJsonPath',
+        '$.repository.full_name'
+    ).toString().trim()
+    def webhookProviderName = config.get(
+        'webhookProviderName',
+        'GitHub'
+    ).toString().trim()
+    if (!webhookRepositoryJsonPath) {
+        throw new IllegalArgumentException(
+            'webhookRepositoryJsonPath must not be empty.'
+        )
+    }
+    if (!webhookProviderName) {
+        throw new IllegalArgumentException(
+            'webhookProviderName must not be empty.'
+        )
+    }
     def webhookFilterExpression = webhookRepository
         ? '^' + regexEscape(webhookRepository) +
             ' refs/heads/' + regexEscape(webhookBranch) + '$'
@@ -116,7 +144,7 @@ def call(Map config = [:]) {
                 genericVariables: [
                     [
                         key: 'PEARZ_WEBHOOK_REPOSITORY',
-                        value: '$.repository.full_name'
+                        value: webhookRepositoryJsonPath
                     ],
                     [
                         key: 'PEARZ_WEBHOOK_REF',
@@ -124,7 +152,7 @@ def call(Map config = [:]) {
                     ]
                 ],
                 causeString:
-                    'Triggered by GitHub push: ' +
+                    "Triggered by ${webhookProviderName} push: " +
                     '$PEARZ_WEBHOOK_REPOSITORY $PEARZ_WEBHOOK_REF',
                 tokenCredentialId: 'pearz-github-webhook',
                 printContributedVariables: false,
@@ -972,6 +1000,162 @@ def call(Map config = [:]) {
                 }
             }
 
+            // Cài APK vừa build lên máy Android qua adb (USB hoặc Wireless
+            // debugging đã pair, adb tự kết nối qua mDNS). Không có máy nào
+            // đang kết nối thì bỏ qua, build vẫn SUCCESS. Cài lỗi (sai chữ
+            // ký, máy từ chối...) chỉ đánh UNSTABLE để upload và Telegram vẫn
+            // chạy.
+            stage('Install on Android Device') {
+                when { expression { isAndroid && androidInstallToDevice } }
+                options { timeout(time: 10, unit: 'MINUTES') }
+                steps {
+                    script {
+                        if (env.OUTPUT_EXTENSION != 'apk') {
+                            env.ANDROID_INSTALL_STATUS =
+                                'Skipped: AAB cannot be installed with adb.'
+                            echo env.ANDROID_INSTALL_STATUS
+                            return
+                        }
+
+                        env.ADB_EXE = resolveAdbExe(configuredAdbExe)
+                        env.PEARZ_ADB_SERIALS = androidDeviceSerial
+                            .replace(',', ' ')
+                        env.PEARZ_ADB_RESULT_PATH =
+                            "${env.WORKSPACE}/Builds/Android/device-install.txt"
+                        echo "adb path: ${env.ADB_EXE}"
+
+                        // Exit code: 0 = đã cài, 3 = không có máy, khác = lỗi.
+                        // Cookie dontKillMe giữ adb server sống qua các build
+                        // để máy không dây không phải dò lại mDNS mỗi lần.
+                        def installStatus
+                        if (isUnix()) {
+                            installStatus = sh(returnStatus: true, script: '''
+                                set -u
+                                rm -f "$PEARZ_ADB_RESULT_PATH"
+
+                                JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe \
+                                    "$ADB_EXE" start-server || exit 1
+
+                                list_devices() {
+                                    "$ADB_EXE" devices |
+                                        awk 'NR > 1 && $2 == "device" { print $1 }'
+                                }
+
+                                # Server vừa khởi động cần vài giây để mDNS
+                                # kết nối lại máy Wireless debugging đã pair.
+                                attempt=0
+                                while [ -z "$(list_devices)" ] && [ "$attempt" -lt 5 ]; do
+                                    sleep 1
+                                    attempt=$((attempt + 1))
+                                done
+
+                                "$ADB_EXE" devices -l
+                                connected=$(list_devices)
+
+                                serials=""
+                                if [ -n "$PEARZ_ADB_SERIALS" ]; then
+                                    for serial in $PEARZ_ADB_SERIALS; do
+                                        if printf '%s\\n' "$connected" | grep -Fqx "$serial"; then
+                                            serials="$serials $serial"
+                                        else
+                                            echo "Device $serial is not connected; skipped."
+                                        fi
+                                    done
+                                else
+                                    serials="$connected"
+                                fi
+
+                                if [ -z "$(echo $serials)" ]; then
+                                    echo "No Android device is connected; install skipped."
+                                    exit 3
+                                fi
+
+                                failed=0
+                                installed=""
+                                for serial in $serials; do
+                                    echo "Installing $OUTPUT_PATH on $serial"
+                                    if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
+                                        model=$("$ADB_EXE" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\\r')
+                                        installed="$installed, ${model:-$serial}"
+                                    else
+                                        echo "ERROR: Install failed on $serial"
+                                        failed=1
+                                    fi
+                                done
+
+                                printf '%s' "${installed#, }" > "$PEARZ_ADB_RESULT_PATH"
+                                exit "$failed"
+                            ''')
+                        } else {
+                            installStatus = bat(returnStatus: true, script: '''
+                                @echo off
+                                setlocal EnableDelayedExpansion
+                                del /q "%PEARZ_ADB_RESULT_PATH%" 2>nul
+
+                                set JENKINS_NODE_COOKIE=dontKillMe
+                                set BUILD_ID=dontKillMe
+                                "%ADB_EXE%" start-server || exit /b 1
+                                "%ADB_EXE%" devices -l
+
+                                set "CONNECTED="
+                                for /f "skip=1 tokens=1,2" %%A in ('"%ADB_EXE%" devices') do (
+                                    if "%%B"=="device" set "CONNECTED=!CONNECTED! %%A"
+                                )
+
+                                set "SERIALS="
+                                if defined PEARZ_ADB_SERIALS (
+                                    for %%S in (%PEARZ_ADB_SERIALS%) do (
+                                        echo !CONNECTED! | findstr /c:" %%S" >nul && set "SERIALS=!SERIALS! %%S"
+                                    )
+                                ) else (
+                                    set "SERIALS=!CONNECTED!"
+                                )
+
+                                if not defined SERIALS (
+                                    echo No Android device is connected; install skipped.
+                                    exit /b 3
+                                )
+
+                                set FAILED=0
+                                set "INSTALLED="
+                                for %%S in (!SERIALS!) do (
+                                    echo Installing %OUTPUT_PATH% on %%S
+                                    "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
+                                    if errorlevel 1 (
+                                        echo ERROR: Install failed on %%S
+                                        set FAILED=1
+                                    ) else (
+                                        set "INSTALLED=!INSTALLED! %%S"
+                                    )
+                                )
+
+                                if defined INSTALLED (echo !INSTALLED!)> "%PEARZ_ADB_RESULT_PATH%"
+                                exit /b !FAILED!
+                            ''')
+                        }
+
+                        def installedOn = fileExists(env.PEARZ_ADB_RESULT_PATH)
+                            ? readFile(env.PEARZ_ADB_RESULT_PATH).trim()
+                            : ''
+
+                        if (installStatus == 3) {
+                            env.ANDROID_INSTALL_STATUS =
+                                'Skipped: no device connected.'
+                        } else if (installStatus == 0) {
+                            env.ANDROID_INSTALL_STATUS =
+                                "Installed on ${installedOn}."
+                        } else {
+                            env.ANDROID_INSTALL_STATUS = installedOn
+                                ? "Partially installed (${installedOn}); see log."
+                                : 'Install failed; see log.'
+                            unstable('adb install failed on at least one device.')
+                        }
+
+                        echo "Device install: ${env.ANDROID_INSTALL_STATUS}"
+                    }
+                }
+            }
+
             // Các stage 'Validate rclone', 'Verify Google Drive Upload',
             // 'Create Public Link' và 'Archive Notification Artifacts' đã gộp
             // hết vào đây để bớt cột Stage View. Đánh đổi: hỏng ở bất kỳ bước
@@ -1376,6 +1560,36 @@ def call(Map config = [:]) {
     }
 }
 
+// Thứ tự dò adb: config `adbExe` > ANDROID_HOME/ANDROID_SDK_ROOT > SDK đi
+// kèm Unity (Android Build Support) > `adb` trên PATH.
+def resolveAdbExe(String configuredAdbExe) {
+    if (configuredAdbExe) {
+        return configuredAdbExe
+    }
+
+    def adbName = isUnix() ? 'adb' : 'adb.exe'
+    def candidates = []
+
+    [env.ANDROID_HOME, env.ANDROID_SDK_ROOT].each { sdkRoot ->
+        if (sdkRoot?.trim()) {
+            candidates << "${sdkRoot.trim()}/platform-tools/${adbName}"
+        }
+    }
+
+    def unityRoot = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}"
+    candidates << (isUnix()
+        ? "${unityRoot}/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}"
+        : "${unityRoot}/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}")
+
+    for (def candidate : candidates) {
+        if (fileExists(candidate)) {
+            return candidate
+        }
+    }
+
+    return adbName
+}
+
 def createRcloneLink(String remotePath) {
     if (!remotePath?.trim()) {
         return ''
@@ -1650,6 +1864,7 @@ def buildTelegramMessage() {
         APK: telegramHtmlEscape(apkDescription),
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
+        INSTALL_STATUS: telegramHtmlEscape(env.ANDROID_INSTALL_STATUS),
         ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
             ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
             : '',
