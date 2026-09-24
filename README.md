@@ -319,7 +319,7 @@ current Jenkins `BUILD_NUMBER`.
 
 Android và iOS **dùng chung một pipeline**, nên Stage View hiển thị chung một
 đồ thị cho mọi nền tảng; stage nào không áp dụng cho build hiện tại thì hiện ở
-trạng thái skipped. Pipeline gồm **10 stage**:
+trạng thái skipped. Pipeline gồm **11 stage**:
 
 | Stage | Chạy khi |
 |-------|----------|
@@ -331,6 +331,7 @@ trạng thái skipped. Pipeline gồm **10 stage**:
 | Archive and Export IPA | iOS, build IPA (không phải cắm máy) |
 | Build and Install on iOS Device | iOS, build cắm thẳng vào iPhone |
 | Verify & Archive Artifact | mọi build trừ iOS cắm máy — kèm đọc metadata |
+| Install on Android Device | Android và `ANDROID_INSTALL_TO_DEVICE=true` — không có máy kết nối thì bỏ qua |
 | Upload to Google Drive | mọi build trừ iOS cắm máy |
 | Upload to TestFlight | iOS IPA và `UPLOAD_TO_TESTFLIGHT=true` |
 

@@ -19,6 +19,13 @@ All notable changes to this package are documented in this file.
   Google Drive upload or notifications. AAB builds skip this stage. The result
   is shown on the Telegram `Install:` line.
 
+### Changed
+
+- The Generic Webhook Trigger repository JSON path and the provider name shown
+  in the build cause are configurable through `webhookRepositoryJsonPath`
+  (default `$.repository.full_name`) and `webhookProviderName` (default
+  `GitHub`).
+
 ## [0.6.64] - 2026-08-24
 
 ### Fixed
