@@ -176,7 +176,7 @@ Common optional parameters:
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
   `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
   `ANDROID_INSTALL_TO_DEVICE`
-- String `ANDROID_DEVICE_SERIAL`
+- String `ANDROID_DEVICE_SERIAL` and `ANDROID_DEVICE_ADDRESS`
 - String `APP_VERSION` and `KEY_ALIAS_NAME`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
@@ -216,6 +216,13 @@ trạng thái `device`. adb được dò theo thứ tự: config `adbExe`,
 `ANDROID_HOME`/`ANDROID_SDK_ROOT`, SDK đi kèm Unity, rồi `adb` trên `PATH`.
 Cài thất bại chỉ đánh build `UNSTABLE`; upload Drive và Telegram vẫn chạy.
 Build AAB bỏ qua bước này.
+
+Cài không dây: String tuỳ chọn `ANDROID_DEVICE_ADDRESS` nhận danh sách
+`host:port` (cách nhau bằng dấu cách hoặc dấu phẩy); PearzCI chạy
+`adb disconnect` rồi `adb connect` từng địa chỉ trước khi cài. Máy Android 11+
+đã pair Wireless debugging với Jenkins agent (`adb pair host:port code`, chạy
+bằng đúng user của agent) thường được adb tự kết nối qua mDNS nên có thể để
+trống. Nên đặt IP tĩnh (DHCP reservation) cho điện thoại trên router.
 
 `ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
 parameter. APK builds use a fixed version code of `1`, because testers identify

@@ -14,6 +14,10 @@ All notable changes to this package are documented in this file.
   `adbExe`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, Unity's bundled Android SDK,
   then `PATH`. An install failure marks the build `UNSTABLE` without blocking
   the Google Drive upload or notifications. AAB builds skip this stage.
+- Wireless install: the optional `ANDROID_DEVICE_ADDRESS` parameter (or
+  `androidDeviceAddress`) lists `host:port` addresses that PearzCI reconnects
+  with `adb connect` before installing. Devices paired through Android 11+
+  Wireless debugging are also picked up through adb's mDNS auto-connect.
 
 ## [0.6.64] - 2026-08-24
 

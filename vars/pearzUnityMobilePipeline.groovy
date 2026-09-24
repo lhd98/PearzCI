@@ -35,6 +35,12 @@ def call(Map config = [:]) {
     def androidDeviceSerial = config.get(
         'androidDeviceSerial', params.ANDROID_DEVICE_SERIAL ?: ''
     ).toString().trim()
+    // Cài không dây: danh sách host:port để `adb connect` trước khi cài.
+    // Với Wireless debugging (Android 11+) đã pair, adb thường tự kết nối qua
+    // mDNS nên có thể để trống.
+    def androidDeviceAddress = config.get(
+        'androidDeviceAddress', params.ANDROID_DEVICE_ADDRESS ?: ''
+    ).toString().trim()
     def configuredAdbExe = config.get('adbExe', '').toString().trim()
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     if (isIos && !macAgentLabel) {
@@ -982,7 +988,7 @@ def call(Map config = [:]) {
                 }
             }
 
-            // Cài APK vừa build lên máy Android cắm vào agent qua adb. Lỗi ở
+            // Cài APK vừa build lên máy Android qua adb (USB hoặc Wi-Fi). Lỗi ở
             // đây (không có máy, máy chưa bật USB debugging, sai chữ ký...)
             // chỉ đánh UNSTABLE để artifact vẫn được upload và báo Telegram.
             stage('Install on Android Device') {
@@ -999,6 +1005,8 @@ def call(Map config = [:]) {
                         env.ADB_EXE = resolveAdbExe(configuredAdbExe)
                         env.PEARZ_ADB_SERIALS = androidDeviceSerial
                             .replace(',', ' ')
+                        env.PEARZ_ADB_ADDRESSES = androidDeviceAddress
+                            .replace(',', ' ')
                         echo "adb path: ${env.ADB_EXE}"
 
                         catchError(
@@ -1010,12 +1018,39 @@ def call(Map config = [:]) {
                                     set -eu
 
                                     "$ADB_EXE" start-server
+
+                                    list_devices() {
+                                        "$ADB_EXE" devices |
+                                            awk 'NR > 1 && $2 == "device" { print $1 }'
+                                    }
+
+                                    # Máy không dây có thể đã rớt kết nối
+                                    # (ngủ, đổi Wi-Fi): disconnect rồi connect
+                                    # lại để không dùng phiên "offline" cũ.
+                                    for address in $PEARZ_ADB_ADDRESSES; do
+                                        "$ADB_EXE" disconnect "$address" >/dev/null 2>&1 || true
+                                        output=$("$ADB_EXE" connect "$address" 2>&1 || true)
+                                        echo "$output"
+                                        case "$output" in
+                                            *"connected to"*) ;;
+                                            *) echo "WARNING: Could not connect to $address" ;;
+                                        esac
+                                    done
+
+                                    # Máy đã pair Wireless debugging được adb
+                                    # tự kết nối qua mDNS sau khi server khởi
+                                    # động, nên chờ tối đa 15 giây.
+                                    attempt=0
+                                    while [ -z "$(list_devices)" ] && [ "$attempt" -lt 15 ]; do
+                                        sleep 1
+                                        attempt=$((attempt + 1))
+                                    done
+
                                     "$ADB_EXE" devices -l
 
                                     serials="$PEARZ_ADB_SERIALS"
                                     if [ -z "$serials" ]; then
-                                        serials=$("$ADB_EXE" devices |
-                                            awk 'NR > 1 && $2 == "device" { print $1 }')
+                                        serials=$(list_devices)
                                     fi
 
                                     if [ -z "$serials" ]; then
@@ -1040,6 +1075,13 @@ def call(Map config = [:]) {
                                     setlocal EnableDelayedExpansion
 
                                     "%ADB_EXE%" start-server || exit /b 1
+
+                                    for %%D in (%PEARZ_ADB_ADDRESSES%) do (
+                                        "%ADB_EXE%" disconnect %%D >nul 2>&1
+                                        "%ADB_EXE%" connect %%D
+                                    )
+                                    if defined PEARZ_ADB_ADDRESSES timeout /t 3 /nobreak >nul
+
                                     "%ADB_EXE%" devices -l
 
                                     set "SERIALS=%PEARZ_ADB_SERIALS%"
