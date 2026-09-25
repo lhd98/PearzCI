@@ -475,7 +475,6 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
-                        // APP_VERSION là base version tuỳ chọn từ Jenkins. Khi
                         // APP_VERSION (bắt buộc) là base version; CI_BUILD_NUMBER
                         // luôn được nối vào để tester nhận biết chính xác bản
                         // build.
