@@ -2,6 +2,29 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.66] - 2026-09-25
+
+### Changed
+
+- **Breaking:** `APP_VERSION` is now required for Android and iOS builds and
+  may contain only digits and dots (for example `1.0.0`). Builds with an empty
+  or invalid value fail in `Prepare Build Variables`.
+- Google Drive now keeps one folder per version:
+  `<driveRoot>/<job>/<APP_VERSION>/`. APK, AAB and IPA of that version share the
+  folder under stable names (`<product>.apk`, `<product>.aab`,
+  `<product>.ipa`), and rebuilding the same version overwrites the previous
+  file instead of creating a new folder per build. Build info files and
+  `mapping.txt` get a per-type suffix (`<product>_APK_BUILD_INFO.txt`,
+  `mapping-aab.txt`) so APK and AAB do not overwrite each other. A build
+  without a mapping file removes the stale mapping of the same type.
+  Existing per-build folders (`apk/1.0.0-157/`) are left untouched.
+
+### Added
+
+- Optional `ANDROID_VERSION_CODE` Jenkins parameter to set the APK/AAB version
+  code explicitly. When empty, APKs keep code `1` and AABs keep using the
+  per-job counter; a manual AAB code at or above the counter advances it.
+
 ## [0.6.65] - 2026-09-24
 
 ### Added
