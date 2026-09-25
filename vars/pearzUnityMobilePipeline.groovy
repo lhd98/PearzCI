@@ -304,6 +304,19 @@ def call(Map config = [:]) {
                             '_'
                         )
 
+                        // APP_VERSION bắt buộc: nó quyết định thư mục Drive
+                        // của build, nên để trống sẽ không biết đặt artifact
+                        // vào đâu. Chỉ gồm số và dấu chấm để hợp lệ cả với
+                        // CFBundleShortVersionString của iOS.
+                        def appVersion = params.APP_VERSION?.toString()?.trim() ?: ''
+                        if (!(appVersion ==~ /[0-9]+(\.[0-9]+)*/)) {
+                            error(
+                                'APP_VERSION is required and must contain only ' +
+                                "digits and dots, for example 1.0.0 (got '${appVersion}')."
+                            )
+                        }
+                        env.PEARZ_APP_VERSION = appVersion
+
                         def artifactBuildNumber = env.BUILD_NUMBER
                         env.ARTIFACT_BUILD_NUMBER = artifactBuildNumber
 
@@ -311,14 +324,17 @@ def call(Map config = [:]) {
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
                         // Giữ một artifact Android duy nhất trong workspace để
-                        // mỗi APK/AAB mới ghi đè file trước. Drive và Jenkins
-                        // archive dùng DRIVE_OUTPUT_FILE_NAME có BUILD_NUMBER,
-                        // nên vẫn giữ được đầy đủ lịch sử phát hành.
+                        // mỗi APK/AAB mới ghi đè file trước. Jenkins archive
+                        // lưu riêng theo từng build nên vẫn còn lịch sử.
                         env.OUTPUT_FILE_NAME = !isIos
                             ? "${outputName}.${env.OUTPUT_EXTENSION}"
                             : "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
+                        // Trên Drive tên file không kèm số build: build lại
+                        // cùng version sẽ ghi đè APK/AAB/IPA cũ thay vì đẻ
+                        // thêm file. Lịch sử từng build vẫn nằm trong Jenkins
+                        // archive.
                         env.DRIVE_OUTPUT_FILE_NAME =
-                            "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
+                            "${outputName}.${env.OUTPUT_EXTENSION}"
                         def buildFolder = isIos ? 'iOS' : 'Android'
                         env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
                         env.BUILD_INFO_FILE_NAME = "${outputName}_BUILD_INFO.txt"
@@ -335,28 +351,21 @@ def call(Map config = [:]) {
                             env.XCODEBUILD_LOG_PATH = "${env.WORKSPACE}/Builds/iOS/xcodebuild.log"
                             env.DERIVED_DATA_PATH = "${env.WORKSPACE}/Builds/iOS/DerivedData"
                         }
-                        def buildVersion = params.APP_VERSION?.trim()
-                            ? "${params.APP_VERSION.trim()}-${artifactBuildNumber}"
-                            : artifactBuildNumber
-                        env.BUILD_VERSION = buildVersion
-                        // Drive được chia hai cấp dưới tên job: loại artifact
-                        // rồi tới version, ví dụ FoodSort/apk/1.0.0-157. APK và
-                        // AAB tách hẳn nhau vì chúng đi hai đường khác nhau
-                        // (tester và Google Play), còn iOS trước đây đổ chung
-                        // một thư mục nên mỗi build lại đè lên build trước.
-                        env.DRIVE_ARTIFACT_FOLDER = isIos
-                            ? 'ios'
-                            : env.OUTPUT_EXTENSION
+                        env.BUILD_VERSION = "${appVersion}-${artifactBuildNumber}"
+                        // Mỗi version một thư mục, APK/AAB/IPA dùng chung:
+                        // JenkinsBuild/<Job>/1.0.0/MyGame.apk. Đổi APP_VERSION
+                        // thì tạo thư mục mới; build lại version cũ thì ghi đè.
+                        // Build info và mapping có hậu tố loại artifact để APK
+                        // và AAB cùng version không đè lên nhau.
                         env.DRIVE_DIRECTORY =
                             "${env.DRIVE_REMOTE}:${env.DRIVE_ROOT}/" +
-                            "${env.JOB_BASE_NAME}/${env.DRIVE_ARTIFACT_FOLDER}/" +
-                            "${buildVersion}"
+                            "${env.JOB_BASE_NAME}/${appVersion}"
                         env.DRIVE_FILE_PATH =
                             "${env.DRIVE_DIRECTORY}/${env.DRIVE_OUTPUT_FILE_NAME}"
                         env.DRIVE_BUILD_INFO_PATH =
-                            "${env.DRIVE_DIRECTORY}/${env.BUILD_INFO_FILE_NAME}"
+                            "${env.DRIVE_DIRECTORY}/${outputName}_${env.OUTPUT_EXTENSION.toUpperCase()}_BUILD_INFO.txt"
                         env.DRIVE_MAPPING_PATH =
-                            "${env.DRIVE_DIRECTORY}/mapping-${artifactBuildNumber}.txt"
+                            "${env.DRIVE_DIRECTORY}/mapping-${env.OUTPUT_EXTENSION}.txt"
 
                         if (isUnix()) {
                             env.GIT_COMMIT_SHORT = sh(
@@ -467,13 +476,35 @@ def call(Map config = [:]) {
                     script {
                         def buildStartedAt = System.currentTimeMillis()
                         // APP_VERSION là base version tuỳ chọn từ Jenkins. Khi
-                        // để trống, Unity sẽ lấy base version trong Project
-                        // Settings; CI_BUILD_NUMBER luôn được nối vào để tester
-                        // nhận biết chính xác bản build.
-                        def ciAppVersion = params.APP_VERSION?.toString()?.trim() ?: ''
+                        // APP_VERSION (bắt buộc) là base version; CI_BUILD_NUMBER
+                        // luôn được nối vào để tester nhận biết chính xác bản
+                        // build.
+                        def ciAppVersion = env.PEARZ_APP_VERSION
                         def androidVersionCode = '1'
+                        // ANDROID_VERSION_CODE tuỳ chọn: điền thì dùng đúng số
+                        // đó cho cả APK lẫn AAB thay vì code 1 / bộ đếm AAB.
+                        def requestedVersionCode =
+                            params.ANDROID_VERSION_CODE?.toString()?.trim() ?: ''
 
-                        if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
+                        if (requestedVersionCode) {
+                            if (!(requestedVersionCode ==~ /[1-9][0-9]{0,9}/) ||
+                                requestedVersionCode.toLong() > Integer.MAX_VALUE) {
+                                error(
+                                    'ANDROID_VERSION_CODE must be a positive ' +
+                                    "integer (got '${requestedVersionCode}')."
+                                )
+                            }
+                            androidVersionCode = requestedVersionCode
+                            echo "Android version code from ANDROID_VERSION_CODE: ${androidVersionCode}"
+
+                            // AAB điền tay mà vượt bộ đếm thì đẩy bộ đếm lên
+                            // theo, để lần sau để trống không cấp lại số cũ
+                            // mà Google Play đã nhận.
+                            if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean() &&
+                                requestedVersionCode.toInteger() >= readNextAabVersionCode()) {
+                                env.AAB_VERSION_CODE = androidVersionCode
+                            }
+                        } else if (params.BUILD_APP_BUNDLE?.toString()?.toBoolean()) {
                             androidVersionCode = readNextAabVersionCode().toString()
                             env.AAB_VERSION_CODE = androidVersionCode
                             echo(
@@ -482,7 +513,7 @@ def call(Map config = [:]) {
                             )
                         }
 
-                        echo "Android APP_VERSION base passed to Unity: ${ciAppVersion ?: '(Project Settings)'}"
+                        echo "Android APP_VERSION base passed to Unity: ${ciAppVersion}"
                         echo "Android CI build number passed to Unity: ${env.ARTIFACT_BUILD_NUMBER}"
                         echo "Android version code passed to Unity: ${androidVersionCode}"
 
@@ -574,7 +605,7 @@ def call(Map config = [:]) {
                                 "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
                                 'BUNDLE_IDENTIFIER=',
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
-                                "APP_VERSION=${params.APP_VERSION ?: ''}",
+                                "APP_VERSION=${env.PEARZ_APP_VERSION}",
                                 "IOS_BUILD_NUMBER=${iosBuildNumber}",
                                 "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
@@ -1309,6 +1340,21 @@ def call(Map config = [:]) {
                                     echo(
                                         'Optional mapping.txt upload failed; ' +
                                         'the main artifact remains valid.'
+                                    )
+                                }
+                            } else if (isAndroid) {
+                                // Build lại cùng version mà lần này không có
+                                // mapping (tắt minify): xoá mapping cũ trên Drive
+                                // để nó không bị nhầm là của artifact mới.
+                                if (isUnix()) {
+                                    sh(
+                                        script: '"$RCLONE_EXE" deletefile "$DRIVE_MAPPING_PATH" >/dev/null 2>&1',
+                                        returnStatus: true
+                                    )
+                                } else {
+                                    bat(
+                                        script: '@"%RCLONE_EXE%" deletefile "%DRIVE_MAPPING_PATH%" >nul 2>&1',
+                                        returnStatus: true
                                     )
                                 }
                             }

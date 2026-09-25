@@ -164,6 +164,8 @@ Required parameters:
   `git@github.com:PearzGame/MyGame.git`
 - String `GIT_BRANCH`, for example `main`
 - String `PRODUCT_NAME`, for example `MyGame`
+- String `APP_VERSION`, for example `1.0.0` (Android/iOS; digits and dots only).
+  It sets the app version and the Google Drive folder of the build.
 - Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
 
 Common optional parameters:
@@ -177,7 +179,7 @@ Common optional parameters:
   `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
   `ANDROID_INSTALL_TO_DEVICE`
 - String `ANDROID_DEVICE_SERIAL`
-- String `APP_VERSION` and `KEY_ALIAS_NAME`
+- String `KEY_ALIAS_NAME` and `ANDROID_VERSION_CODE`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
 - Optional String `KEYSTORE_PATH`, only to override the default
   `Config/<BundleIdentifier>.keystore` location
@@ -223,13 +225,15 @@ user chạy Jenkins (`adb pair <ip>:<port>` rồi nhập mã 6 số); sau đó a
 nối lại qua mDNS, kể cả khi cổng đổi. Agent và điện thoại phải cùng mạng con
 và router phải cho multicast (mDNS) đi qua giữa mạng dây và Wi-Fi.
 
-`ANDROID_VERSION_CODE` is managed automatically; do not create it as a Jenkins
-parameter. APK builds use a fixed version code of `1`, because testers identify
-a build by its version name, not its code; a constant code also lets any APK be
-reinstalled over another without Android blocking it as a downgrade. AAB builds
-use a separate, per-job persistent counter starting at `1`; it advances only
-after a successful AAB pipeline, so APK test builds do not consume Google Play
-version codes. The
+`ANDROID_VERSION_CODE` is optional. When filled, that exact version code is
+used for the APK or AAB. When empty, APK builds use a fixed version code of
+`1`, because testers identify a build by its version name, not its code; a
+constant code also lets any APK be reinstalled over another without Android
+blocking it as a downgrade. AAB builds with an empty value use a separate,
+per-job persistent counter starting at `1`; it advances only after a
+successful AAB pipeline, so APK test builds do not consume Google Play version
+codes. A manually entered AAB version code at or above the counter moves the
+counter past it. The
 counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
 which is retained even when `CLEAN_WORKSPACE` is enabled.
 
@@ -247,14 +251,14 @@ Each AAB does have its own Gradle configuration-cache miss because its package
 version changes, which is necessary for Google Play to show a different
 version. As soon as the AAB has been built and signed, PearzCI restores the
 generated Gradle project to the base version; APK builds also verify that base
-value before Gradle starts. The base version is `APP_VERSION` when supplied by
-Jenkins; otherwise it is `PlayerSettings.bundleVersion`.
+value before Gradle starts. The base version is always `APP_VERSION` from
+Jenkins.
 
 Testers still see the exact Jenkins build through three channels:
 
-- **Artifact filenames on Google Drive**: `<product>-<BUILD_NUMBER>.apk` /
-  `<product>-<BUILD_NUMBER>.aab`. The workspace copy uses a stable name so
-  each new build overwrites the previous one; Drive keeps the full history.
+- **Jenkins archived artifacts**: every build keeps its own APK/AAB (the last
+  `artifactBuildsToKeep` builds), even though Drive keeps only the latest file
+  per version.
 - **`build-metadata.json`**: written next to the APK/AAB, contains the full
   `versionName` (e.g. `1.0.0-67`) and other build identifiers.
 - **`StreamingAssets/pearz-build-info.txt`**: PearzCI injects a plain-text
@@ -298,22 +302,27 @@ link.
 
 #### Google Drive layout
 
-Every build goes into its own version folder, grouped by artifact type:
+Mỗi `APP_VERSION` có một thư mục; APK, AAB và IPA của version đó nằm chung:
 
 ```text
-<driveRoot>/<jobName>/apk/<version>/
-<driveRoot>/<jobName>/aab/<version>/
-<driveRoot>/<jobName>/ios/<version>/
+<driveRoot>/<jobName>/<APP_VERSION>/
+  <product>.apk
+  <product>_APK_BUILD_INFO.txt
+  mapping-apk.txt
+  <product>.aab
+  <product>_AAB_BUILD_INFO.txt
+  mapping-aab.txt
+  <product>.ipa
+  <product>_IPA_BUILD_INFO.txt
 ```
 
-For example, `JenkinsBuild/FoodSort/apk/1.0.0-157/` holds
-`FoodSort-157.apk` and `FoodSort_BUILD_INFO.txt`, and the matching AAB lands in
-`JenkinsBuild/FoodSort/aab/1.0.0-157/`. APK and AAB are kept apart because they
-travel different routes — testers and Google Play.
-
-`<version>` is `<APP_VERSION>-<artifact build number>`, or just the artifact
-build number when `APP_VERSION` is empty. The artifact build number is the
-current Jenkins `BUILD_NUMBER`.
+Ví dụ `JenkinsBuild/FoodSort/1.0.0/FoodSort.apk`. Đổi `APP_VERSION` thì build
+tạo thư mục mới; build lại version cũ thì ghi đè file cùng loại (rclone cập
+nhật file tại chỗ nên link Drive cũ vẫn trỏ tới bản mới nhất). Build không có
+mapping (tắt minify) sẽ xoá `mapping-<loại>.txt` cũ để không bị nhầm. AAB đã
+gửi lên Google Play thì nâng `APP_VERSION` trước khi build bản tiếp theo, nếu
+không AAB trên Drive sẽ bị bản mới đè. Lịch sử từng build vẫn còn trong Jenkins
+archive và số build Jenkins vẫn hiện trên Telegram.
 
 #### Stage View của pipeline
 
@@ -677,9 +686,8 @@ App Store Connect rejects a build whose `CFBundleVersion` matches one already
 uploaded, so `IOS_BUILD_NUMBER` defaults to the Jenkins `BUILD_NUMBER` when the
 parameter is empty. `APP_VERSION` is deliberately **not** filled in the same
 way: it becomes `CFBundleShortVersionString`, which Apple requires to be
-period-separated numbers, so the `<version>-<build>` form used for Android
-version names and Drive folders would be rejected. Leave `APP_VERSION` empty to
-keep the marketing version set in the Unity project.
+period-separated numbers. `APP_VERSION` is required and validated to contain
+only digits and dots, so it is always accepted by Apple.
 
 The export options plist must be configured for App Store distribution
 (`<key>method</key><string>app-store</string>`); a development or ad-hoc export
