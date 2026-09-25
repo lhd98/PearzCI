@@ -1,5 +1,6 @@
-def call() {
-    final String projectVersionPath = 'ProjectSettings/ProjectVersion.txt'
+def call(String unityProjectPath = '.') {
+    final String projectVersionPath =
+        "${unityProjectPath}/ProjectSettings/ProjectVersion.txt"
 
     if (!fileExists(projectVersionPath)) {
         error("Unity project version file not found: ${projectVersionPath}")

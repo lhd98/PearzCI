@@ -52,6 +52,32 @@ def call(Map config = [:]) {
         'repositoryCredentialsId',
         'github-ssh'
     ).toString().trim()
+    // Một repository có thể chứa project Unity trong thư mục con. Mặc định
+    // vẫn là workspace để các job hiện có không đổi hành vi.
+    def unityProjectPath = config.get(
+        'unityProjectPath',
+        params.UNITY_PROJECT_PATH ?: ''
+    ).toString().trim()
+    if (unityProjectPath) {
+        if (
+            unityProjectPath.startsWith('/') ||
+            unityProjectPath ==~ /^[A-Za-z]:.*/
+        ) {
+            throw new IllegalArgumentException(
+                'unityProjectPath must be a relative path inside the repository.'
+            )
+        }
+        unityProjectPath = unityProjectPath.replace('\\', '/')
+            .replaceAll('^/+|/+$', '')
+        if (
+            !unityProjectPath ||
+            unityProjectPath.tokenize('/').contains('..')
+        ) {
+            throw new IllegalArgumentException(
+                'unityProjectPath must be a relative path inside the repository.'
+            )
+        }
+    }
     def telegramCredentialsId = config.get(
         'telegramCredentialsId',
         ''
@@ -271,7 +297,12 @@ def call(Map config = [:]) {
             stage('Prepare Build Variables') {
                 steps {
                     script {
-                        env.UNITY_VERSION = readUnityEditorVersion()
+                        env.UNITY_PROJECT_PATH = unityProjectPath
+                            ? "${env.WORKSPACE}/${unityProjectPath}"
+                            : env.WORKSPACE
+                        env.UNITY_VERSION = readUnityEditorVersion(
+                            env.UNITY_PROJECT_PATH
+                        )
 
                         if (isUnix()) {
                             def kernelName = sh(
@@ -538,7 +569,7 @@ def call(Map config = [:]) {
                                         "$UNITY_EXE" \
                                             -batchmode \
                                             -quit \
-                                            -projectPath "$WORKSPACE" \
+                                            -projectPath "$UNITY_PROJECT_PATH" \
                                             -buildTarget Android \
                                             -executeMethod Pearz.CI.BuildEntry.BuildAndroid \
                                             -logFile "$BUILD_LOG_PATH"
@@ -558,7 +589,7 @@ def call(Map config = [:]) {
                                             -batchmode ^
                                             -nographics ^
                                             -quit ^
-                                            -projectPath "%WORKSPACE%" ^
+                                            -projectPath "%UNITY_PROJECT_PATH%" ^
                                             -buildTarget Android ^
                                             -executeMethod Pearz.CI.BuildEntry.BuildAndroid ^
                                             -logFile "%BUILD_LOG_PATH%"
@@ -623,7 +654,7 @@ def call(Map config = [:]) {
                                     fi
                                     trap 'rm -f "$device_build_marker"' EXIT
                                     "$UNITY_EXE" -batchmode -quit \\
-                                        -projectPath "$WORKSPACE" \\
+                                        -projectPath "$UNITY_PROJECT_PATH" \\
                                         -buildTarget iOS \\
                                         -executeMethod Pearz.CI.BuildEntry.BuildIOS \\
                                         -logFile "$BUILD_LOG_PATH"
