@@ -326,14 +326,42 @@ def call(Map config = [:]) {
                             env.UNITY_HUB_ROOT = env.WINDOWS_UNITY_HUB_ROOT
                         }
 
-                        def outputName = params.PRODUCT_NAME?.trim()
-                            ? params.PRODUCT_NAME.trim()
-                            : env.JOB_BASE_NAME
+                        // Artifact name precedence:
+                        // 1. Explicit Jenkins PRODUCT_NAME override.
+                        // 2. Unity Project Settings productName.
+                        // Do not fall back to JOB_BASE_NAME: the job name is
+                        // an operational label and may differ from the app.
+                        def configuredProductName = params.PRODUCT_NAME
+                            ?.toString()?.trim() ?: ''
+                        def projectProductName = configuredProductName
+                            ? ''
+                            : readUnityProductName(env.UNITY_PROJECT_PATH)
+                        def outputName = configuredProductName ?: projectProductName
+
+                        if (!outputName) {
+                            error(
+                                'PRODUCT_NAME is empty and Unity Project ' +
+                                'Settings has no productName. Set PRODUCT_NAME ' +
+                                'or define productName in ProjectSettings.asset.'
+                            )
+                        }
 
                         outputName = outputName.replaceAll(
                             '[<>:"\\\\/|?*]',
                             '_'
                         )
+
+                        if (!outputName.trim()) {
+                            error(
+                                'The resolved product name contains only ' +
+                                'invalid filename characters.'
+                            )
+                        }
+
+                        env.PEARZ_PRODUCT_NAME = outputName
+                        env.PEARZ_PRODUCT_NAME_SOURCE = configuredProductName
+                            ? 'Jenkins PRODUCT_NAME'
+                            : 'Unity Project Settings productName'
 
                         // APP_VERSION bắt buộc: nó quyết định thư mục Drive
                         // của build, nên để trống sẽ không biết đặt artifact
@@ -448,7 +476,7 @@ def call(Map config = [:]) {
             stage('Validate Unity') {
                 steps {
                     echo "NODE_OS = ${env.NODE_OS}"
-                    echo "PRODUCT_NAME = ${params.PRODUCT_NAME}"
+                    echo "PRODUCT_NAME = ${env.PEARZ_PRODUCT_NAME} (${env.PEARZ_PRODUCT_NAME_SOURCE})"
                     echo "GIT_BRANCH = ${params.GIT_BRANCH}"
                     echo "UNITY_VERSION = ${env.UNITY_VERSION}"
                     echo "OUTPUT_PATH = ${env.OUTPUT_PATH}"
@@ -632,7 +660,7 @@ def call(Map config = [:]) {
                         try {
                             withEnv([
                                 "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
-                                "PRODUCT_NAME=${params.PRODUCT_NAME ?: ''}",
+                                "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}",
                                 'BUNDLE_IDENTIFIER=',
                                 "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                 "APP_VERSION=${env.PEARZ_APP_VERSION}",
@@ -1839,8 +1867,8 @@ def resolveIosBuildInfo() {
     def foundPath = findIosBuildInfo(env.BUILD_INFO_FILE_NAME)
 
     // FGSDK đặt tên file theo productName của Unity, còn BUILD_INFO_FILE_NAME
-    // dựng từ tham số PRODUCT_NAME của job. Hai giá trị đó lệch nhau là
-    // chuyện có thật, nên còn một lượt dò rộng trước khi bỏ cuộc.
+    // dựng từ tên đã resolve của pipeline. Vẫn dò rộng một lượt để tương
+    // thích với các SDK cũ đã dùng tên khác.
     if (!foundPath) {
         foundPath = findIosBuildInfo('*_BUILD_INFO.txt')
     }
@@ -1928,7 +1956,9 @@ def buildTelegramMessage() {
         VERSION: telegramHtmlEscape(versionParts.join(' / ')),
         VERSION_NAME: telegramHtmlEscape(env.META_VERSION_NAME),
         VERSION_CODE: telegramHtmlEscape(env.META_VERSION_CODE),
-        PRODUCT_NAME: telegramHtmlEscape(env.META_PRODUCT_NAME ?: params.PRODUCT_NAME),
+        PRODUCT_NAME: telegramHtmlEscape(
+            env.META_PRODUCT_NAME ?: env.PEARZ_PRODUCT_NAME
+        ),
         BUNDLE_ID: telegramHtmlEscape(env.META_BUNDLE_IDENTIFIER),
         GOOGLE_PLAY_URL: telegramHtmlEscape(googlePlayUrl),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
@@ -1996,7 +2026,7 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         STATUS: telegramBuildStatus(),
         PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
         VERSION: telegramHtmlEscape(versionParts.join(' / ')),
-        PRODUCT_NAME: telegramHtmlEscape(params.PRODUCT_NAME),
+        PRODUCT_NAME: telegramHtmlEscape(env.PEARZ_PRODUCT_NAME),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
         BUILD_INFO_URL: telegramHtmlEscape(
             deviceBuild ? '' : (env.BUILD_INFO_URL ?: env.DRIVE_FOLDER_URL)
@@ -2135,6 +2165,43 @@ def readBuildMetadata() {
         metadata.MAPPING_SIZE_BYTES?.toString() ?: ''
 }
 
+// Unity stores the display name in ProjectSettings.asset. Read it before the
+// build so the output filename can follow the project without requiring a
+// duplicate Jenkins parameter. An explicit PRODUCT_NAME parameter is handled
+// by the caller and takes precedence over this value.
+def readUnityProductName(String projectPath) {
+    def settingsPath = "${projectPath}/ProjectSettings/ProjectSettings.asset"
+
+    if (!fileExists(settingsPath)) {
+        return ''
+    }
+
+    def settings = readFile(file: settingsPath, encoding: 'UTF-8')
+    def productLine = settings.readLines().find { line ->
+        line ==~ /^\s*productName\s*:.*/
+    }
+
+    if (!productLine) {
+        return ''
+    }
+
+    def productName = productLine
+        .replaceFirst(/^\s*productName\s*:\s*/, '')
+        .trim()
+
+    if (productName.size() >= 2) {
+        def first = productName[0]
+        def last = productName[-1]
+
+        if ((first == '"' && last == '"') ||
+            (first == "'" && last == "'")) {
+            productName = productName.substring(1, productName.size() - 1)
+        }
+    }
+
+    return productName.trim()
+}
+
 // SDK cũ của một số project sinh một report BUILD_INFO.txt riêng. Đây là
 // fallback tương thích cho project không cài SDK đó: không cố tái tạo các
 // section quảng cáo/Firebase, chỉ ghi các thông tin CI chắc chắn có.
@@ -2145,7 +2212,7 @@ def ensureAndroidBuildInfo() {
     }
 
     def productName = env.META_PRODUCT_NAME?.trim()
-        ?: (params.PRODUCT_NAME?.toString()?.trim() ?: env.JOB_BASE_NAME)
+        ?: env.PEARZ_PRODUCT_NAME?.trim()
     def bundleIdentifier = env.META_BUNDLE_IDENTIFIER?.trim() ?: ''
     def versionName = env.META_VERSION_NAME?.trim()
         ?: (env.PEARZ_APP_VERSION ?: '')

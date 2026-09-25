@@ -165,7 +165,6 @@ Required parameters:
 - String `PROJECT_REPOSITORY_URL`, for example
   `git@github.com:PearzGame/MyGame.git`
 - String `GIT_BRANCH`, for example `main`
-- String `PRODUCT_NAME`, for example `MyGame`
 - String `APP_VERSION`, for example `1.0.0` (Android/iOS; digits and dots only).
   It sets the app version and the Google Drive folder of the build.
 - Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
@@ -174,6 +173,8 @@ Common optional parameters:
 
 - String `TELEGRAM_CHANNEL` using
   `botToken|chatId|messageThreadId`; separate targets with semicolons
+- Optional String `PRODUCT_NAME`, for example `MyGame`. When left empty,
+  artifact names use Unity's `productName` from `ProjectSettings.asset`.
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
@@ -192,8 +193,10 @@ Common optional parameters:
 
 PearzCI uses the Jenkins credential ID `github-ssh` for project checkout. The
 Unity editor version is read from `ProjectSettings/ProjectVersion.txt`, and the
-bundle identifier is read from Unity Project Settings; do not create Jenkins
-parameters for these values.
+bundle identifier and default artifact name are read from Unity Project
+Settings; do not create Jenkins parameters for these values. An explicit
+`PRODUCT_NAME` parameter overrides the Unity project name. The Jenkins job name
+is never used as the app artifact name.
 
 `CLEAN_WORKSPACE` mặc định là `false`. Khi bật, PearzCI xoá toàn bộ workspace
 của riêng Jenkins job trước bước checkout rồi tải lại project từ Git. Dùng tuỳ
@@ -610,8 +613,9 @@ not replace the graph layout. iOS runs are pinned to the `macos` agent label
 (override with `macAgentLabel`), while Android keeps running on any available
 agent. One job covers Android and iOS: select `iOS` from `BUILD_PLATFORM`.
 
-The job uses the existing required parameters `PROJECT_REPOSITORY_URL`,
-`GIT_BRANCH`, and `PRODUCT_NAME`. iOS runs read these additional values; keep
+The job uses the existing required parameters `PROJECT_REPOSITORY_URL` and
+`GIT_BRANCH`; `PRODUCT_NAME` is optional and falls back to Unity Project
+Settings. iOS runs read these additional values; keep
 the stable ones in the job's pipeline script (see the config keys below) and
 leave only the per-build toggles as job parameters:
 
