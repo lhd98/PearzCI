@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Build;
@@ -867,6 +868,7 @@ public static class BuildEntry
                 androidVersionCode =
                     PlayerSettings.Android.bundleVersionCode,
                 unityVersion = Application.unityVersion,
+                compressionMethod = GetCompressionMethod(BuildTargetGroup.Android),
                 scriptingBackend = GetAndroidScriptingBackend(),
                 managedStrippingLevel =
                     PlayerSettings
@@ -1016,6 +1018,39 @@ public static class BuildEntry
         return backend == ScriptingImplementation.IL2CPP
             ? "IL2CPP"
             : "Mono";
+    }
+
+    // Unity keeps the player compression setting behind an internal API. Read
+    // that same setting instead of guessing from BuildOptions.None, so the CI
+    // report shows the method actually selected in Player Settings.
+    private static string GetCompressionMethod(BuildTargetGroup targetGroup)
+    {
+        try
+        {
+            MethodInfo method = typeof(EditorUserBuildSettings).GetMethod(
+                "GetCompressionType",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(BuildTargetGroup) },
+                null);
+
+            string value = method?.Invoke(null, new object[] { targetGroup })
+                ?.ToString();
+
+            if (string.Equals(value, "Lz4HC", StringComparison.OrdinalIgnoreCase))
+                return "LZ4HC";
+            if (string.Equals(value, "Lz4", StringComparison.OrdinalIgnoreCase))
+                return "LZ4";
+            if (string.Equals(value, "None", StringComparison.OrdinalIgnoreCase))
+                return "None";
+
+            return string.IsNullOrWhiteSpace(value) ? "Unknown" : value;
+        }
+        catch (Exception exception)
+        {
+            Warning("Could not read player compression method: " + exception.Message);
+            return "Unknown";
+        }
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)
@@ -1272,6 +1307,7 @@ public static class BuildEntry
         public string   versionName;
         public int      androidVersionCode;
         public string   unityVersion;
+        public string   compressionMethod;
         public string   scriptingBackend;
         public string   managedStrippingLevel;
         public string   orientation;

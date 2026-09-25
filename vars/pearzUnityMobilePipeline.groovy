@@ -2154,6 +2154,8 @@ def readBuildMetadata() {
     env.META_VERSION_NAME = metadata.VERSION_NAME?.toString() ?: ''
     env.META_VERSION_CODE = metadata.VERSION_CODE?.toString() ?: ''
     env.META_UNITY_VERSION = metadata.UNITY_VERSION?.toString() ?: ''
+    env.META_COMPRESSION_METHOD =
+        metadata.COMPRESSION_METHOD?.toString() ?: ''
     env.META_SCRIPTING_BACKEND =
         metadata.SCRIPTING_BACKEND?.toString() ?: ''
     env.META_STRIPPING_LEVEL =
@@ -2208,6 +2210,7 @@ def readUnityProductName(String projectPath) {
 def ensureAndroidBuildInfo() {
     if (fileExists(env.BUILD_INFO_PATH)) {
         echo "Build info file found: ${env.BUILD_INFO_PATH}"
+        upsertAndroidBuildInfoCompressionMethod()
         return true
     }
 
@@ -2238,6 +2241,7 @@ Build Type        : ${buildType}
 Build Date/Time   : ${generatedAt}
 Android Version   : ${versionCode}
 Unity Version     : ${env.META_UNITY_VERSION ?: env.UNITY_VERSION}
+Compression Method: ${env.META_COMPRESSION_METHOD ?: 'Unknown'}
 CI Version        : ${env.PEARZ_CI_VERSION}
 Result            : ${env.META_RESULT ?: 'Succeeded'}
 
@@ -2250,6 +2254,29 @@ export its own BUILD_INFO.txt file.
 
     echo "Generated fallback Android build info: ${env.BUILD_INFO_PATH}"
     return true
+}
+
+// Project SDKs can supply their own BUILD_INFO.txt. Keep that report intact
+// while ensuring the compression field is present and reflects this CI build.
+def upsertAndroidBuildInfoCompressionMethod() {
+    def compressionMethod = env.META_COMPRESSION_METHOD?.trim()
+
+    if (!compressionMethod) {
+        echo 'Compression method is unavailable in build metadata; existing BUILD_INFO.txt is unchanged.'
+        return
+    }
+
+    def contents = readFile(file: env.BUILD_INFO_PATH, encoding: 'UTF-8')
+    def line = "Compression Method: ${compressionMethod}"
+    def pattern = /(?m)^Compression Method\s*:\s*.*(?:\r?\n)?/
+    def updated = (contents =~ pattern).find()
+        ? contents.replaceFirst(pattern, line + '\n')
+        : contents.replaceFirst(/\s*\z/, "\n${line}\n")
+
+    if (updated != contents) {
+        writeFile(file: env.BUILD_INFO_PATH, encoding: 'UTF-8', text: updated)
+        echo "Added compression method to build info: ${compressionMethod}"
+    }
 }
 
 def sendTelegramNotification(String telegramCredentialsId) {

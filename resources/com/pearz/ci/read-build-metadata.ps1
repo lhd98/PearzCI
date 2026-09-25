@@ -36,6 +36,7 @@ Write-MetadataValue "BUNDLE_IDENTIFIER" $metadata.bundleIdentifier
 Write-MetadataValue "VERSION_NAME" $metadata.versionName
 Write-MetadataValue "VERSION_CODE" $metadata.androidVersionCode
 Write-MetadataValue "UNITY_VERSION" $metadata.unityVersion
+Write-MetadataValue "COMPRESSION_METHOD" $metadata.compressionMethod
 Write-MetadataValue "SCRIPTING_BACKEND" $metadata.scriptingBackend
 Write-MetadataValue "STRIPPING_LEVEL" $metadata.managedStrippingLevel
 Write-MetadataValue "ORIENTATION" $metadata.orientation

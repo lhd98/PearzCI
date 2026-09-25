@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.70] - 2026-09-25
+
+### Added
+
+- Android `BUILD_INFO.txt` now reports the Unity Player Settings compression
+  method. SDK-generated reports are updated in place; the CI fallback report
+  includes the same field.
+
 ## [0.6.69] - 2026-09-25
 
 ### Changed
