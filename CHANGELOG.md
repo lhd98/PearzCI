@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.68] - Unreleased
+
+### Changed
+
+- Android Verify now preserves an SDK-generated `*_BUILD_INFO.txt` when
+  available, and otherwise creates a minimal CI build report from the build
+  metadata so projects without the legacy SDK can still archive and upload.
+
 ## [0.6.67] - 2026-09-25
 
 ### Added
