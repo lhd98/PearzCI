@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.67] - 2026-09-25
+
+### Added
+
+- Unity projects can now live in a relative subdirectory of the repository via
+  the `unityProjectPath` pipeline option.
+
+### Changed
+
+- Android builds fall back to Unity's default Player Settings signing when no
+  explicit keystore is configured and the project convention keystore is absent.
+  An explicit `KEYSTORE_PATH` still fails fast when its file is missing.
+
 ## [0.6.66] - 2026-09-25
 
 ### Changed
