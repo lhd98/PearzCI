@@ -658,6 +658,8 @@ public static class BuildEntry
             return;
         }
 
+        bool hasExplicitKeystorePath =
+            !string.IsNullOrWhiteSpace(configuration.KeystorePath);
         string configuredKeystorePath = configuration.KeystorePath;
 
         if (string.IsNullOrWhiteSpace(configuredKeystorePath))
@@ -690,6 +692,15 @@ public static class BuildEntry
 
         if (!File.Exists(keystorePath))
         {
+            if (!hasExplicitKeystorePath)
+            {
+                Log(
+                    "No project keystore found at the convention path. " +
+                    "Using Unity's default signing configuration.");
+
+                return;
+            }
+
             throw new FileNotFoundException(
                 "Không tìm thấy Android keystore.",
                 keystorePath);

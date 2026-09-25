@@ -99,7 +99,9 @@ For example, package name `com.pg.sushi.sort` uses
 `Config/com.pg.sushi.sort.keystore`. The Android bundle identifier always comes
 from Unity Project Settings. `KEYSTORE_PATH` remains supported for existing jobs
 and non-standard locations; relative overrides are resolved from the Unity
-project root.
+project root. If the convention file is absent, PearzCI falls back to Unity's
+current Player Settings signing configuration. An explicitly configured
+`KEYSTORE_PATH` remains a hard requirement.
 
 ## Windows standalone (.exe)
 
