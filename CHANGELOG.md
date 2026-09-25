@@ -2,13 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
-## [0.6.68] - Unreleased
+## [0.6.69] - 2026-09-25
 
 ### Changed
 
 - Android Verify now preserves an SDK-generated `*_BUILD_INFO.txt` when
   available, and otherwise creates a minimal CI build report from the build
   metadata so projects without the legacy SDK can still archive and upload.
+- Android APK/AAB artifact names now use the Jenkins `PRODUCT_NAME` override
+  when provided, otherwise Unity's `productName` from Project Settings. The
+  Jenkins job name is no longer used as an app artifact name.
 
 ## [0.6.67] - 2026-09-25
 
