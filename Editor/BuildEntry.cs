@@ -1037,6 +1037,11 @@ public static class BuildEntry
             string value = method?.Invoke(null, new object[] { targetGroup })
                 ?.ToString();
 
+            // Unity uses -1 for the default build compression. On Android,
+            // that default is ZIP; do not expose the internal sentinel value
+            // in the human-readable build report.
+            if (string.Equals(value, "-1", StringComparison.Ordinal))
+                return "Default (ZIP)";
             if (string.Equals(value, "Lz4HC", StringComparison.OrdinalIgnoreCase))
                 return "LZ4HC";
             if (string.Equals(value, "Lz4", StringComparison.OrdinalIgnoreCase))

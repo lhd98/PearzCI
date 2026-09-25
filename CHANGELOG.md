@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.71] - 2026-09-25
+
+### Fixed
+
+- Android build reports now translate Unity's internal `-1` compression value
+  to `Default (ZIP)` instead of displaying the raw sentinel value.
+
 ## [0.6.70] - 2026-09-25
 
 ### Added
