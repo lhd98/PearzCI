@@ -78,7 +78,6 @@ are:
 - `SCRIPTING_DEFINE_SYMBOLS`
 - `APP_VERSION`
 - `ANDROID_VERSION_CODE`
-- `ANDROID_COMPRESSION` (`Default`, `LZ4`, `LZ4HC`)
 - `KEYSTORE_PATH` (optional path override)
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS_NAME`
@@ -179,7 +178,6 @@ Common optional parameters:
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
-- Choice `ANDROID_COMPRESSION`: `LZ4HC`, `LZ4`, or `Default`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
   `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
   `ANDROID_INSTALL_TO_DEVICE`
@@ -232,13 +230,11 @@ user chạy Jenkins (`adb pair <ip>:<port>` rồi nhập mã 6 số); sau đó a
 nối lại qua mDNS, kể cả khi cổng đổi. Agent và điện thoại phải cùng mạng con
 và router phải cho multicast (mDNS) đi qua giữa mạng dây và Wi-Fi.
 
-`ANDROID_COMPRESSION` chọn nén Android (`Default` = ZIP, `LZ4`, `LZ4HC`).
-Setting Compression Method trong Build Settings của Unity nằm ở thư mục
-`Library/` (không commit), nên Jenkins checkout mới luôn thấy `Default`; ngoài
-ra `BuildPipeline.BuildPlayer` chỉ nén LZ4/LZ4HC khi được truyền qua
-`BuildOptions`. Vì vậy hãy tạo Choice parameter này (đặt `LZ4HC` đầu tiên nếu
-muốn giống máy local). Khi để trống, PearzCI dùng setting trong editor nếu có.
-Giá trị thực tế được ghi vào `Compression Method` của `BUILD_INFO.txt`.
+Android compression được chọn tự động theo loại build: APK dùng `LZ4` (build
+nhanh), AAB dùng `LZ4HC` (size nhỏ, load nhanh). Setting Compression Method
+trong Build Settings của Unity không được dùng vì nó nằm trong `Library/`
+(không commit). Giá trị thực tế được ghi vào `Compression Method` của
+`BUILD_INFO.txt`.
 
 `ANDROID_VERSION_CODE` is optional. When filled, that exact version code is
 used for the APK or AAB. When empty, APK builds use a fixed version code of

@@ -587,7 +587,6 @@ def call(Map config = [:]) {
                                 "APP_VERSION=${ciAppVersion}",
                                 "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
                                 "ANDROID_VERSION_CODE=${androidVersionCode}",
-                                "ANDROID_COMPRESSION=${params.ANDROID_COMPRESSION ?: ''}",
                                 // Bundle ID is always sourced from Unity Project Settings.
                                 'BUNDLE_IDENTIFIER='
                             ]) {

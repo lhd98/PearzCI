@@ -6,11 +6,10 @@ All notable changes to this package are documented in this file.
 
 ### Fixed
 
-- Android builds now apply the compression method via `BuildOptions`, so
-  LZ4/LZ4HC actually takes effect in CI. The new `ANDROID_COMPRESSION`
-  parameter (`Default`, `LZ4`, `LZ4HC`) selects it, because Unity's Build
-  Settings value lives in the uncommitted `Library/` folder and a fresh
-  Jenkins checkout always reported `Default (ZIP)`.
+- Android builds now apply compression via `BuildOptions`, chosen by build
+  type: APK uses LZ4 and AAB uses LZ4HC. Unity's Build Settings value lives in
+  the uncommitted `Library/` folder, so CI previously always built and
+  reported `Default (ZIP)`.
 
 ## [0.6.71] - 2026-09-25
 

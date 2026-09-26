@@ -3,7 +3,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Build;
@@ -86,7 +85,8 @@ public static class BuildEntry
                 locationPathName = configuration.OutputPath,
                 target           = BuildTarget.Android,
                 targetGroup      = BuildTargetGroup.Android,
-                options          = GetAndroidCompressionBuildOptions()
+                options          = GetAndroidCompressionBuildOptions(
+                    configuration.BuildAppBundle)
             };
 
             Log("Calling BuildPipeline.BuildPlayer...");
@@ -868,7 +868,9 @@ public static class BuildEntry
                 androidVersionCode =
                     PlayerSettings.Android.bundleVersionCode,
                 unityVersion = Application.unityVersion,
-                compressionMethod = ResolveAndroidCompressionMethod(),
+                compressionMethod = configuration != null
+                    ? GetAndroidCompressionMethod(configuration.BuildAppBundle)
+                    : "Unknown",
                 scriptingBackend = GetAndroidScriptingBackend(),
                 managedStrippingLevel =
                     PlayerSettings
@@ -1022,86 +1024,22 @@ public static class BuildEntry
 
     // BuildPipeline.BuildPlayer ignores the Build Settings compression unless
     // it is passed as BuildOptions, and that editor setting lives in the
-    // uncommitted Library folder, so a fresh Jenkins checkout always sees the
-    // default. ANDROID_COMPRESSION (Default, LZ4, LZ4HC) makes the CI choice
-    // explicit; when empty, the local editor setting is used if available.
-    private static string ResolveAndroidCompressionMethod()
+    // uncommitted Library folder. Pick it from the build type instead: APK
+    // test builds favour build speed (LZ4), AAB release builds favour a
+    // smaller download with fast loading (LZ4HC).
+    private static string GetAndroidCompressionMethod(bool buildAppBundle)
     {
-        string value = GetEnvironmentVariable("ANDROID_COMPRESSION");
-
-        if (string.IsNullOrEmpty(value))
-            return GetCompressionMethod(BuildTargetGroup.Android);
-
-        switch (value.ToUpperInvariant())
-        {
-            case "LZ4HC":
-                return "LZ4HC";
-            case "LZ4":
-                return "LZ4";
-            case "DEFAULT":
-            case "ZIP":
-            case "NONE":
-                return "Default (ZIP)";
-            default:
-                throw new FormatException(
-                    "ANDROID_COMPRESSION phải là Default, LZ4 hoặc LZ4HC. " +
-                    $"Giá trị hiện tại: {value}");
-        }
+        return buildAppBundle ? "LZ4HC" : "LZ4";
     }
 
-    private static BuildOptions GetAndroidCompressionBuildOptions()
+    private static BuildOptions GetAndroidCompressionBuildOptions(
+        bool buildAppBundle)
     {
-        string method = ResolveAndroidCompressionMethod();
+        Log($"Android compression: {GetAndroidCompressionMethod(buildAppBundle)}");
 
-        Log($"Android compression: {method}");
-
-        switch (method)
-        {
-            case "LZ4HC":
-                return BuildOptions.CompressWithLz4HC;
-            case "LZ4":
-                return BuildOptions.CompressWithLz4;
-            default:
-                return BuildOptions.None;
-        }
-    }
-
-    // Unity keeps the player compression setting behind an internal API. Read
-    // that same setting instead of guessing from BuildOptions.None, so the CI
-    // report shows the method actually selected in Player Settings.
-    private static string GetCompressionMethod(BuildTargetGroup targetGroup)
-    {
-        try
-        {
-            MethodInfo method = typeof(EditorUserBuildSettings).GetMethod(
-                "GetCompressionType",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                null,
-                new[] { typeof(BuildTargetGroup) },
-                null);
-
-            string value = method?.Invoke(null, new object[] { targetGroup })
-                ?.ToString();
-
-            // Unity uses -1 for the default build compression. On Android,
-            // that default is ZIP; do not expose the internal sentinel value
-            // in the human-readable build report.
-            if (string.Equals(value, "-1", StringComparison.Ordinal))
-                return "Default (ZIP)";
-            if (string.Equals(value, "Lz4HC", StringComparison.OrdinalIgnoreCase))
-                return "LZ4HC";
-            if (string.Equals(value, "Lz4", StringComparison.OrdinalIgnoreCase))
-                return "LZ4";
-            if (string.Equals(value, "None", StringComparison.OrdinalIgnoreCase))
-                return "None";
-
-            return string.IsNullOrWhiteSpace(value) ? "Unknown" : value;
-        }
-        catch (Exception exception)
-        {
-            Warning("Could not read player compression method: " + exception.Message);
-            return "Unknown";
-        }
+        return buildAppBundle
+            ? BuildOptions.CompressWithLz4HC
+            : BuildOptions.CompressWithLz4;
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)
