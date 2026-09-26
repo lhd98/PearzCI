@@ -17,12 +17,14 @@ def call(Map config = [:]) {
             break
         case 'windows':
         case 'windows64':
-            pearzUnityWindowsPipeline(config)
-            break
+            throw new IllegalArgumentException(
+                'Windows player builds were removed in PearzCI 0.6.75; ' +
+                'Jenkins now runs only on a macOS agent.'
+            )
         default:
             throw new IllegalArgumentException(
                 "Unsupported BUILD_PLATFORM '${platform}'. " +
-                'Choose Android, iOS, or Windows.'
+                'Choose Android or iOS.'
             )
     }
 }

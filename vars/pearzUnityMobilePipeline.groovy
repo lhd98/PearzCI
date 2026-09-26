@@ -23,9 +23,6 @@ def call(Map config = [:]) {
     def appStoreConnectIssuerId = config.get(
         'appStoreConnectIssuerId', params.APP_STORE_CONNECT_ISSUER_ID ?: ''
     ).toString().trim()
-    // iOS bắt buộc chạy trên macOS; Android giữ nguyên "any" như trước để
-    // không đổi cách chọn node của các job Android đang chạy. Nhãn rỗng
-    // tương đương `agent any`.
     // Mặc định tắt: chỉ cài APK lên máy Android cắm vào agent khi job bật rõ.
     def androidInstallToDevice = config.get(
         'androidInstallToDevice', params.ANDROID_INSTALL_TO_DEVICE ?: false
@@ -36,6 +33,9 @@ def call(Map config = [:]) {
         'androidDeviceSerial', params.ANDROID_DEVICE_SERIAL ?: ''
     ).toString().trim()
     def configuredAdbExe = config.get('adbExe', '').toString().trim()
+    // iOS bắt buộc chạy trên macOS; Android giữ nguyên "any" như trước để
+    // không đổi cách chọn node của các job Android đang chạy. Nhãn rỗng
+    // tương đương `agent any`.
     def macAgentLabel = config.get('macAgentLabel', 'macos').toString().trim()
     if (isIos && !macAgentLabel) {
         throw new IllegalArgumentException(
@@ -91,10 +91,6 @@ def call(Map config = [:]) {
         'unityHubRoot',
         ''
     ).toString().trim()
-    def windowsRcloneExe = config.get(
-        'windowsRcloneExe',
-        configuredRcloneExe ?: 'D:\\Tools\\rclone\\rclone.exe'
-    )
     def macRcloneExe = config.get(
         'macRcloneExe',
         configuredRcloneExe ?: 'rclone'
@@ -107,10 +103,6 @@ def call(Map config = [:]) {
     if (telegramMaxCommits < 1) {
         throw new IllegalArgumentException('telegramMaxCommits must be at least 1.')
     }
-    def windowsUnityHubRoot = config.get(
-        'windowsUnityHubRoot',
-        configuredUnityHubRoot ?: 'C:\\Program Files\\Unity\\Hub\\Editor'
-    )
     def macUnityHubRoot = config.get(
         'macUnityHubRoot',
         configuredUnityHubRoot ?: '/Applications/Unity/Hub/Editor'
@@ -203,13 +195,11 @@ def call(Map config = [:]) {
             // Đặt ngoài workspace, gắn với JOB_BASE_NAME, để cache giữ nguyên
             // qua các lần checkout mà vẫn cô lập giữa các job. Unity spawn
             // tiến trình Gradle kế thừa biến môi trường này.
-            GRADLE_USER_HOME = "${env.HOME ?: env.USERPROFILE}/.gradle-jenkins/${env.JOB_BASE_NAME}"
+            GRADLE_USER_HOME = "${env.HOME}/.gradle-jenkins/${env.JOB_BASE_NAME}"
             PEARZ_CI_VERSION = "${pearzCiVersion}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
-            WINDOWS_RCLONE_EXE = "${windowsRcloneExe}"
             MAC_RCLONE_EXE = "${macRcloneExe}"
-            WINDOWS_UNITY_HUB_ROOT = "${windowsUnityHubRoot}"
             MAC_UNITY_HUB_ROOT = "${macUnityHubRoot}"
             IOS_BUILD_TO_DEVICE = "${iosBuildToDevice}"
         }
@@ -279,17 +269,11 @@ def call(Map config = [:]) {
                             ]]
                         ])
 
-                        if (isUnix()) {
-                            sh '''
-                                git submodule sync --recursive
-                                git submodule update --init --recursive
-                            '''
-                        } else {
-                            bat '''
-                                git submodule sync --recursive
-                                git submodule update --init --recursive
-                            '''
-                        }
+                        sh '''
+                            git submodule sync --recursive
+                            git submodule update --init --recursive
+                        '''
+
                     }
                 }
             }
@@ -304,27 +288,21 @@ def call(Map config = [:]) {
                             env.UNITY_PROJECT_PATH
                         )
 
-                        if (isUnix()) {
-                            def kernelName = sh(
-                                script: 'uname -s',
-                                returnStdout: true
-                            ).trim()
+                        def kernelName = sh(
+                            script: 'uname -s',
+                            returnStdout: true
+                        ).trim()
 
-                            if (kernelName != 'Darwin') {
-                                error(
-                                    "Unsupported Jenkins agent OS: ${kernelName}. " +
-                                    'PearzCI supports Windows and macOS.'
-                                )
-                            }
-
-                            env.NODE_OS = 'macOS'
-                            env.RCLONE_EXE = env.MAC_RCLONE_EXE
-                            env.UNITY_HUB_ROOT = env.MAC_UNITY_HUB_ROOT
-                        } else {
-                            env.NODE_OS = 'Windows'
-                            env.RCLONE_EXE = env.WINDOWS_RCLONE_EXE
-                            env.UNITY_HUB_ROOT = env.WINDOWS_UNITY_HUB_ROOT
+                        if (kernelName != 'Darwin') {
+                            error(
+                                "Unsupported Jenkins agent OS: ${kernelName}. " +
+                                'PearzCI mobile builds require a macOS agent.'
+                            )
                         }
+
+                        env.NODE_OS = 'macOS'
+                        env.RCLONE_EXE = env.MAC_RCLONE_EXE
+                        env.UNITY_HUB_ROOT = env.MAC_UNITY_HUB_ROOT
 
                         // Artifact name precedence:
                         // 1. Explicit Jenkins PRODUCT_NAME override.
@@ -426,45 +404,23 @@ def call(Map config = [:]) {
                         env.DRIVE_MAPPING_PATH =
                             "${env.DRIVE_DIRECTORY}/mapping-${env.OUTPUT_EXTENSION}.txt"
 
-                        if (isUnix()) {
-                            env.GIT_COMMIT_SHORT = sh(
-                                script: 'git rev-parse --short HEAD',
-                                returnStdout: true
-                            ).trim()
-                            env.GIT_COMMIT_MESSAGE = sh(
-                                script: 'git log -1 --pretty=%s',
-                                returnStdout: true
-                            ).trim()
-                            env.GIT_COMMIT_AUTHOR = sh(
-                                script: 'git log -1 --pretty=%an',
-                                returnStdout: true
-                            ).trim()
-                        } else {
-                            env.GIT_COMMIT_SHORT = bat(
-                                script: '@git rev-parse --short HEAD',
-                                returnStdout: true
-                            ).trim()
-                            env.GIT_COMMIT_MESSAGE = bat(
-                                script: '@git log -1 --pretty=%%s',
-                                returnStdout: true
-                            ).trim()
-                            env.GIT_COMMIT_AUTHOR = bat(
-                                script: '@git log -1 --pretty=%%an',
-                                returnStdout: true
-                            ).trim()
-                        }
+                        env.GIT_COMMIT_SHORT = sh(
+                            script: 'git rev-parse --short HEAD',
+                            returnStdout: true
+                        ).trim()
+                        env.GIT_COMMIT_MESSAGE = sh(
+                            script: 'git log -1 --pretty=%s',
+                            returnStdout: true
+                        ).trim()
+                        env.GIT_COMMIT_AUTHOR = sh(
+                            script: 'git log -1 --pretty=%an',
+                            returnStdout: true
+                        ).trim()
 
-                        if (isUnix()) {
-                            env.PEARZCI_GIT_COMMIT = sh(
-                                script: 'git rev-parse HEAD',
-                                returnStdout: true
-                            ).trim()
-                        } else {
-                            env.PEARZCI_GIT_COMMIT = bat(
-                                script: '@git rev-parse HEAD',
-                                returnStdout: true
-                            ).trim()
-                        }
+                        env.PEARZCI_GIT_COMMIT = sh(
+                            script: 'git rev-parse HEAD',
+                            returnStdout: true
+                        ).trim()
 
                         env.GIT_CHANGES = collectGitChanges(telegramMaxCommits)
                     }
@@ -500,11 +456,8 @@ def call(Map config = [:]) {
 
                         echo "TELEGRAM_CHANNEL targets = ${telegramTargets}"
 
-                        def unityExe = isUnix()
-                            ? "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
-                                '/Unity.app/Contents/MacOS/Unity'
-                            : "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
-                                '/Editor/Unity.exe'
+                        def unityExe = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
+                            '/Unity.app/Contents/MacOS/Unity'
 
                         env.UNITY_EXE = unityExe
                         echo "Unity path: ${unityExe}"
@@ -513,14 +466,11 @@ def call(Map config = [:]) {
                             error("Unity not found: ${unityExe}")
                         }
 
-                        if (isUnix()) {
-                            sh "\"${unityExe}\" -version"
-                            if (isIos) {
-                                sh 'xcodebuild -version'
-                            }
-                        } else {
-                            bat "\"${unityExe}\" -version"
+                        sh "\"${unityExe}\" -version"
+                        if (isIos) {
+                            sh 'xcodebuild -version'
                         }
+
                     }
                 }
             }
@@ -590,47 +540,26 @@ def call(Map config = [:]) {
                                 // Bundle ID is always sourced from Unity Project Settings.
                                 'BUNDLE_IDENTIFIER='
                             ]) {
-                                if (isUnix()) {
-                                    sh '''
-                                        set +e
+                                sh '''
+                                    set +e
 
-                                        "$UNITY_EXE" \
-                                            -batchmode \
-                                            -quit \
-                                            -projectPath "$UNITY_PROJECT_PATH" \
-                                            -buildTarget Android \
-                                            -executeMethod Pearz.CI.BuildEntry.BuildAndroid \
-                                            -logFile "$BUILD_LOG_PATH"
+                                    "$UNITY_EXE" \
+                                        -batchmode \
+                                        -quit \
+                                        -projectPath "$UNITY_PROJECT_PATH" \
+                                        -buildTarget Android \
+                                        -executeMethod Pearz.CI.BuildEntry.BuildAndroid \
+                                        -logFile "$BUILD_LOG_PATH"
 
-                                        unity_exit_code=$?
+                                    unity_exit_code=$?
 
-                                        if [ -f "$BUILD_LOG_PATH" ]; then
-                                            cat "$BUILD_LOG_PATH"
-                                        fi
+                                    if [ -f "$BUILD_LOG_PATH" ]; then
+                                        cat "$BUILD_LOG_PATH"
+                                    fi
 
-                                        exit "$unity_exit_code"
-                                    '''
-                                } else {
-                                    bat '''
-                                        @echo off
-                                        "%UNITY_EXE%" ^
-                                            -batchmode ^
-                                            -nographics ^
-                                            -quit ^
-                                            -projectPath "%UNITY_PROJECT_PATH%" ^
-                                            -buildTarget Android ^
-                                            -executeMethod Pearz.CI.BuildEntry.BuildAndroid ^
-                                            -logFile "%BUILD_LOG_PATH%"
+                                    exit "$unity_exit_code"
+                                '''
 
-                                        set UNITY_EXIT_CODE=%ERRORLEVEL%
-
-                                        if exist "%BUILD_LOG_PATH%" (
-                                            type "%BUILD_LOG_PATH%"
-                                        )
-
-                                        exit /b %UNITY_EXIT_CODE%
-                                    '''
-                                }
                             }
                         } finally {
                             env.BUILD_TIME_MILLIS = (
@@ -1113,161 +1042,96 @@ def call(Map config = [:]) {
                         // Cookie dontKillMe giữ adb server sống qua các build
                         // để máy không dây không phải dò lại mDNS mỗi lần.
                         def installStatus
-                        if (isUnix()) {
-                            installStatus = sh(returnStatus: true, script: '''
-                                set -u
-                                rm -f "$PEARZ_ADB_RESULT_PATH"
+                        installStatus = sh(returnStatus: true, script: '''
+                            set -u
+                            rm -f "$PEARZ_ADB_RESULT_PATH"
 
-                                JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe \
-                                    "$ADB_EXE" start-server || exit 1
+                            JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe \
+                                "$ADB_EXE" start-server || exit 1
 
-                                list_devices() {
-                                    "$ADB_EXE" devices |
-                                        awk 'NR > 1 && $2 == "device" { print $1 }'
-                                }
+                            list_devices() {
+                                "$ADB_EXE" devices |
+                                    awk 'NR > 1 && $2 == "device" { print $1 }'
+                            }
 
-                                # Kết nối Wi-Fi hay bị adb làm rớt trong khi
-                                # điện thoại vẫn tưởng còn kết nối. Trước khi cài,
-                                # nối lại: phiên offline, máy adb thấy qua mDNS và
-                                # các địa chỉ đã cài thành công lần trước.
-                                known_file="$HOME/.pearz-ci/adb-known-devices.txt"
-                                mkdir -p "$(dirname "$known_file")"
-                                "$ADB_EXE" reconnect offline >/dev/null 2>&1 || true
-                                {
-                                    "$ADB_EXE" mdns services 2>/dev/null |
-                                        awk '$2 ~ /^_adb(-tls-connect)?\\._tcp/ { print $3 }'
-                                    [ -f "$known_file" ] && cat "$known_file"
-                                } | grep -E '^[0-9.]+:[0-9]+$' | sort -u |
-                                while read -r address; do
-                                    echo "adb connect $address"
-                                    output=$("$ADB_EXE" connect "$address" 2>&1 | head -1)
-                                    echo "$output"
-                                    case "$output" in
-                                        *"connected to"*) echo "$address" >> "$known_file.new" ;;
-                                    esac
-                                done
-                                # Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
-                                if [ -f "$known_file.new" ]; then
-                                    tail -n 20 "$known_file.new" > "$known_file"
-                                    rm -f "$known_file.new"
-                                fi
+                            # Kết nối Wi-Fi hay bị adb làm rớt trong khi
+                            # điện thoại vẫn tưởng còn kết nối. Trước khi cài,
+                            # nối lại: phiên offline, máy adb thấy qua mDNS và
+                            # các địa chỉ đã cài thành công lần trước.
+                            known_file="$HOME/.pearz-ci/adb-known-devices.txt"
+                            mkdir -p "$(dirname "$known_file")"
+                            "$ADB_EXE" reconnect offline >/dev/null 2>&1 || true
+                            {
+                                "$ADB_EXE" mdns services 2>/dev/null |
+                                    awk '$2 ~ /^_adb(-tls-connect)?\\._tcp/ { print $3 }'
+                                [ -f "$known_file" ] && cat "$known_file"
+                            } | grep -E '^[0-9.]+:[0-9]+$' | sort -u |
+                            while read -r address; do
+                                echo "adb connect $address"
+                                output=$("$ADB_EXE" connect "$address" 2>&1 | head -1)
+                                echo "$output"
+                                case "$output" in
+                                    *"connected to"*) echo "$address" >> "$known_file.new" ;;
+                                esac
+                            done
+                            # Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
+                            if [ -f "$known_file.new" ]; then
+                                tail -n 20 "$known_file.new" > "$known_file"
+                                rm -f "$known_file.new"
+                            fi
 
-                                attempt=0
-                                while [ -z "$(list_devices)" ] && [ "$attempt" -lt 5 ]; do
-                                    sleep 1
-                                    attempt=$((attempt + 1))
-                                done
+                            attempt=0
+                            while [ -z "$(list_devices)" ] && [ "$attempt" -lt 5 ]; do
+                                sleep 1
+                                attempt=$((attempt + 1))
+                            done
 
-                                "$ADB_EXE" devices -l
-                                connected=$(list_devices)
+                            "$ADB_EXE" devices -l
+                            connected=$(list_devices)
 
-                                serials=""
-                                if [ -n "$PEARZ_ADB_SERIALS" ]; then
-                                    for serial in $PEARZ_ADB_SERIALS; do
-                                        if printf '%s\\n' "$connected" | grep -Fqx "$serial"; then
-                                            serials="$serials $serial"
-                                        else
-                                            echo "Device $serial is not connected; skipped."
-                                        fi
-                                    done
-                                else
-                                    serials="$connected"
-                                fi
-
-                                if [ -z "$(echo $serials)" ]; then
-                                    echo "No Android device is connected; install skipped."
-                                    exit 3
-                                fi
-
-                                failed=0
-                                installed=""
-                                done_ids=" "
-                                for serial in $serials; do
-                                    # Một máy có thể xuất hiện hai lần (tên mDNS
-                                    # và ip:port); chỉ cài một lần theo serialno.
-                                    device_id=$("$ADB_EXE" -s "$serial" get-serialno 2>/dev/null | tr -d '\\r')
-                                    case "$done_ids" in
-                                        *" ${device_id:-$serial} "*) continue ;;
-                                    esac
-                                    done_ids="$done_ids${device_id:-$serial} "
-
-                                    echo "Installing $OUTPUT_PATH on $serial"
-                                    if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
-                                        model=$("$ADB_EXE" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\\r')
-                                        installed="$installed, ${model:-$serial}"
+                            serials=""
+                            if [ -n "$PEARZ_ADB_SERIALS" ]; then
+                                for serial in $PEARZ_ADB_SERIALS; do
+                                    if printf '%s\\n' "$connected" | grep -Fqx "$serial"; then
+                                        serials="$serials $serial"
                                     else
-                                        echo "ERROR: Install failed on $serial"
-                                        failed=1
+                                        echo "Device $serial is not connected; skipped."
                                     fi
                                 done
+                            else
+                                serials="$connected"
+                            fi
 
-                                printf '%s' "${installed#, }" > "$PEARZ_ADB_RESULT_PATH"
-                                exit "$failed"
-                            ''')
-                        } else {
-                            installStatus = bat(returnStatus: true, script: '''
-                                @echo off
-                                setlocal EnableDelayedExpansion
-                                del /q "%PEARZ_ADB_RESULT_PATH%" 2>nul
+                            if [ -z "$(echo $serials)" ]; then
+                                echo "No Android device is connected; install skipped."
+                                exit 3
+                            fi
 
-                                set JENKINS_NODE_COOKIE=dontKillMe
-                                set BUILD_ID=dontKillMe
-                                "%ADB_EXE%" start-server || exit /b 1
+                            failed=0
+                            installed=""
+                            done_ids=" "
+                            for serial in $serials; do
+                                # Một máy có thể xuất hiện hai lần (tên mDNS
+                                # và ip:port); chỉ cài một lần theo serialno.
+                                device_id=$("$ADB_EXE" -s "$serial" get-serialno 2>/dev/null | tr -d '\\r')
+                                case "$done_ids" in
+                                    *" ${device_id:-$serial} "*) continue ;;
+                                esac
+                                done_ids="$done_ids${device_id:-$serial} "
 
-                                "%ADB_EXE%" reconnect offline >nul 2>&1
-                                for /f "tokens=2,3" %%A in ('"%ADB_EXE%" mdns services 2^>nul') do (
-                                    echo %%A | findstr /b "_adb" >nul && (
-                                        echo adb connect %%B
-                                        "%ADB_EXE%" connect %%B
-                                    )
-                                )
-                                timeout /t 2 /nobreak >nul
+                                echo "Installing $OUTPUT_PATH on $serial"
+                                if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
+                                    model=$("$ADB_EXE" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\\r')
+                                    installed="$installed, ${model:-$serial}"
+                                else
+                                    echo "ERROR: Install failed on $serial"
+                                    failed=1
+                                fi
+                            done
 
-                                "%ADB_EXE%" devices -l
-
-                                set "CONNECTED="
-                                for /f "skip=1 tokens=1,2" %%A in ('"%ADB_EXE%" devices') do (
-                                    if "%%B"=="device" set "CONNECTED=!CONNECTED! %%A"
-                                )
-
-                                set "SERIALS="
-                                if defined PEARZ_ADB_SERIALS (
-                                    for %%S in (%PEARZ_ADB_SERIALS%) do (
-                                        echo !CONNECTED! | findstr /c:" %%S" >nul && set "SERIALS=!SERIALS! %%S"
-                                    )
-                                ) else (
-                                    set "SERIALS=!CONNECTED!"
-                                )
-
-                                if not defined SERIALS (
-                                    echo No Android device is connected; install skipped.
-                                    exit /b 3
-                                )
-
-                                set FAILED=0
-                                set "INSTALLED="
-                                set "DONE_IDS= "
-                                for %%S in (!SERIALS!) do (
-                                    set "DEVICE_ID=%%S"
-                                    for /f %%I in ('"%ADB_EXE%" -s %%S get-serialno 2^>nul') do set "DEVICE_ID=%%I"
-                                    echo !DONE_IDS! | findstr /c:" !DEVICE_ID! " >nul
-                                    if errorlevel 1 (
-                                        set "DONE_IDS=!DONE_IDS!!DEVICE_ID! "
-                                        echo Installing %OUTPUT_PATH% on %%S
-                                        "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
-                                        if errorlevel 1 (
-                                            echo ERROR: Install failed on %%S
-                                            set FAILED=1
-                                        ) else (
-                                            set "INSTALLED=!INSTALLED! %%S"
-                                        )
-                                    )
-                                )
-
-                                if defined INSTALLED (echo !INSTALLED!)> "%PEARZ_ADB_RESULT_PATH%"
-                                exit /b !FAILED!
-                            ''')
-                        }
+                            printf '%s' "${installed#, }" > "$PEARZ_ADB_RESULT_PATH"
+                            exit "$failed"
+                        ''')
 
                         def installedOn = fileExists(env.PEARZ_ADB_RESULT_PATH)
                             ? readFile(env.PEARZ_ADB_RESULT_PATH).trim()
@@ -1303,142 +1167,78 @@ def call(Map config = [:]) {
                 }
                 steps {
                     script {
-                        if (isUnix()) {
-                            sh '''
-                                set -eu
+                        sh '''
+                            set -eu
 
-                                if ! command -v "$RCLONE_EXE" >/dev/null 2>&1 &&
-                                    [ ! -x "$RCLONE_EXE" ]; then
-                                    echo "ERROR: rclone not found: $RCLONE_EXE"
-                                    exit 1
-                                fi
+                            if ! command -v "$RCLONE_EXE" >/dev/null 2>&1 &&
+                                [ ! -x "$RCLONE_EXE" ]; then
+                                echo "ERROR: rclone not found: $RCLONE_EXE"
+                                exit 1
+                            fi
 
-                                "$RCLONE_EXE" version
+                            "$RCLONE_EXE" version
 
-                                if ! "$RCLONE_EXE" listremotes |
-                                    grep -Fqx "$DRIVE_REMOTE:"; then
-                                    echo "ERROR: rclone remote $DRIVE_REMOTE: does not exist."
-                                    exit 1
-                                fi
-                            '''
-                        } else {
-                            bat '''
-                                if not exist "%RCLONE_EXE%" (
-                                    echo ERROR: rclone.exe not found:
-                                    echo %RCLONE_EXE%
-                                    exit /b 1
-                                )
-
-                                "%RCLONE_EXE%" version
-                                "%RCLONE_EXE%" listremotes | findstr /B /C:"%DRIVE_REMOTE%:" >nul
-
-                                if errorlevel 1 (
-                                    echo ERROR: rclone remote "%DRIVE_REMOTE%:" does not exist.
-                                    exit /b 1
-                                )
-                            '''
-                        }
+                            if ! "$RCLONE_EXE" listremotes |
+                                grep -Fqx "$DRIVE_REMOTE:"; then
+                                echo "ERROR: rclone remote $DRIVE_REMOTE: does not exist."
+                                exit 1
+                            fi
+                        '''
 
                         def uploadStartedAt = System.currentTimeMillis()
 
                         try {
                             retry(2) {
-                                if (isUnix()) {
+                                sh '''
+                                    set -eu
+
+                                    "$RCLONE_EXE" copyto \
+                                        "$OUTPUT_PATH" \
+                                        "$DRIVE_FILE_PATH" \
+                                        --progress \
+                                        --stats 10s \
+                                        --retries 3 \
+                                        --low-level-retries 10 \
+                                        --log-file "$UPLOAD_LOG_PATH" \
+                                        --log-level INFO
+
+                                '''
+
+                            }
+
+                            if (env.BUILD_INFO_FOUND == 'true') {
+                                retry(2) {
                                     sh '''
                                         set -eu
-
                                         "$RCLONE_EXE" copyto \
-                                            "$OUTPUT_PATH" \
-                                            "$DRIVE_FILE_PATH" \
+                                            "$BUILD_INFO_PATH" \
+                                            "$DRIVE_BUILD_INFO_PATH" \
                                             --progress \
                                             --stats 10s \
                                             --retries 3 \
                                             --low-level-retries 10 \
                                             --log-file "$UPLOAD_LOG_PATH" \
                                             --log-level INFO
-
                                     '''
-                                } else {
-                                    bat '''
-                                        "%RCLONE_EXE%" copyto "%OUTPUT_PATH%" "%DRIVE_FILE_PATH%" ^
-                                            --progress ^
-                                            --stats 10s ^
-                                            --retries 3 ^
-                                            --low-level-retries 10 ^
-                                            --log-file "%UPLOAD_LOG_PATH%" ^
-                                            --log-level INFO
 
-                                        if errorlevel 1 (
-                                            echo ERROR: Google Drive upload failed.
-                                            exit /b 1
-                                        )
-
-                                    '''
-                                }
-                            }
-
-                            if (env.BUILD_INFO_FOUND == 'true') {
-                                retry(2) {
-                                    if (isUnix()) {
-                                        sh '''
-                                            set -eu
-                                            "$RCLONE_EXE" copyto \
-                                                "$BUILD_INFO_PATH" \
-                                                "$DRIVE_BUILD_INFO_PATH" \
-                                                --progress \
-                                                --stats 10s \
-                                                --retries 3 \
-                                                --low-level-retries 10 \
-                                                --log-file "$UPLOAD_LOG_PATH" \
-                                                --log-level INFO
-                                        '''
-                                    } else {
-                                        bat '''
-                                            "%RCLONE_EXE%" copyto "%BUILD_INFO_PATH%" "%DRIVE_BUILD_INFO_PATH%" ^
-                                                --progress ^
-                                                --stats 10s ^
-                                                --retries 3 ^
-                                                --low-level-retries 10 ^
-                                                --log-file "%UPLOAD_LOG_PATH%" ^
-                                                --log-level INFO
-
-                                            if errorlevel 1 (
-                                                echo ERROR: Build info upload failed.
-                                                exit /b 1
-                                            )
-                                        '''
-                                    }
                                 }
                             }
 
                             if (isAndroid && fileExists(env.MAPPING_PATH)) {
                                 def mappingUploadStatus
 
-                                if (isUnix()) {
-                                    mappingUploadStatus = sh(
-                                        script: '''
-                                            "$RCLONE_EXE" copyto \
-                                                "$MAPPING_PATH" \
-                                                "$DRIVE_MAPPING_PATH" \
-                                                --retries 3 \
-                                                --low-level-retries 10 \
-                                                --log-file "$UPLOAD_LOG_PATH" \
-                                                --log-level INFO
-                                        ''',
-                                        returnStatus: true
-                                    )
-                                } else {
-                                    mappingUploadStatus = bat(
-                                        script: '''
-                                            @"%RCLONE_EXE%" copyto "%MAPPING_PATH%" "%DRIVE_MAPPING_PATH%" ^
-                                                --retries 3 ^
-                                                --low-level-retries 10 ^
-                                                --log-file "%UPLOAD_LOG_PATH%" ^
-                                                --log-level INFO
-                                        ''',
-                                        returnStatus: true
-                                    )
-                                }
+                                mappingUploadStatus = sh(
+                                    script: '''
+                                        "$RCLONE_EXE" copyto \
+                                            "$MAPPING_PATH" \
+                                            "$DRIVE_MAPPING_PATH" \
+                                            --retries 3 \
+                                            --low-level-retries 10 \
+                                            --log-file "$UPLOAD_LOG_PATH" \
+                                            --log-level INFO
+                                    ''',
+                                    returnStatus: true
+                                )
 
                                 if (mappingUploadStatus != 0) {
                                     echo(
@@ -1450,17 +1250,11 @@ def call(Map config = [:]) {
                                 // Build lại cùng version mà lần này không có
                                 // mapping (tắt minify): xoá mapping cũ trên Drive
                                 // để nó không bị nhầm là của artifact mới.
-                                if (isUnix()) {
-                                    sh(
-                                        script: '"$RCLONE_EXE" deletefile "$DRIVE_MAPPING_PATH" >/dev/null 2>&1',
-                                        returnStatus: true
-                                    )
-                                } else {
-                                    bat(
-                                        script: '@"%RCLONE_EXE%" deletefile "%DRIVE_MAPPING_PATH%" >nul 2>&1',
-                                        returnStatus: true
-                                    )
-                                }
+                                sh(
+                                    script: '"$RCLONE_EXE" deletefile "$DRIVE_MAPPING_PATH" >/dev/null 2>&1',
+                                    returnStatus: true
+                                )
+
                             }
                         } finally {
                             env.UPLOAD_TIME_MILLIS = (
@@ -1468,45 +1262,21 @@ def call(Map config = [:]) {
                             ).toString()
                         }
 
-                        if (isUnix()) {
+                        sh '''
+                            set -eu
+                            "$RCLONE_EXE" lsjson \
+                                "$DRIVE_FILE_PATH" \
+                                --files-only
+                            echo "Build artifact verified successfully on Google Drive."
+                        '''
+
+                        if (env.BUILD_INFO_FOUND == 'true') {
                             sh '''
                                 set -eu
                                 "$RCLONE_EXE" lsjson \
-                                    "$DRIVE_FILE_PATH" \
+                                    "$DRIVE_BUILD_INFO_PATH" \
                                     --files-only
-                                echo "Build artifact verified successfully on Google Drive."
                             '''
-                        } else {
-                            bat '''
-                                "%RCLONE_EXE%" lsjson "%DRIVE_FILE_PATH%" --files-only
-
-                                if errorlevel 1 (
-                                    echo ERROR: Uploaded artifact could not be verified.
-                                    exit /b 1
-                                )
-
-                                echo Build artifact verified successfully on Google Drive.
-                            '''
-                        }
-
-                        if (env.BUILD_INFO_FOUND == 'true') {
-                            if (isUnix()) {
-                                sh '''
-                                    set -eu
-                                    "$RCLONE_EXE" lsjson \
-                                        "$DRIVE_BUILD_INFO_PATH" \
-                                        --files-only
-                                '''
-                            } else {
-                                bat '''
-                                    "%RCLONE_EXE%" lsjson "%DRIVE_BUILD_INFO_PATH%" --files-only
-
-                                    if errorlevel 1 (
-                                        echo ERROR: Uploaded build info file could not be verified.
-                                        exit /b 1
-                                    )
-                                '''
-                            }
 
                             echo 'Build info file verified on Google Drive.'
                         }
@@ -1514,19 +1284,12 @@ def call(Map config = [:]) {
                         env.MAPPING_UPLOADED = 'false'
 
                         if (isAndroid && fileExists(env.MAPPING_PATH)) {
-                            def mappingStatus = isUnix()
-                                ? sh(
-                                    script:
-                                        '"$RCLONE_EXE" lsjson ' +
-                                        '"$DRIVE_MAPPING_PATH" --files-only',
-                                    returnStatus: true
-                                )
-                                : bat(
-                                    script:
-                                        '@"%RCLONE_EXE%" lsjson ' +
-                                        '"%DRIVE_MAPPING_PATH%" --files-only',
-                                    returnStatus: true
-                                )
+                            def mappingStatus = sh(
+                                script:
+                                    '"$RCLONE_EXE" lsjson ' +
+                                    '"$DRIVE_MAPPING_PATH" --files-only',
+                                returnStatus: true
+                            )
 
                             if (mappingStatus == 0) {
                                 env.MAPPING_UPLOADED = 'true'
@@ -1661,37 +1424,12 @@ def call(Map config = [:]) {
                 }
 
                 script {
-                    if (isUnix()) {
-                        sh(
-                            'rm -f send-telegram.sh send-telegram.ps1 ' +
-                            'read-build-metadata.sh ' +
-                            'read-build-metadata.ps1 ' +
-                            'remove-applovin-spm.rb ' +
-                            'telegram-message.txt'
-                        )
-                    } else {
-                        bat '''
-                            if exist "%WORKSPACE%\\send-telegram.ps1" (
-                                del /F /Q "%WORKSPACE%\\send-telegram.ps1"
-                            )
-
-                            if exist "%WORKSPACE%\\send-telegram.sh" (
-                                del /F /Q "%WORKSPACE%\\send-telegram.sh"
-                            )
-
-                            if exist "%WORKSPACE%\\read-build-metadata.ps1" (
-                                del /F /Q "%WORKSPACE%\\read-build-metadata.ps1"
-                            )
-
-                            if exist "%WORKSPACE%\\read-build-metadata.sh" (
-                                del /F /Q "%WORKSPACE%\\read-build-metadata.sh"
-                            )
-
-                            if exist "%WORKSPACE%\\telegram-message.txt" (
-                                del /F /Q "%WORKSPACE%\\telegram-message.txt"
-                            )
-                        '''
-                    }
+                    sh(
+                        'rm -f send-telegram.sh ' +
+                        'read-build-metadata.sh ' +
+                        'remove-applovin-spm.rb ' +
+                        'telegram-message.txt'
+                    )
 
                     if (isAndroid) {
                         echo(
@@ -1717,7 +1455,7 @@ def resolveAdbExe(String configuredAdbExe) {
         return configuredAdbExe
     }
 
-    def adbName = isUnix() ? 'adb' : 'adb.exe'
+    def adbName = 'adb'
     def candidates = []
 
     [env.ANDROID_HOME, env.ANDROID_SDK_ROOT].each { sdkRoot ->
@@ -1727,9 +1465,7 @@ def resolveAdbExe(String configuredAdbExe) {
     }
 
     def unityRoot = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}"
-    candidates << (isUnix()
-        ? "${unityRoot}/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}"
-        : "${unityRoot}/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}")
+    candidates << "${unityRoot}/PlaybackEngines/AndroidPlayer/SDK/platform-tools/${adbName}"
 
     for (def candidate : candidates) {
         if (fileExists(candidate)) {
@@ -1749,18 +1485,11 @@ def createRcloneLink(String remotePath) {
         def output
 
         withEnv(["RCLONE_LINK_TARGET=${remotePath.trim()}"]) {
-            output = isUnix()
-                ? sh(
-                    script:
-                        '"$RCLONE_EXE" link "$RCLONE_LINK_TARGET"',
-                    returnStdout: true
-                )
-                : bat(
-                    script: '''@echo off
-                        "%RCLONE_EXE%" link "%RCLONE_LINK_TARGET%"
-                    ''',
-                    returnStdout: true
-                )
+            output = sh(
+                script:
+                    '"$RCLONE_EXE" link "$RCLONE_LINK_TARGET"',
+                returnStdout: true
+            )
         }
 
         def urls = output
@@ -2141,37 +1870,19 @@ def readBuildMetadata() {
         try {
             def metadataOutput
 
-            if (isUnix()) {
-                writeFile(
-                    file: 'read-build-metadata.sh',
-                    encoding: 'UTF-8',
-                    text: libraryResource(
-                        'com/pearz/ci/read-build-metadata.sh'
-                    )
+            writeFile(
+                file: 'read-build-metadata.sh',
+                encoding: 'UTF-8',
+                text: libraryResource(
+                    'com/pearz/ci/read-build-metadata.sh'
                 )
-                metadataOutput = sh(
-                    script:
-                        'sh ./read-build-metadata.sh ' +
-                        '"$METADATA_PATH"',
-                    returnStdout: true
-                )
-            } else {
-                writeFile(
-                    file: 'read-build-metadata.ps1',
-                    encoding: 'UTF-8',
-                    text: libraryResource(
-                        'com/pearz/ci/read-build-metadata.ps1'
-                    )
-                )
-                metadataOutput = bat(
-                    script: '''@powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                        -ExecutionPolicy Bypass ^
-                        -File "%WORKSPACE%\\read-build-metadata.ps1" ^
-                        -MetadataPath "%METADATA_PATH%"
-                    ''',
-                    returnStdout: true
-                )
-            }
+            )
+            metadataOutput = sh(
+                script:
+                    'sh ./read-build-metadata.sh ' +
+                    '"$METADATA_PATH"',
+                returnStdout: true
+            )
 
             metadataOutput.readLines().each { line ->
                 def separatorIndex = line.indexOf('=')
@@ -2356,37 +2067,19 @@ def sendTelegramNotification(String telegramCredentialsId) {
         )
 
         def sendTelegram = {
-            if (isUnix()) {
-                writeFile(
-                    file: 'send-telegram.sh',
-                    encoding: 'UTF-8',
-                    text: libraryResource(
-                        'com/pearz/ci/send-telegram.sh'
-                    )
+            writeFile(
+                file: 'send-telegram.sh',
+                encoding: 'UTF-8',
+                text: libraryResource(
+                    'com/pearz/ci/send-telegram.sh'
                 )
-                withEnv([
-                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
-                ]) {
-                    sh 'sh ./send-telegram.sh'
-                }
-            } else {
-                writeFile(
-                    file: 'send-telegram.ps1',
-                    encoding: 'UTF-8',
-                    text: libraryResource(
-                        'com/pearz/ci/send-telegram.ps1'
-                    )
-                )
-                withEnv([
-                    'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
-                ]) {
-                    bat '''
-                        powershell.exe -NoLogo -NoProfile -NonInteractive ^
-                            -ExecutionPolicy Bypass ^
-                            -File "%WORKSPACE%\\send-telegram.ps1"
-                    '''
-                }
+            )
+            withEnv([
+                'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+            ]) {
+                sh 'sh ./send-telegram.sh'
             }
+
         }
 
         if (telegramCredentialsId) {
@@ -2418,7 +2111,7 @@ def sendTelegramNotification(String telegramCredentialsId) {
 
 // Dùng cho cả iOS IPA lẫn iOS device. Trước đây chỉ device build mới được
 // báo, còn IPA thì im lặng hoàn toàn. iOS luôn chạy trên macOS nên chỉ cần
-// nhánh sh, không cần bản PowerShell như Android.
+// nhánh sh.
 def sendIosTelegramNotification(
     String telegramCredentialsId,
     boolean deviceBuild
@@ -2573,41 +2266,23 @@ def collectGitChanges(int maximumChanges) {
     )
     def changes = collectJenkinsChangeSets()
     if (!changes) {
-        if (isUnix()) {
         withEnv([
-            "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
-            "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
+        "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
+        "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
         ]) {
-            logOutput = sh(
-                script: '''
-                    if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
-                        git log --pretty=format:'%h%x09%an%x09%B%x1e' \
-                            "$PREVIOUS_BUILD_COMMIT..HEAD"
-                    else
-                        git log -1 --pretty=format:'%h%x09%an%x09%B%x1e'
-                    fi
-                ''',
-                returnStdout: true
-            ).trim()
+        logOutput = sh(
+            script: '''
+                if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
+                    git log --pretty=format:'%h%x09%an%x09%B%x1e' \
+                        "$PREVIOUS_BUILD_COMMIT..HEAD"
+                else
+                    git log -1 --pretty=format:'%h%x09%an%x09%B%x1e'
+                fi
+            ''',
+            returnStdout: true
+        ).trim()
         }
-    } else {
-        withEnv([
-            "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
-            "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
-        ]) {
-            logOutput = bat(
-                script: '''
-                    @echo off
-                    if "%HAS_VALID_PREVIOUS_COMMIT%"=="true" (
-                        git log --pretty=format:%%h%%x09%%an%%x09%%B%%x1e "%PREVIOUS_BUILD_COMMIT%..HEAD"
-                    ) else (
-                        git log -1 --pretty=format:%%h%%x09%%an%%x09%%B%%x1e
-                    )
-                ''',
-                returnStdout: true
-            ).trim()
-        }
-        }
+
     }
 
     if (!changes) {
@@ -2725,24 +2400,12 @@ def isAncestorCommit(String commit) {
     }
 
     withEnv(["PREVIOUS_BUILD_COMMIT=" + commit.trim()]) {
-        if (isUnix()) {
-            return sh(
-                script: '''
-                    git rev-parse --verify \
-                        "$PREVIOUS_BUILD_COMMIT^{commit}" >/dev/null 2>&1 &&
-                    git merge-base --is-ancestor \
-                        "$PREVIOUS_BUILD_COMMIT" HEAD
-                ''',
-                returnStatus: true
-            ) == 0
-        }
-
-        return bat(
+        return sh(
             script: '''
-                @echo off
-                git rev-parse --verify "%PREVIOUS_BUILD_COMMIT%^{commit}" >nul 2>&1
-                if errorlevel 1 exit /b 1
-                git merge-base --is-ancestor "%PREVIOUS_BUILD_COMMIT%" HEAD
+                git rev-parse --verify \
+                    "$PREVIOUS_BUILD_COMMIT^{commit}" >/dev/null 2>&1 &&
+                git merge-base --is-ancestor \
+                    "$PREVIOUS_BUILD_COMMIT" HEAD
             ''',
             returnStatus: true
         ) == 0
@@ -2938,7 +2601,7 @@ def saveNextAabVersionCode(int usedVersionCode) {
 
 def getAabVersionCodeStateFile() {
     // Job root lives on the Jenkins controller, unlike a workspace it is not
-    // removed by CLEAN_WORKSPACE and is shared by Windows/macOS agents.
+    // removed by CLEAN_WORKSPACE and is shared by every macOS agent.
     def jobRoot = currentBuild.rawBuild.parent.rootDir
     return new File(jobRoot, 'pearz-ci-aab-version-code.txt')
 }
