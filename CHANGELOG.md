@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.78] - 2026-09-26
+
+### Fixed
+
+- `ANDROID_INSTALL_TO_DEVICE` with an empty `ANDROID_DEVICE_SERIAL` stopped with
+  `PEARZ_ADB_SERIALS: unbound variable` (Jenkins drops empty environment
+  variables) and reported `Install failed` / `UNSTABLE`. It now installs on
+  every connected device, or reports `Skipped: no device connected` and keeps
+  the build `SUCCESS` when none is connected.
+
 ## [0.6.77] - 2026-09-26
 
 ### Changed
