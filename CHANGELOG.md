@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.75] - 2026-09-26
+
+### Removed
+
+- **Breaking:** Windows Jenkins agents are no longer supported. Android and iOS
+  builds run only on a macOS agent (Mac Mini); every `bat`/PowerShell branch,
+  `send-telegram.ps1`, `read-build-metadata.ps1` and the `windowsUnityHubRoot`
+  / `windowsRcloneExe` settings were removed. A build on another OS fails in
+  `Prepare Build Variables`.
+- **Breaking:** the Windows standalone player pipeline
+  (`pearzUnityWindowsPipeline`, `BUILD_PLATFORM=Windows`) was removed because it
+  required a Windows agent. `BuildEntry.BuildWindows` remains in the Unity
+  package for manual use.
+
 ## [0.6.74] - 2026-09-26
 
 ### Added

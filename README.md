@@ -5,9 +5,8 @@ Pearz CI pipelines.
 
 ## Requirements
 
-- Unity 6000.3 or newer on Windows or macOS
+- Unity 6000.3 or newer on a macOS Jenkins agent (Mac Mini)
 - Android Build Support when building Android players
-- Windows Build Support (IL2CPP) when building Windows players with IL2CPP
 - Jenkins with Pipeline, Git, Credentials, Shared Library, and Generic Webhook Trigger support
 - rclone with a configured Google Drive remote
 - `curl` on macOS for Telegram notifications
@@ -103,23 +102,6 @@ project root. If the convention file is absent, PearzCI falls back to Unity's
 current Player Settings signing configuration. An explicitly configured
 `KEYSTORE_PATH` remains a hard requirement.
 
-## Windows standalone (.exe)
-
-Run Unity on a **Windows Jenkins agent** with Windows Build Support installed:
-
-```text
--executeMethod Pearz.CI.BuildEntry.BuildWindows
-```
-
-Set `BUILD_PLATFORM` to `Windows`. The pipeline writes and archives the full
-player under `Builds/Windows/`: the `.exe`, its matching `*_Data` folder, and
-Unity runtime files. Keep the whole folder together when distributing or
-running the game; the `.exe` alone is not a runnable Unity player.
-
-Supported optional settings are `PRODUCT_NAME`, `APP_VERSION`,
-`SCRIPTING_DEFINE_SYMBOLS`, `IL2CPP_CODE_GENERATION`,
-`MANAGED_STRIPPING_LEVEL`, and `STRIP_ENGINE_CODE`.
-
 ## Jenkins Shared Library
 
 The package contains the Unity build entry point, while this repository also
@@ -167,7 +149,7 @@ Required parameters:
 - String `GIT_BRANCH`, for example `main`
 - String `APP_VERSION`, for example `1.0.0` (Android/iOS; digits and dots only).
   It sets the app version and the Google Drive folder of the build.
-- Choice `BUILD_PLATFORM`: `Android`, `iOS`, or `Windows` (default: `Android`)
+- Choice `BUILD_PLATFORM`: `Android` or `iOS` (default: `Android`)
 
 Common optional parameters:
 
@@ -518,14 +500,14 @@ Multi-line section placeholders include their own heading and content.
 
 ### Build machine setup
 
-PearzCI detects the operating system of the Jenkins agent automatically.
-Windows and macOS use the following defaults:
+PearzCI runs only on a macOS Jenkins agent; a build on any other OS fails in
+`Prepare Build Variables`. Defaults:
 
-| Setting | Windows | macOS |
-| --- | --- | --- |
-| Unity Hub editors | `C:\Program Files\Unity\Hub\Editor` | `/Applications/Unity/Hub/Editor` |
-| rclone command | `D:\Tools\rclone\rclone.exe` | `rclone` from `PATH` |
-| Telegram client | Windows PowerShell | POSIX shell and `curl` |
+| Setting | Default |
+| --- | --- |
+| Unity Hub editors | `/Applications/Unity/Hub/Editor` |
+| rclone command | `rclone` from `PATH` |
+| Telegram client | POSIX shell and `curl` |
 
 The Jenkins agent user must have:
 
@@ -540,8 +522,6 @@ Platform paths can be overridden when calling the pipeline:
 
 ```groovy
 pearzUnityMobilePipeline(
-    windowsUnityHubRoot: 'C:\\Program Files\\Unity\\Hub\\Editor',
-    windowsRcloneExe: 'D:\\Tools\\rclone\\rclone.exe',
     macUnityHubRoot: '/Applications/Unity/Hub/Editor',
     macRcloneExe: 'rclone'
 )
