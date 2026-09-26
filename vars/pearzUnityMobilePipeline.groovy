@@ -141,12 +141,24 @@ def call(Map config = [:]) {
             ' refs/heads/' + regexEscape(webhookBranch) + '$'
         : '^refs/heads/' + regexEscape(webhookBranch) + '$'
 
+    // Build webhook bị bỏ ngay khi bắt đầu nếu đã có push mới hơn đang chờ
+    // trong hàng đợi của job; build bấm tay luôn được chạy tới cùng.
+    if (isSupersededWebhookBuild()) {
+        currentBuild.result = 'NOT_BUILT'
+        currentBuild.description = 'Skipped: a newer push is queued'
+        echo 'A newer webhook build is queued; this build is skipped.'
+        return
+    }
+
     pipeline {
         agent { label "${agentLabelExpression}" }
 
         options {
             timestamps()
-            disableConcurrentBuilds(abortPrevious: true)
+            // Không huỷ build đang chạy: build tay (ví dụ AAB phát hành)
+            // luôn chạy xong. Build webhook cũ tự bỏ qua khi có push mới
+            // hơn đang chờ (xem isSupersededWebhookBuild).
+            disableConcurrentBuilds()
             quietPeriod(5)
             skipDefaultCheckout(true)
             buildDiscarder(
@@ -483,6 +495,10 @@ def call(Map config = [:]) {
 
                 steps {
                     script {
+                        if (isSupersededWebhookBuild()) {
+                            env.PEARZ_SUPERSEDED = 'true'
+                            error('A newer webhook build is queued; stopping before the Unity build.')
+                        }
                         def buildStartedAt = System.currentTimeMillis()
                         // APP_VERSION (bắt buộc) là base version; CI_BUILD_NUMBER
                         // luôn được nối vào để tester nhận biết chính xác bản
@@ -575,6 +591,10 @@ def call(Map config = [:]) {
                 options { timeout(time: 60, unit: 'MINUTES') }
                 steps {
                     script {
+                        if (isSupersededWebhookBuild()) {
+                            env.PEARZ_SUPERSEDED = 'true'
+                            error('A newer webhook build is queued; stopping before the Unity build.')
+                        }
                         def startedAt = System.currentTimeMillis()
                         // CFBundleVersion phải tăng sau mỗi lần nộp, nếu không
                         // App Store Connect từ chối vì trùng build. Param để
@@ -1411,7 +1431,11 @@ def call(Map config = [:]) {
                     def sendNotifications = params.SEND_NOTIFICATIONS == null ||
                         params.SEND_NOTIFICATIONS.toString().toBoolean()
 
-                    if (!sendNotifications) {
+                    if (env.PEARZ_SUPERSEDED == 'true') {
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description = 'Skipped: a newer push is queued'
+                        echo 'Superseded by a newer webhook build; notification skipped.'
+                    } else if (!sendNotifications) {
                         echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
                     } else if (isAndroid) {
                         sendTelegramNotification(telegramCredentialsId)
@@ -2221,10 +2245,26 @@ def readPearzCiVersion() {
     return 'unknown'
 }
 
+// Build do Generic Webhook Trigger kích hoạt là lỗi thời khi hàng đợi của
+// job đang có một build webhook khác: mọi item trong hàng đợi đều mới hơn
+// build đang chạy. Build bấm tay không bao giờ bị coi là lỗi thời.
+@NonCPS
+def isSupersededWebhookBuild() {
+    def webhookCause = 'org.jenkinsci.plugins.gwt.GenericCause'
+    def build = currentBuild.rawBuild
+    if (!build.causes.any { it.class.name == webhookCause }) {
+        return false
+    }
+
+    return jenkins.model.Jenkins.get().queue.getItems(build.parent).any { item ->
+        item.causes.any { it.class.name == webhookCause }
+    }
+}
+
 def collectGitChanges(int maximumChanges) {
     // Mốc là build THÀNH CÔNG gần nhất, không phải build gần nhất. Git
     // plugin ghi lại commit ngay ở bước checkout, nên một build bị huỷ
-    // (disableConcurrentBuilds abortPrevious) hoặc build hỏng vẫn kịp
+    // (bị push mới hơn thay thế) hoặc build hỏng vẫn kịp
     // đẩy GIT_PREVIOUS_COMMIT lên. Build chạy tới cùng sau đó sẽ tưởng
     // không có gì mới và báo "No new commits", dù chính nó tạo artifact.
     // GIT_PREVIOUS_SUCCESSFUL_COMMIT không phải lúc nào cũng được expose khi

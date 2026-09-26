@@ -323,6 +323,24 @@ gửi lên Google Play thì nâng `APP_VERSION` trước khi build bản tiếp 
 không AAB trên Drive sẽ bị bản mới đè. Lịch sử từng build vẫn còn trong Jenkins
 archive và số build Jenkins vẫn hiện trên Telegram.
 
+Thư mục theo layout cũ (`<job>/apk/1.0.0-157/`, `<job>/aab/…`, `<job>/ios/…`,
+`<job>/1.0.0-157/`) không còn được dùng. Chạy trên Mac Mini (user có remote
+rclone) để xem rồi xoá; file bị xoá vào Thùng rác của Drive:
+
+```bash
+tools/cleanup-legacy-drive-folders.sh                 # chỉ liệt kê
+tools/cleanup-legacy-drive-folders.sh --delete        # xoá
+tools/cleanup-legacy-drive-folders.sh --job FoodSort --delete
+```
+
+#### Build chạy chồng nhau
+
+Mỗi job chỉ chạy một build một lúc; build mới xếp hàng chờ, không huỷ build
+đang chạy, nên build bấm tay (ví dụ AAB phát hành) luôn chạy xong. Build do
+webhook kích hoạt tự bỏ qua (kết quả `NOT_BUILT`, không gửi Telegram) nếu lúc
+bắt đầu hoặc ngay trước bước build Unity đã có một build webhook mới hơn đang
+chờ, để chỉ commit mới nhất được build.
+
 #### Stage View của pipeline
 
 Android và iOS **dùng chung một pipeline**, nên Stage View hiển thị chung một
