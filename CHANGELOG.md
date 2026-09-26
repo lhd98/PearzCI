@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.76] - 2026-09-26
+
+### Changed
+
+- A new build no longer aborts the running one (`disableConcurrentBuilds()`
+  without `abortPrevious`), so manual builds such as release AABs always
+  finish. A webhook-triggered build is skipped as `NOT_BUILT`, without a
+  Telegram message, when a newer webhook build is already queued at its start
+  or right before the Unity build.
+
+### Added
+
+- `tools/cleanup-legacy-drive-folders.sh` lists (default) or deletes
+  (`--delete`) Google Drive folders from the pre-0.6.66 per-build layout
+  (`<job>/apk|aab|ios/…`, `<job>/<version>-<build>/`). The new
+  `<job>/<APP_VERSION>/` folders are never touched.
+
 ## [0.6.75] - 2026-09-26
 
 ### Removed

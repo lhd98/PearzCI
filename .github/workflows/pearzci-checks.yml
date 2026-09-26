@@ -45,7 +45,7 @@ jobs:
       - name: Check shell scripts
         run: |
           set -euo pipefail
-          for script in resources/com/pearz/ci/*.sh .github/scripts/*.sh; do
+          for script in resources/com/pearz/ci/*.sh .github/scripts/*.sh tools/*.sh; do
             bash -n "$script"
           done
-          shellcheck --severity=error resources/com/pearz/ci/*.sh .github/scripts/*.sh
+          shellcheck --severity=error resources/com/pearz/ci/*.sh .github/scripts/*.sh tools/*.sh
