@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.74] - 2026-09-26
+
+### Added
+
+- Release automation: merging a new `package.json` version into `main` now
+  creates the `vX.Y.Z` tag, moves `upm` to that commit and sends the Telegram
+  release notice through GitHub Actions. Manual tagging and `upm` pushes are no
+  longer needed.
+- Pull request checks: version consistency across `package.json`,
+  `version.txt` and `CHANGELOG.md` (higher than the base branch, not already
+  tagged, no duplicate sections), Groovy syntax for `vars/` and `jenkins/`, and
+  shell script checks.
+
 ## [0.6.73] - 2026-09-26
 
 ### Fixed

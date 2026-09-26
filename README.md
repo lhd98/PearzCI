@@ -33,7 +33,7 @@ the project.
 ### PearzCI release Telegram notification
 
 This repository sends a Telegram notice when an exact release tag such as
-`v0.6.6` is pushed. It runs entirely through GitHub Actions; Jenkins game
+`v0.6.6` is pushed, or when the Release PearzCI workflow creates one. It runs entirely through GitHub Actions; Jenkins game
 build jobs are not involved.
 
 In GitHub, open **PearzCI > Settings > Secrets and variables > Actions** and
@@ -606,8 +606,18 @@ editing them by hand:
 pwsh ./tools/bump-version.ps1 -Version 0.5.5
 ```
 
-Then add the matching `CHANGELOG.md` entry, commit, create an annotated tag
-(`git tag -a v0.5.5 -m "Release v0.5.5"`), and advance the `upm` branch.
+Then add the matching `CHANGELOG.md` entry at the top and merge into `main`.
+The **Release PearzCI** GitHub Actions workflow does the rest: when the
+`package.json` version on `main` has no tag yet, it checks that `version.txt`
+and `CHANGELOG.md` match, creates the annotated tag `vX.Y.Z`, moves `upm` to the
+same commit and sends the Telegram release notice. Do not tag or push `upm` by
+hand. Commits that do not change the version release nothing.
+
+The **PearzCI checks** workflow runs on every pull request and push to `main`:
+version consistency (a changed version must be higher than the base branch's
+and must not already be tagged, and `CHANGELOG.md` must not repeat a section),
+Groovy syntax of `vars/` and `jenkins/`, and `bash -n` plus ShellCheck
+(errors only) for the shell scripts.
 
 ## iOS Jenkins pipeline
 
