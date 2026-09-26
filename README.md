@@ -223,8 +223,9 @@ nối. Trước khi cài, PearzCI tự nối lại: `adb reconnect offline`, r�
 được gần đây (lưu ở `~/.pearz-ci/adb-known-devices.txt` của user chạy agent).
 Nên không cần tự chạy lệnh connect trước mỗi build.
 
-Android compression được chọn tự động theo loại build: APK dùng `LZ4` (build
-nhanh), AAB dùng `LZ4HC` (size nhỏ, load nhanh). Setting Compression Method
+Android compression được chọn tự động theo loại build: APK dùng `Default (ZIP)`
+(file nhỏ nhất, load chậm hơn một chút), AAB release dùng `LZ4HC` (size nhỏ,
+load nhanh). Setting Compression Method
 trong Build Settings của Unity không được dùng vì nó nằm trong `Library/`
 (không commit). Giá trị thực tế được ghi vào `Compression Method` của
 `BUILD_INFO.txt`.
