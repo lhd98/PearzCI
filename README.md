@@ -127,6 +127,11 @@ the Jenkins job:
 pearzUnityPipeline()
 ```
 
+Library layout: `pearzUnityPipeline` chọn nền tảng; `pearzUnityMobilePipeline`
+chứa các stage; helper nằm ở `pearzAndroid` (adb, metadata, AAB version code),
+`pearzIos` (Info.plist, BUILD_INFO, TestFlight), `pearzTelegram` và
+`pearzGitChanges`. Job chỉ cần gọi `pearzUnityPipeline()`.
+
 This one-line script is identical for every project. Jenkins loads PearzCI
 implicitly at the globally configured version, so project jobs do not need an
 `@Library` declaration, a second CI repository, or a project-specific

@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.77] - 2026-09-26
+
+### Changed
+
+- Split the 2,600-line mobile pipeline: helpers moved to `vars/pearzAndroid`
+  (adb install, build metadata, BUILD_INFO, AAB version code),
+  `vars/pearzIos` (Info.plist, BUILD_INFO, TestFlight upload),
+  `vars/pearzTelegram` and `vars/pearzGitChanges`. The stages stay in
+  `pearzUnityMobilePipeline`; behaviour is unchanged.
+
 ## [0.6.76] - 2026-09-26
 
 ### Changed
