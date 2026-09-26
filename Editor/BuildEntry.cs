@@ -86,7 +86,7 @@ public static class BuildEntry
                 locationPathName = configuration.OutputPath,
                 target           = BuildTarget.Android,
                 targetGroup      = BuildTargetGroup.Android,
-                options          = BuildOptions.None
+                options          = GetAndroidCompressionBuildOptions()
             };
 
             Log("Calling BuildPipeline.BuildPlayer...");
@@ -868,7 +868,7 @@ public static class BuildEntry
                 androidVersionCode =
                     PlayerSettings.Android.bundleVersionCode,
                 unityVersion = Application.unityVersion,
-                compressionMethod = GetCompressionMethod(BuildTargetGroup.Android),
+                compressionMethod = ResolveAndroidCompressionMethod(),
                 scriptingBackend = GetAndroidScriptingBackend(),
                 managedStrippingLevel =
                     PlayerSettings
@@ -1018,6 +1018,52 @@ public static class BuildEntry
         return backend == ScriptingImplementation.IL2CPP
             ? "IL2CPP"
             : "Mono";
+    }
+
+    // BuildPipeline.BuildPlayer ignores the Build Settings compression unless
+    // it is passed as BuildOptions, and that editor setting lives in the
+    // uncommitted Library folder, so a fresh Jenkins checkout always sees the
+    // default. ANDROID_COMPRESSION (Default, LZ4, LZ4HC) makes the CI choice
+    // explicit; when empty, the local editor setting is used if available.
+    private static string ResolveAndroidCompressionMethod()
+    {
+        string value = GetEnvironmentVariable("ANDROID_COMPRESSION");
+
+        if (string.IsNullOrEmpty(value))
+            return GetCompressionMethod(BuildTargetGroup.Android);
+
+        switch (value.ToUpperInvariant())
+        {
+            case "LZ4HC":
+                return "LZ4HC";
+            case "LZ4":
+                return "LZ4";
+            case "DEFAULT":
+            case "ZIP":
+            case "NONE":
+                return "Default (ZIP)";
+            default:
+                throw new FormatException(
+                    "ANDROID_COMPRESSION phải là Default, LZ4 hoặc LZ4HC. " +
+                    $"Giá trị hiện tại: {value}");
+        }
+    }
+
+    private static BuildOptions GetAndroidCompressionBuildOptions()
+    {
+        string method = ResolveAndroidCompressionMethod();
+
+        Log($"Android compression: {method}");
+
+        switch (method)
+        {
+            case "LZ4HC":
+                return BuildOptions.CompressWithLz4HC;
+            case "LZ4":
+                return BuildOptions.CompressWithLz4;
+            default:
+                return BuildOptions.None;
+        }
     }
 
     // Unity keeps the player compression setting behind an internal API. Read
