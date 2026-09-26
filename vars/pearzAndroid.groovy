@@ -260,6 +260,9 @@ def installOnConnectedDevices(String configuredAdbExe, String androidDeviceSeria
     installStatus = sh(returnStatus: true, script: '''
         set -u
         rm -f "$PEARZ_ADB_RESULT_PATH"
+        # Jenkins bỏ hẳn biến môi trường khi giá trị rỗng, nên phải có mặc định
+        # để `set -u` không dừng script khi ANDROID_DEVICE_SERIAL để trống.
+        serial_filter="${PEARZ_ADB_SERIALS:-}"
 
         JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe \
             "$ADB_EXE" start-server || exit 1
@@ -305,8 +308,8 @@ def installOnConnectedDevices(String configuredAdbExe, String androidDeviceSeria
         connected=$(list_devices)
 
         serials=""
-        if [ -n "$PEARZ_ADB_SERIALS" ]; then
-            for serial in $PEARZ_ADB_SERIALS; do
+        if [ -n "$serial_filter" ]; then
+            for serial in $serial_filter; do
                 if printf '%s\\n' "$connected" | grep -Fqx "$serial"; then
                     serials="$serials $serial"
                 else
