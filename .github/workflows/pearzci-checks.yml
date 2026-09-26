@@ -49,3 +49,6 @@ jobs:
             bash -n "$script"
           done
           shellcheck --severity=error resources/com/pearz/ci/*.sh .github/scripts/*.sh tools/*.sh
+
+      - name: Test Android device install script
+        run: .github/scripts/test-android-install-devices.sh

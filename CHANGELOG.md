@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.79] - 2026-09-26
+
+### Changed
+
+- The Android device install and iOS connected-device build scripts moved out
+  of Groovy strings into `resources/com/pearz/ci/android-install-devices.sh`
+  and `ios-device-install.sh`, run through the new `pearzScript.run` helper
+  (written to the workspace `@tmp` folder). Behaviour is unchanged.
+
+### Added
+
+- The PR checks now ShellCheck these scripts and run
+  `android-install-devices.sh` against a stub adb in eight scenarios, including
+  unset environment variables (the cause of the 0.6.78 fix).
+
 ## [0.6.78] - 2026-09-26
 
 ### Fixed

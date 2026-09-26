@@ -620,7 +620,11 @@ The **PearzCI checks** workflow runs on every pull request and push to `main`:
 version consistency (a changed version must be higher than the base branch's
 and must not already be tagged, and `CHANGELOG.md` must not repeat a section),
 Groovy syntax of `vars/` and `jenkins/`, and `bash -n` plus ShellCheck
-(errors only) for the shell scripts.
+(errors only) for the shell scripts. Longer shell steps live in
+`resources/com/pearz/ci/*.sh` (loaded by `pearzScript.run`) rather than inside
+Groovy strings, so they are checked too; `android-install-devices.sh` also runs
+against a stub adb (no device, several devices, mDNS reconnect, duplicate
+listing, serial filter, install failure, unset environment variables).
 
 ## iOS Jenkins pipeline
 
