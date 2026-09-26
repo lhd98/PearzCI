@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.73] - 2026-09-26
+
+### Fixed
+
+- Wireless Android devices that adb dropped while the phone still showed the
+  Mac as connected are reconnected before the install: PearzCI runs
+  `adb reconnect offline`, then `adb connect` for every device found by
+  `adb mdns services` and for addresses that connected recently (kept in
+  `~/.pearz-ci/adb-known-devices.txt` on the agent, last 20). A device listed
+  under both its mDNS name and `ip:port` is installed only once.
+
 ## [0.6.72] - 2026-09-26
 
 ### Fixed
@@ -49,17 +60,6 @@ All notable changes to this package are documented in this file.
 - Android builds fall back to Unity's default Player Settings signing when no
   explicit keystore is configured and the project convention keystore is absent.
   An explicit `KEYSTORE_PATH` still fails fast when its file is missing.
-
-## [0.6.67] - 2026-09-26
-
-### Fixed
-
-- Wireless Android devices that adb dropped while the phone still showed the
-  Mac as connected are reconnected before the install: PearzCI runs
-  `adb reconnect offline`, then `adb connect` for every device found by
-  `adb mdns services` and for addresses that connected recently (kept in
-  `~/.pearz-ci/adb-known-devices.txt` on the agent, last 20). A device listed
-  under both its mDNS name and `ip:port` is installed only once.
 
 ## [0.6.66] - 2026-09-25
 
