@@ -230,6 +230,12 @@ user chạy Jenkins (`adb pair <ip>:<port>` rồi nhập mã 6 số); sau đó a
 nối lại qua mDNS, kể cả khi cổng đổi. Agent và điện thoại phải cùng mạng con
 và router phải cho multicast (mDNS) đi qua giữa mạng dây và Wi-Fi.
 
+Kết nối Wi-Fi của adb có thể rớt dù điện thoại vẫn hiện Mac là thiết bị đã kết
+nối. Trước khi cài, PearzCI tự nối lại: `adb reconnect offline`, rồi
+`adb connect` tới mọi máy thấy qua `adb mdns services` và các địa chỉ kết nối
+được gần đây (lưu ở `~/.pearz-ci/adb-known-devices.txt` của user chạy agent).
+Nên không cần tự chạy lệnh connect trước mỗi build.
+
 Android compression được chọn tự động theo loại build: APK dùng `LZ4` (build
 nhanh), AAB dùng `LZ4HC` (size nhỏ, load nhanh). Setting Compression Method
 trong Build Settings của Unity không được dùng vì nó nằm trong `Library/`

@@ -1126,8 +1126,32 @@ def call(Map config = [:]) {
                                         awk 'NR > 1 && $2 == "device" { print $1 }'
                                 }
 
-                                # Server vừa khởi động cần vài giây để mDNS
-                                # kết nối lại máy Wireless debugging đã pair.
+                                # Kết nối Wi-Fi hay bị adb làm rớt trong khi
+                                # điện thoại vẫn tưởng còn kết nối. Trước khi cài,
+                                # nối lại: phiên offline, máy adb thấy qua mDNS và
+                                # các địa chỉ đã cài thành công lần trước.
+                                known_file="$HOME/.pearz-ci/adb-known-devices.txt"
+                                mkdir -p "$(dirname "$known_file")"
+                                "$ADB_EXE" reconnect offline >/dev/null 2>&1 || true
+                                {
+                                    "$ADB_EXE" mdns services 2>/dev/null |
+                                        awk '$2 ~ /^_adb(-tls-connect)?\\._tcp/ { print $3 }'
+                                    [ -f "$known_file" ] && cat "$known_file"
+                                } | grep -E '^[0-9.]+:[0-9]+$' | sort -u |
+                                while read -r address; do
+                                    echo "adb connect $address"
+                                    output=$("$ADB_EXE" connect "$address" 2>&1 | head -1)
+                                    echo "$output"
+                                    case "$output" in
+                                        *"connected to"*) echo "$address" >> "$known_file.new" ;;
+                                    esac
+                                done
+                                # Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
+                                if [ -f "$known_file.new" ]; then
+                                    tail -n 20 "$known_file.new" > "$known_file"
+                                    rm -f "$known_file.new"
+                                fi
+
                                 attempt=0
                                 while [ -z "$(list_devices)" ] && [ "$attempt" -lt 5 ]; do
                                     sleep 1
@@ -1157,7 +1181,16 @@ def call(Map config = [:]) {
 
                                 failed=0
                                 installed=""
+                                done_ids=" "
                                 for serial in $serials; do
+                                    # Một máy có thể xuất hiện hai lần (tên mDNS
+                                    # và ip:port); chỉ cài một lần theo serialno.
+                                    device_id=$("$ADB_EXE" -s "$serial" get-serialno 2>/dev/null | tr -d '\\r')
+                                    case "$done_ids" in
+                                        *" ${device_id:-$serial} "*) continue ;;
+                                    esac
+                                    done_ids="$done_ids${device_id:-$serial} "
+
                                     echo "Installing $OUTPUT_PATH on $serial"
                                     if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
                                         model=$("$ADB_EXE" -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\\r')
@@ -1180,6 +1213,16 @@ def call(Map config = [:]) {
                                 set JENKINS_NODE_COOKIE=dontKillMe
                                 set BUILD_ID=dontKillMe
                                 "%ADB_EXE%" start-server || exit /b 1
+
+                                "%ADB_EXE%" reconnect offline >nul 2>&1
+                                for /f "tokens=2,3" %%A in ('"%ADB_EXE%" mdns services 2^>nul') do (
+                                    echo %%A | findstr /b "_adb" >nul && (
+                                        echo adb connect %%B
+                                        "%ADB_EXE%" connect %%B
+                                    )
+                                )
+                                timeout /t 2 /nobreak >nul
+
                                 "%ADB_EXE%" devices -l
 
                                 set "CONNECTED="
@@ -1203,14 +1246,21 @@ def call(Map config = [:]) {
 
                                 set FAILED=0
                                 set "INSTALLED="
+                                set "DONE_IDS= "
                                 for %%S in (!SERIALS!) do (
-                                    echo Installing %OUTPUT_PATH% on %%S
-                                    "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
+                                    set "DEVICE_ID=%%S"
+                                    for /f %%I in ('"%ADB_EXE%" -s %%S get-serialno 2^>nul') do set "DEVICE_ID=%%I"
+                                    echo !DONE_IDS! | findstr /c:" !DEVICE_ID! " >nul
                                     if errorlevel 1 (
-                                        echo ERROR: Install failed on %%S
-                                        set FAILED=1
-                                    ) else (
-                                        set "INSTALLED=!INSTALLED! %%S"
+                                        set "DONE_IDS=!DONE_IDS!!DEVICE_ID! "
+                                        echo Installing %OUTPUT_PATH% on %%S
+                                        "%ADB_EXE%" -s %%S install -r -d "%OUTPUT_PATH%"
+                                        if errorlevel 1 (
+                                            echo ERROR: Install failed on %%S
+                                            set FAILED=1
+                                        ) else (
+                                            set "INSTALLED=!INSTALLED! %%S"
+                                        )
                                     )
                                 )
 
