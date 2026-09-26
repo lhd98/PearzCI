@@ -1,0 +1,71 @@
+name: Release PearzCI
+
+# Merge vào main mà package.json mang version chưa có tag thì tự release:
+# tạo tag vX.Y.Z, đưa upm lên cùng commit và gửi Telegram.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pearzci-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and update upm
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check version consistency
+        run: .github/scripts/check-version.sh
+
+      - name: Create tag and update upm
+        id: release
+        run: |
+          set -euo pipefail
+
+          version="$(jq -r '.version' package.json)"
+          tag="v$version"
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists; nothing to release."
+            exit 0
+          fi
+
+          git fetch origin upm
+          if ! git merge-base --is-ancestor origin/upm HEAD; then
+            echo "ERROR: upm has commits that are not on main; merge upm into main first." >&2
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$tag" -m "$tag"
+          git push origin "refs/tags/$tag"
+          git push origin HEAD:refs/heads/upm
+
+          echo "Released $tag at $(git rev-parse --short HEAD)."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  notify:
+    name: Notify Telegram
+    needs: release
+    if: needs.release.outputs.tag != ''
+    # Tag do GITHUB_TOKEN push không kích hoạt workflow khác, nên gọi thẳng.
+    uses: ./.github/workflows/pearzci-release-telegram.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit

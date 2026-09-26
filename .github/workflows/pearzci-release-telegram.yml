@@ -10,6 +10,12 @@ on:
         description: Exact release tag to announce (for example v0.6.11)
         required: true
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: Exact release tag to announce
+        required: true
+        type: string
 
 permissions:
   contents: read

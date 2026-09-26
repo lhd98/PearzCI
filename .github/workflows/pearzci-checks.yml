@@ -1,0 +1,51 @@
+name: PearzCI checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Version, Groovy and shell checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version consistency
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: .github/scripts/check-version.sh
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Check Groovy syntax
+        env:
+          GROOVY_VERSION: 4.0.22
+        run: |
+          set -euo pipefail
+          curl -sSfL -o groovy.jar \
+            "https://repo1.maven.org/maven2/org/apache/groovy/groovy/${GROOVY_VERSION}/groovy-${GROOVY_VERSION}.jar"
+          java -cp groovy.jar groovy.ui.GroovyMain \
+            .github/scripts/check-groovy-syntax.groovy \
+            vars/*.groovy jenkins/*.groovy
+
+      - name: Check shell scripts
+        run: |
+          set -euo pipefail
+          for script in resources/com/pearz/ci/*.sh .github/scripts/*.sh; do
+            bash -n "$script"
+          done
+          shellcheck --severity=error resources/com/pearz/ci/*.sh .github/scripts/*.sh
