@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.80] - 2026-09-26
+
+### Changed
+
+- APK builds use Unity's default ZIP compression again instead of LZ4, giving
+  the smallest APK (AntVoxel: 76.8 MB with ZIP vs 79.1 MB with LZ4). AAB
+  release builds keep LZ4HC. `BUILD_INFO.txt` reports `Default (ZIP)` for APKs.
+  This is a Unity package change: update PearzCI in the project to apply it.
+
 ## [0.6.79] - 2026-09-26
 
 ### Changed

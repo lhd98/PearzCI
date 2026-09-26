@@ -1025,11 +1025,11 @@ public static class BuildEntry
     // BuildPipeline.BuildPlayer ignores the Build Settings compression unless
     // it is passed as BuildOptions, and that editor setting lives in the
     // uncommitted Library folder. Pick it from the build type instead: APK
-    // test builds favour build speed (LZ4), AAB release builds favour a
-    // smaller download with fast loading (LZ4HC).
+    // builds use Unity's default ZIP compression for the smallest file, AAB
+    // release builds use LZ4HC for a small download with fast loading.
     private static string GetAndroidCompressionMethod(bool buildAppBundle)
     {
-        return buildAppBundle ? "LZ4HC" : "LZ4";
+        return buildAppBundle ? "LZ4HC" : "Default (ZIP)";
     }
 
     private static BuildOptions GetAndroidCompressionBuildOptions(
@@ -1039,7 +1039,7 @@ public static class BuildEntry
 
         return buildAppBundle
             ? BuildOptions.CompressWithLz4HC
-            : BuildOptions.CompressWithLz4;
+            : BuildOptions.None;
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)
