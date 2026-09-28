@@ -65,6 +65,13 @@ run_case serial-filter 0 "Model-b" STUB_DEVICES="a b" PEARZ_ADB_SERIALS=b
 run_case serial-missing 3 "" STUB_DEVICES=a PEARZ_ADB_SERIALS=zz
 run_case install-fails 1 "Model-a" STUB_DEVICES="a b" STUB_FAIL=b
 
+# Đã có máy kết nối: không adb connect thêm (tránh phiên TLS thứ hai).
+run_case no-extra-connect 0 "Model-a" STUB_DEVICES=a STUB_MDNS=10.0.0.5:4000
+if grep -q '^connect ' "$work/no-extra-connect/calls"; then
+    echo "FAIL no-extra-connect: adb connect ran while a device was connected"
+    failures=$((failures + 1))
+fi
+
 # Đã có adb server chạy từ binary khác: script phải dùng binary đó, không
 # start-server bằng ADB_EXE (khác version sẽ kill server của người dùng).
 mkdir -p "$work/fakebin" "$work/server"

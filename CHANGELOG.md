@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.82] - 2026-09-28
+
+### Fixed
+
+- Android device install only runs `adb reconnect offline` and `adb connect`
+  when no device is connected. Connecting to a phone that mDNS had already
+  connected opened a second TLS session to it (listed as both
+  `adb-...._adb-tls-connect._tcp` and `ip:port`), and phones tend to drop one.
+
 ## [0.6.81] - 2026-09-28
 
 ### Fixed

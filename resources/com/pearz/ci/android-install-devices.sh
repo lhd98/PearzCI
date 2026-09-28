@@ -29,29 +29,33 @@ list_devices() {
 }
 
 # Kết nối Wi-Fi hay bị adb làm rớt trong khi
-# điện thoại vẫn tưởng còn kết nối. Trước khi cài,
-# nối lại: phiên offline, máy adb thấy qua mDNS và
-# các địa chỉ đã cài thành công lần trước.
+# điện thoại vẫn tưởng còn kết nối. Chưa thấy máy nào
+# thì nối lại: phiên offline, máy adb thấy qua mDNS và
+# các địa chỉ đã cài thành công lần trước. Đã có máy thì
+# bỏ qua: `adb connect` tới máy mDNS đã tự nối sẽ mở phiên
+# TLS thứ hai tới cùng điện thoại, và máy hay đóng bớt một phiên.
 known_file="$HOME/.pearz-ci/adb-known-devices.txt"
 mkdir -p "$(dirname "$known_file")"
-"$ADB_EXE" reconnect offline >/dev/null 2>&1 || true
-{
-    "$ADB_EXE" mdns services 2>/dev/null |
-        awk '$2 ~ /^_adb(-tls-connect)?\._tcp/ { print $3 }'
-    [ -f "$known_file" ] && cat "$known_file"
-} | grep -E '^[0-9.]+:[0-9]+$' | sort -u |
-while read -r address; do
-    echo "adb connect $address"
-    output=$("$ADB_EXE" connect "$address" 2>&1 | head -1)
-    echo "$output"
-    case "$output" in
-        *"connected to"*) echo "$address" >> "$known_file.new" ;;
-    esac
-done
-# Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
-if [ -f "$known_file.new" ]; then
+if [ -z "$(list_devices)" ]; then
+    "$ADB_EXE" reconnect offline >/dev/null 2>&1 || true
+    {
+        "$ADB_EXE" mdns services 2>/dev/null |
+            awk '$2 ~ /^_adb(-tls-connect)?\._tcp/ { print $3 }'
+        [ -f "$known_file" ] && cat "$known_file"
+    } | grep -E '^[0-9.]+:[0-9]+$' | sort -u |
+    while read -r address; do
+        echo "adb connect $address"
+        output=$("$ADB_EXE" connect "$address" 2>&1 | head -1)
+        echo "$output"
+        case "$output" in
+            *"connected to"*) echo "$address" >> "$known_file.new" ;;
+        esac
+    done
+    # Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
+    if [ -f "$known_file.new" ]; then
     tail -n 20 "$known_file.new" > "$known_file"
     rm -f "$known_file.new"
+fi
 fi
 
 attempt=0
