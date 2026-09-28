@@ -210,9 +210,13 @@ nối thì bỏ qua, build vẫn `SUCCESS`; cài lỗi chỉ đánh `UNSTABLE`, 
 và Telegram vẫn chạy. Kết quả hiện ở dòng `Install:` của Telegram. Build AAB
 bỏ qua bước này.
 
-adb được dò theo thứ tự: config `adbExe`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`,
+adb được dò theo thứ tự: config `adbExe`, env `PEARZ_ADB_EXE`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`,
 SDK đi kèm Unity, rồi `adb` trên `PATH`. PearzCI giữ adb server chạy giữa các
-build. Với Wireless debugging, pair điện thoại một lần trên agent bằng đúng
+build. Nếu adb server đã chạy sẵn (vd. bạn vừa `adb connect` bằng adb
+Homebrew), PearzCI dùng đúng binary adb của server đó, vì adb khác version sẽ
+kill server khi `start-server` và làm rớt mọi máy Wi-Fi. Muốn job luôn dùng
+một bản adb cố định mà không có Jenkinsfile riêng, đặt biến môi trường
+`PEARZ_ADB_EXE` (vd. `/opt/homebrew/bin/adb`) trong cấu hình node Jenkins. Với Wireless debugging, pair điện thoại một lần trên agent bằng đúng
 user chạy Jenkins (`adb pair <ip>:<port>` rồi nhập mã 6 số); sau đó adb tự kết
 nối lại qua mDNS, kể cả khi cổng đổi. Agent và điện thoại phải cùng mạng con
 và router phải cho multicast (mDNS) đi qua giữa mạng dây và Wi-Fi.

@@ -8,6 +8,19 @@ rm -f "$PEARZ_ADB_RESULT_PATH"
 # để `set -u` không dừng script khi ANDROID_DEVICE_SERIAL để trống.
 serial_filter="${PEARZ_ADB_SERIALS:-}"
 
+# adb khác version với server đang chạy sẽ tự kill server đó khi start-server,
+# làm rớt mọi máy Wi-Fi của người dùng Mac. Có server rồi thì dùng đúng binary
+# adb đang chạy server ấy thay cho bản đã dò (thường là bản đi kèm Unity).
+server_port="${ANDROID_ADB_SERVER_PORT:-5037}"
+server_pid=$(lsof -nP -iTCP:"$server_port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+if [ -n "$server_pid" ]; then
+    server_exe=$(ps -o comm= -p "$server_pid" 2>/dev/null)
+    if [ -n "$server_exe" ] && [ -x "$server_exe" ] && [ "$server_exe" != "$ADB_EXE" ]; then
+        echo "adb server is already running from $server_exe; using it instead of $ADB_EXE"
+        ADB_EXE="$server_exe"
+    fi
+fi
+
 JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe             "$ADB_EXE" start-server || exit 1
 
 list_devices() {

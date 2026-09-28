@@ -65,6 +65,23 @@ run_case serial-filter 0 "Model-b" STUB_DEVICES="a b" PEARZ_ADB_SERIALS=b
 run_case serial-missing 3 "" STUB_DEVICES=a PEARZ_ADB_SERIALS=zz
 run_case install-fails 1 "Model-a" STUB_DEVICES="a b" STUB_FAIL=b
 
+# Đã có adb server chạy từ binary khác: script phải dùng binary đó, không
+# start-server bằng ADB_EXE (khác version sẽ kill server của người dùng).
+mkdir -p "$work/fakebin" "$work/server"
+cat > "$work/server/adb" <<STUB
+#!/usr/bin/env bash
+echo "server-adb" >> "\$STUB_STATE/used"
+exec "$work/adb" "\$@"
+STUB
+printf '#!/bin/sh\necho 4242\n' > "$work/fakebin/lsof"
+printf '#!/bin/sh\necho %s\n' "$work/server/adb" > "$work/fakebin/ps"
+chmod +x "$work/server/adb" "$work/fakebin/lsof" "$work/fakebin/ps"
+run_case reuse-running-server 0 "Model-a" STUB_DEVICES=a PATH="$work/fakebin:$PATH"
+if ! grep -q server-adb "$work/reuse-running-server/used" 2>/dev/null; then
+    echo "FAIL reuse-running-server: running server's adb was not used"
+    failures=$((failures + 1))
+fi
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed."
     exit 1

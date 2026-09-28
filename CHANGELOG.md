@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.81] - 2026-09-28
+
+### Fixed
+
+- Android device install no longer kills the user's adb server. When an adb
+  server is already running, the install uses that server's own adb binary
+  instead of the resolved one (usually Unity's bundled adb). A different adb
+  version would otherwise restart the server on `start-server`, dropping every
+  Wireless debugging connection on the Mac.
+
+### Added
+
+- `adbExe` falls back to the `PEARZ_ADB_EXE` environment variable, so jobs
+  without their own Jenkinsfile can pin adb from the Jenkins node settings
+  (e.g. `/opt/homebrew/bin/adb`).
+
 ## [0.6.80] - 2026-09-26
 
 ### Changed

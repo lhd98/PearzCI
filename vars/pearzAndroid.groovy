@@ -1,10 +1,14 @@
 // Helper cho build Android: adb, build metadata/BUILD_INFO và bộ đếm AAB version code.
 
-// Thứ tự dò adb: config `adbExe` > ANDROID_HOME/ANDROID_SDK_ROOT > SDK đi
-// kèm Unity (Android Build Support) > `adb` trên PATH.
+// Thứ tự dò adb: config `adbExe` > env PEARZ_ADB_EXE (đặt trong cấu hình node
+// Jenkins, cho job không có Jenkinsfile riêng) > ANDROID_HOME/ANDROID_SDK_ROOT >
+// SDK đi kèm Unity (Android Build Support) > `adb` trên PATH.
 def resolveAdbExe(String configuredAdbExe) {
     if (configuredAdbExe) {
         return configuredAdbExe
+    }
+    if (env.PEARZ_ADB_EXE?.trim()) {
+        return env.PEARZ_ADB_EXE.trim()
     }
 
     def adbName = 'adb'
