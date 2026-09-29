@@ -86,7 +86,8 @@ public static class BuildEntry
                 target           = BuildTarget.Android,
                 targetGroup      = BuildTargetGroup.Android,
                 options          = GetAndroidCompressionBuildOptions(
-                    configuration.BuildAppBundle)
+                    configuration.BuildAppBundle,
+                    configuration.DevelopmentBuild)
             };
 
             Log("Calling BuildPipeline.BuildPlayer...");
@@ -326,6 +327,9 @@ public static class BuildEntry
         bool buildAppBundle = GetBooleanEnvironmentVariable(
             "BUILD_APP_BUNDLE",
             false);
+        bool developmentBuild = GetBooleanEnvironmentVariable(
+            "DEVELOPMENT_BUILD",
+            false);
 
         outputPath = Path.ChangeExtension(
             outputPath,
@@ -335,6 +339,7 @@ public static class BuildEntry
         {
             OutputPath        = outputPath,
             BuildAppBundle = buildAppBundle,
+            DevelopmentBuild = developmentBuild,
 
             Il2CppCodeGeneration =
                 GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
@@ -768,6 +773,7 @@ public static class BuildEntry
         Log($"App version: {configuration.AppVersion}");
         Log($"Version code: {configuration.AndroidVersionCode}");
         Log($"App Bundle: {configuration.BuildAppBundle}");
+        Log($"Development build: {configuration.DevelopmentBuild}");
 
         Log(
             "IL2CPP code generation override: " +
@@ -1033,13 +1039,22 @@ public static class BuildEntry
     }
 
     private static BuildOptions GetAndroidCompressionBuildOptions(
-        bool buildAppBundle)
+        bool buildAppBundle,
+        bool developmentBuild)
     {
         Log($"Android compression: {GetAndroidCompressionMethod(buildAppBundle)}");
 
-        return buildAppBundle
+        BuildOptions options = buildAppBundle
             ? BuildOptions.CompressWithLz4HC
             : BuildOptions.None;
+
+        if (developmentBuild)
+        {
+            Log("Android Development Build: enabled");
+            options |= BuildOptions.Development;
+        }
+
+        return options;
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)
@@ -1317,6 +1332,7 @@ public static class BuildEntry
     {
         public string OutputPath            { get; set; }
         public bool   BuildAppBundle        { get; set; }
+        public bool   DevelopmentBuild      { get; set; }
 
         public string Il2CppCodeGeneration  { get; set; }
         public string ManagedStrippingLevel { get; set; }

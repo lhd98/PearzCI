@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.85] - 2026-09-29
+
+### Added
+
+- Android builds support the optional `DEVELOPMENT_BUILD` Jenkins boolean. It
+  defaults to `false`; when enabled PearzCI passes Unity
+  `BuildOptions.Development` to the player build.
+
 ## [0.6.84] - 2026-09-29
 
 ### Fixed

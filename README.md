@@ -166,7 +166,7 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
-  `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
+  `DEVELOPMENT_BUILD`, `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
   `ANDROID_INSTALL_TO_DEVICE`
 - String `ANDROID_DEVICE_SERIAL`
 - String `KEY_ALIAS_NAME` and `ANDROID_VERSION_CODE`
@@ -209,6 +209,10 @@ serial chỉ định (cách nhau bằng dấu cách hoặc dấu phẩy). Không
 nối thì bỏ qua, build vẫn `SUCCESS`; cài lỗi chỉ đánh `UNSTABLE`, upload Drive
 và Telegram vẫn chạy. Kết quả hiện ở dòng `Install:` của Telegram. Build AAB
 bỏ qua bước này.
+
+`DEVELOPMENT_BUILD` mặc định là `false` và chỉ áp dụng cho Android. Khi bật,
+PearzCI tạo Unity Development Build để kiểm thử hoặc debug trên thiết bị; không
+dùng artifact này để phát hành lên cửa hàng.
 
 adb được dò theo thứ tự: config `adbExe`, env `PEARZ_ADB_EXE`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`,
 SDK đi kèm Unity, rồi `adb` trên `PATH`. PearzCI giữ adb server chạy giữa các
