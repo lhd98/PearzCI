@@ -19,9 +19,13 @@ case "$1" in
           for a in ${STUB_MDNS:-}; do printf 'adb-X\t_adb-tls-connect._tcp\t%s\n' "$a"; done ;;
     connect) echo "$2" >> "$state/connected"; echo "connected to $2" ;;
     devices) echo 'List of devices attached'
-             for d in ${STUB_DEVICES:-} $(cat "$state/connected" 2>/dev/null); do
-                 printf '%s\tdevice\n' "$d"
-             done ;;
+             if [ -n "${STUB_DEVICES_NL:-}" ]; then
+                 while IFS= read -r d; do printf '%s\tdevice\n' "$d"; done <<< "$STUB_DEVICES_NL"
+             else
+                 for d in ${STUB_DEVICES:-} $(cat "$state/connected" 2>/dev/null); do
+                     printf '%s\tdevice\n' "$d"
+                 done
+             fi ;;
     -s) serial="$2"; shift 2
         case "$1" in
             get-serialno) echo "${STUB_SERIALNO:-$serial}" ;;
@@ -59,6 +63,8 @@ run_case() {
 run_case no-device 3 ""
 run_case one-device 0 "Model-a" STUB_DEVICES=a
 run_case two-devices 0 "Model-a, Model-b" STUB_DEVICES="a b"
+run_case mdns-name-with-space 0 "Model-adb-R5GL6375DLA-k14CjD (2)._adb-tls-connect._tcp" \
+    STUB_DEVICES_NL="adb-R5GL6375DLA-k14CjD (2)._adb-tls-connect._tcp"
 run_case mdns-reconnect 0 "Model-10.0.0.5:4000" STUB_MDNS=10.0.0.5:4000
 run_case duplicate-listing 0 "Model-a" STUB_DEVICES=a STUB_MDNS=10.0.0.5:4000 STUB_SERIALNO=SAME
 run_case serial-filter 0 "Model-b" STUB_DEVICES="a b" PEARZ_ADB_SERIALS=b

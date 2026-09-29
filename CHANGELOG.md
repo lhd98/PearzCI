@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.84] - 2026-09-29
+
+### Fixed
+
+- Android device install now preserves whitespace in mDNS device serials. A
+  paired phone whose mDNS name contains a space (such as `Pixel (2)`) was
+  incorrectly treated as disconnected, even though `adb devices` reported it
+  as `device`.
+
 ## [0.6.83] - 2026-09-29
 
 ### Fixed

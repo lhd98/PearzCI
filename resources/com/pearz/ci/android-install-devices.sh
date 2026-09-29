@@ -25,7 +25,16 @@ JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe             "$ADB_EXE" start-
 
 list_devices() {
     "$ADB_EXE" devices |
-        awk 'NR > 1 && $2 == "device" { print $1 }'
+        # `adb devices` separates serial and state with a tab. Do not split on
+        # arbitrary whitespace: mDNS serials can include the phone name, and
+        # that name may itself contain spaces (for example `Pixel (2)`).
+        awk 'NR > 1 {
+            sub(/\r$/, "")
+            if ($0 ~ /\tdevice$/) {
+                sub(/\tdevice$/, "")
+                print
+            }
+        }'
 }
 
 # Kết nối Wi-Fi hay bị adb làm rớt trong khi
@@ -79,7 +88,8 @@ serials=""
 if [ -n "$serial_filter" ]; then
     for serial in $serial_filter; do
         if printf '%s\n' "$connected" | grep -Fqx "$serial"; then
-            serials="$serials $serial"
+            serials="${serials}${serial}
+"
         else
             echo "Device $serial is not connected; skipped."
         fi
@@ -88,22 +98,25 @@ else
     serials="$connected"
 fi
 
-if [ -z "$(echo $serials)" ]; then
+if [ -z "$serials" ]; then
     echo "No Android device is connected; install skipped."
     exit 3
 fi
 
 failed=0
 installed=""
-done_ids=" "
-for serial in $serials; do
+done_ids=""
+while IFS= read -r serial; do
+    [ -n "$serial" ] || continue
     # Một máy có thể xuất hiện hai lần (tên mDNS
     # và ip:port); chỉ cài một lần theo serialno.
     device_id=$("$ADB_EXE" -s "$serial" get-serialno 2>/dev/null | tr -d '\r')
-    case "$done_ids" in
-        *" ${device_id:-$serial} "*) continue ;;
-    esac
-    done_ids="$done_ids${device_id:-$serial} "
+    resolved_device_id="${device_id:-$serial}"
+    if printf '%s\n' "$done_ids" | grep -Fqx -- "$resolved_device_id"; then
+        continue
+    fi
+    done_ids="${done_ids}${resolved_device_id}
+"
 
     echo "Installing $OUTPUT_PATH on $serial"
     if "$ADB_EXE" -s "$serial" install -r -d "$OUTPUT_PATH"; then
@@ -113,7 +126,9 @@ for serial in $serials; do
         echo "ERROR: Install failed on $serial"
         failed=1
     fi
-done
+done <<EOF
+$serials
+EOF
 
 printf '%s' "${installed#, }" > "$PEARZ_ADB_RESULT_PATH"
 exit "$failed"
