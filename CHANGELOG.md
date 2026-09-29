@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.83] - 2026-09-29
+
+### Fixed
+
+- Android device install waits up to 8 seconds (`PEARZ_ADB_MDNS_WAIT`) for
+  mDNS to reconnect paired phones before falling back to `adb connect`. When
+  the adb server had been stopped during the build (Unity uses its own adb),
+  the freshly started server had no device yet, so the install connected by
+  IP and mDNS added a second session to the same phone moments later.
+
 ## [0.6.82] - 2026-09-28
 
 ### Fixed

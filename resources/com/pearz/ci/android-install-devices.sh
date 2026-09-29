@@ -34,6 +34,14 @@ list_devices() {
 # các địa chỉ đã cài thành công lần trước. Đã có máy thì
 # bỏ qua: `adb connect` tới máy mDNS đã tự nối sẽ mở phiên
 # TLS thứ hai tới cùng điện thoại, và máy hay đóng bớt một phiên.
+# Server vừa khởi động (vd. Unity đã tắt server trong lúc build) cần vài
+# giây để mDNS tự nối lại máy đã pair; connect sớm hơn sẽ thành 2 phiên.
+wait_attempt=0
+while [ -z "$(list_devices)" ] && [ "$wait_attempt" -lt "${PEARZ_ADB_MDNS_WAIT:-8}" ]; do
+    sleep 1
+    wait_attempt=$((wait_attempt + 1))
+done
+
 known_file="$HOME/.pearz-ci/adb-known-devices.txt"
 mkdir -p "$(dirname "$known_file")"
 if [ -z "$(list_devices)" ]; then

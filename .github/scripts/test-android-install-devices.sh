@@ -40,7 +40,7 @@ run_case() {
     mkdir -p "$state/home"
     local status=0
     env -u PEARZ_ADB_SERIALS HOME="$state/home" STUB_STATE="$state" \
-        ADB_EXE="$work/adb" OUTPUT_PATH="$work/app.apk" \
+        PEARZ_ADB_MDNS_WAIT=0 ADB_EXE="$work/adb" OUTPUT_PATH="$work/app.apk" \
         PEARZ_ADB_RESULT_PATH="$state/result" "$@" \
         bash "$script" > "$state/log" 2>&1 || status=$?
     local result=""
