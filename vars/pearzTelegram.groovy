@@ -184,7 +184,10 @@ def telegramHtmlEscape(Object value) {
         .replace('>', '&gt;')
 }
 
-def sendTelegramNotification(String telegramCredentialsId) {
+def sendTelegramNotification(
+    String telegramCredentialsId,
+    boolean telegramSilent = false
+) {
     boolean telegramConfigured = telegramCredentialsId ||
         "${params.TELEGRAM_CHANNEL ?: ''}".trim()
 
@@ -219,7 +222,8 @@ def sendTelegramNotification(String telegramCredentialsId) {
                 )
             )
             withEnv([
-                'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
+                "TELEGRAM_SILENT=${telegramSilent}"
             ]) {
                 sh 'sh ./send-telegram.sh'
             }
@@ -258,7 +262,8 @@ def sendTelegramNotification(String telegramCredentialsId) {
 // nhánh sh.
 def sendIosTelegramNotification(
     String telegramCredentialsId,
-    boolean deviceBuild
+    boolean deviceBuild,
+    boolean telegramSilent = false
 ) {
     boolean telegramConfigured = telegramCredentialsId ||
         "${params.TELEGRAM_CHANNEL ?: ''}".trim()
@@ -284,7 +289,8 @@ def sendIosTelegramNotification(
                 )
             )
             withEnv([
-                'TELEGRAM_MESSAGE_FILE=telegram-message.txt'
+                'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
+                "TELEGRAM_SILENT=${telegramSilent}"
             ]) {
                 sh 'sh ./send-telegram.sh'
             }

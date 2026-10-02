@@ -166,8 +166,8 @@ Common optional parameters:
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
-  `DEVELOPMENT_BUILD`, `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`, `PROFILE_GRADLE`, and
-  `ANDROID_INSTALL_TO_DEVICE`
+  `DEVELOPMENT_BUILD`, `CLEAN_WORKSPACE`, `SEND_NOTIFICATIONS`,
+  `TELEGRAM_SILENT`, `PROFILE_GRADLE`, and `ANDROID_INSTALL_TO_DEVICE`
 - String `ANDROID_DEVICE_SERIAL`
 - String `KEY_ALIAS_NAME` and `ANDROID_VERSION_CODE`
 - Password `KEYSTORE_PASSWORD` and `KEY_ALIAS_PASSWORD`
@@ -193,6 +193,10 @@ trước; không bật nếu cần giữ file cục bộ chưa được commit t
 `SEND_NOTIFICATIONS` mặc định là `true`. Tắt nó để bỏ qua toàn bộ thông báo
 sau build (hiện tại là Telegram); cờ này cũng áp dụng cho Discord, Lark hoặc
 nền tảng khác khi được bổ sung sau này.
+
+`TELEGRAM_SILENT` mặc định là `false`. Bật nó để Telegram vẫn nhận được thông
+ báo build nhưng không phát âm thanh hoặc rung cho người nhận. Cờ này chỉ ảnh
+ hưởng đến thông báo Telegram và không thay đổi nội dung hay kết quả build.
 
 `PROFILE_GRADLE` mặc định là `false` và chỉ dùng cho Android build trên macOS.
 Khi bật, sau khi Unity tạo APK/AAB, PearzCI chạy lại Gradle với `--rerun-tasks`

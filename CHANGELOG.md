@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.86] - 2026-10-02
+
+### Added
+
+- Telegram build notifications support the optional `TELEGRAM_SILENT` Jenkins
+  boolean. When enabled, messages are delivered without sound or vibration;
+  when omitted, the existing notification behaviour is preserved.
+
 ## [0.6.85] - 2026-09-29
 
 ### Added

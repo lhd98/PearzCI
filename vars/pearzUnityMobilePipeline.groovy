@@ -1112,6 +1112,8 @@ def call(Map config = [:]) {
                     // khác được bổ sung sau này.
                     def sendNotifications = params.SEND_NOTIFICATIONS == null ||
                         params.SEND_NOTIFICATIONS.toString().toBoolean()
+                    def telegramSilent = params.TELEGRAM_SILENT != null &&
+                        params.TELEGRAM_SILENT.toString().toBoolean()
 
                     if (env.PEARZ_SUPERSEDED == 'true') {
                         currentBuild.result = 'NOT_BUILT'
@@ -1120,11 +1122,15 @@ def call(Map config = [:]) {
                     } else if (!sendNotifications) {
                         echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
                     } else if (isAndroid) {
-                        pearzTelegram.sendTelegramNotification(telegramCredentialsId)
+                        pearzTelegram.sendTelegramNotification(
+                            telegramCredentialsId,
+                            telegramSilent
+                        )
                     } else {
                         pearzTelegram.sendIosTelegramNotification(
                             telegramCredentialsId,
-                            iosBuildToDevice
+                            iosBuildToDevice,
+                            telegramSilent
                         )
                     }
                 }

@@ -22,6 +22,16 @@ trim_value() {
 
 message_file=${TELEGRAM_MESSAGE_FILE:-}
 message=''
+telegram_silent=${TELEGRAM_SILENT:-false}
+
+case "$telegram_silent" in
+    true|false)
+        ;;
+    *)
+        echo "TELEGRAM_SILENT must be true or false." >&2
+        exit 1
+        ;;
+esac
 
 if [ -n "$message_file" ] && [ -f "$message_file" ]; then
     message=$(cat "$message_file")
@@ -112,6 +122,8 @@ while :; do
                             --data-urlencode \
                                 "disable_web_page_preview=false" \
                             --data-urlencode \
+                                "disable_notification=$telegram_silent" \
+                            --data-urlencode \
                                 "message_thread_id=$thread_id" \
                             "$uri"
                     ) || response=''
@@ -124,6 +136,8 @@ while :; do
                             --data-urlencode "parse_mode=HTML" \
                             --data-urlencode \
                                 "disable_web_page_preview=false" \
+                            --data-urlencode \
+                                "disable_notification=$telegram_silent" \
                             "$uri"
                     ) || response=''
                 fi
