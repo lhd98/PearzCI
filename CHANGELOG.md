@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.87] - 2026-10-03
+
+### Fixed
+
+- iOS device auto-detection now also accepts a paired physical iPhone whose
+  CoreDevice tunnel is not open yet (`available (paired)`, e.g. locked screen
+  or network-attached). Previously the install stage failed with "không thấy
+  iPhone nào cắm dây và đã pair" even though the device was paired.
+
 ## [0.6.86] - 2026-10-02
 
 ### Added
