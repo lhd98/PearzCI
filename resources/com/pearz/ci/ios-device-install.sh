@@ -51,7 +51,18 @@ if [ -z "${IOS_DEVICE_UDID:-}" ]; then
           state = cp["state"] || dev["state"] || dev.dig("deviceProperties", "state")
           hw["reality"] == "physical" && state == "connected"
         end
-        (strict.empty? ? connected : strict).each do |dev|
+        # Máy đã pair nhưng tunnel CoreDevice chưa mở hiện
+        # "available (paired)" (hay gặp khi màn hình khóa
+        # hoặc kết nối qua mạng). devicectl tự mở kết nối khi
+        # install, nên vẫn nhận làm target.
+        paired = devices.select do |dev|
+          properties = dev["properties"] || {}
+          hw = properties["hardware"] || dev["hardwareProperties"] || {}
+          cp = properties["connection"] || dev["connectionProperties"] || {}
+          hw["reality"] == "physical" && cp["pairingState"] == "paired"
+        end
+        picked = [strict, connected, paired].find { |list| !list.empty? } || []
+        picked.each do |dev|
           properties = dev["properties"] || {}
           hw = properties["hardware"] || dev["hardwareProperties"] || {}
           state = properties["state"] || dev["deviceProperties"] || {}
@@ -62,7 +73,7 @@ if [ -z "${IOS_DEVICE_UDID:-}" ]; then
     rm -f "$dev_json"
     count="$(echo "$candidates" | awk 'NF' | wc -l | tr -d ' ')"
     if [ "$count" -eq 0 ]; then
-        echo 'ERROR: không thấy iPhone nào cắm dây và đã pair.'
+        echo 'ERROR: không thấy iPhone nào đã pair với máy Mac này.'
         echo 'Cắm máy + Trust trên máy, hoặc điền IOS_DEVICE_UDID. Danh sách hiện có:'
         xcrun devicectl list devices || true
         exit 1
