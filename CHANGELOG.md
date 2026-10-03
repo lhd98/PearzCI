@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.89] - 2026-10-03
+
+### Added
+
+- The iOS device stage creates a missing development provisioning profile
+  automatically. When no installed profile matches the app's bundle id (new
+  game, changed bundle id, or an expired 7-day Personal Team profile), it runs
+  `xcodebuild -allowProvisioningUpdates -allowProvisioningDeviceRegistration`
+  with automatic signing so Xcode generates and installs the profile, then
+  signs and installs as before. Requires an Apple ID signed in under
+  **Xcode > Settings > Accounts** for the Jenkins macOS user. The team comes
+  from `iosDevelopmentTeam` / `IOS_DEVELOPMENT_TEAM`, or from the `OU` of the
+  keychain's `Apple Development` certificate.
+
 ## [0.6.88] - 2026-10-03
 
 ### Fixed

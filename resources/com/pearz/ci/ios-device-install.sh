@@ -166,26 +166,72 @@ if [ -z "$profile_specifier" ]; then
     echo "Tự suy provisioning profile theo bundle id: $profile_specifier"
 fi
 
-profile_path=''
-for profiles_dir in \
-    "$HOME/Library/MobileDevice/Provisioning Profiles" \
-    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
-    [ -d "$profiles_dir" ] || continue
-    for candidate_profile in "$profiles_dir"/*.mobileprovision; do
-        [ -f "$candidate_profile" ] || continue
-        candidate_name="$(security cms -D -i "$candidate_profile" 2>/dev/null | \
-            plutil -extract Name raw - 2>/dev/null || true)"
-        if [ "$candidate_name" = "$profile_specifier" ]; then
-            profile_path="$candidate_profile"
-            break 2
-        fi
+find_installed_profile() {
+    profile_path=''
+    for profiles_dir in \
+        "$HOME/Library/MobileDevice/Provisioning Profiles" \
+        "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+        [ -d "$profiles_dir" ] || continue
+        for candidate_profile in "$profiles_dir"/*.mobileprovision; do
+            [ -f "$candidate_profile" ] || continue
+            candidate_name="$(security cms -D -i "$candidate_profile" 2>/dev/null | \
+                plutil -extract Name raw - 2>/dev/null || true)"
+            if [ "$candidate_name" = "$profile_specifier" ]; then
+                profile_path="$candidate_profile"
+                return 0
+            fi
+        done
     done
-done
-[ -n "$profile_path" ] || {
-    echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
-    echo 'Với game lần đầu build device trên máy Mac này: mở Xcode project export ra, chọn Team + Automatically manage signing rồi build lên iPhone 1 lần để Xcode sinh và cài profile. Sau đó CI chạy tự động.'
-    exit 3
+    return 1
 }
+
+# Chưa có profile (game mới / đổi bundle id / Personal Team
+# hết hạn 7 ngày): cho Xcode tự tạo như bấm Run trong Xcode.
+# Cần Apple ID đã đăng nhập trong Xcode > Settings > Accounts
+# dưới user chạy Jenkins. Team lấy từ IOS_DEVELOPMENT_TEAM
+# hoặc OU của chứng chỉ "Apple Development" trong keychain.
+# Bản build này chỉ để Xcode sinh profile; kết quả build
+# (kể cả lỗi validate IAP của Personal Team) bỏ qua.
+auto_provision_profile() {
+    team="${IOS_DEVELOPMENT_TEAM:-}"
+    if [ -z "$team" ]; then
+        team="$(security find-certificate -c 'Apple Development' -p 2>/dev/null | \
+            openssl x509 -noout -subject -nameopt multiline 2>/dev/null | \
+            awk -F' = ' '/organizationalUnitName/ {print $2; exit}')"
+    fi
+    [ -n "$team" ] || {
+        echo 'WARN: không xác định được Team ID để tự tạo profile (điền IOS_DEVELOPMENT_TEAM).'
+        return 1
+    }
+    echo "Không thấy profile — nhờ Xcode tự tạo cho team $team (-allowProvisioningUpdates)..."
+    provision_log="$DERIVED_DATA_PATH/provisioning.log"
+    if [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" ]; then
+        container_args="-workspace $IOS_PROJECT_PATH/Unity-iPhone.xcworkspace"
+    else
+        container_args="-project $IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+    fi
+    # shellcheck disable=SC2086
+    xcodebuild $container_args -scheme Unity-iPhone \
+        -configuration "$XCODE_CONFIGURATION" \
+        -destination generic/platform=iOS \
+        -derivedDataPath "$DERIVED_DATA_PATH/Provisioning" \
+        -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+        CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$team" \
+        CODE_SIGN_IDENTITY='Apple Development' PROVISIONING_PROFILE_SPECIFIER= \
+        build > "$provision_log" 2>&1
+    grep -E 'error:|Provisioning|profile' "$provision_log" | tail -n 20 || true
+}
+
+if ! find_installed_profile; then
+    auto_provision_profile || true
+    find_installed_profile || {
+        echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
+        echo 'Xcode không tự tạo được profile. Kiểm tra: Apple ID đã đăng nhập trong Xcode > Settings > Accounts (đúng user chạy Jenkins), iPhone đang mở khoá + kết nối, bundle id chưa bị Apple ID khác dùng.'
+        echo "Log chi tiết: $DERIVED_DATA_PATH/provisioning.log"
+        exit 3
+    }
+fi
+echo "Dùng provisioning profile: $profile_path"
 
 profile_plist="$DERIVED_DATA_PATH/provisioning-profile.plist"
 signing_entitlements="$DERIVED_DATA_PATH/signing-entitlements.plist"

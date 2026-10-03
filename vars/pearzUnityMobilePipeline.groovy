@@ -770,9 +770,9 @@ def call(Map config = [:]) {
                         ).toString().trim()
                         // Device build ký bằng 'Apple Development' + profile đã
                         // cài và luôn ở cấu hình Debug; XCODE_CONFIGURATION chỉ
-                        // áp dụng cho export IPA. IOS_DEVELOPMENT_TEAM cũng không
-                        // được dùng trong sh của device build (chỉ export IPA
-                        // cần), nên không còn bắt buộc điền cho device.
+                        // áp dụng cho export IPA. IOS_DEVELOPMENT_TEAM không bắt
+                        // buộc: chỉ dùng khi tự tạo profile, trống thì lấy từ
+                        // chứng chỉ Apple Development.
                         def xcodeConfiguration = 'Debug'
 
                         if (!(destinationTimeout ==~ /[1-9][0-9]*/)) {
@@ -789,7 +789,9 @@ def call(Map config = [:]) {
                             "IOS_DEVICE_UDID=${deviceUdid}",
                             "XCODE_CONFIGURATION=${xcodeConfiguration}",
                             "IOS_PROFILE_SPECIFIER=${profileSpecifier}",
-                            "IOS_DESTINATION_TIMEOUT=${destinationTimeout}"
+                            "IOS_DESTINATION_TIMEOUT=${destinationTimeout}",
+                            // Chỉ dùng khi phải nhờ Xcode tự tạo profile.
+                            "IOS_DEVELOPMENT_TEAM=${config.get('iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: '').toString().trim()}"
                         ]) {
                             pearzScript.run('ios-device-install.sh')
                         }
