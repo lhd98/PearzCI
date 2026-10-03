@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.6.88] - 2026-10-03
+
+### Fixed
+
+- The iOS device stage builds the unsigned app for `generic/platform=iOS`
+  instead of `-destination id=<UDID>`. Xcode only lists a phone as a
+  destination while its CoreDevice tunnel is open, so a paired device that
+  `devicectl` reports as `available (paired)` failed with "Unable to find a
+  destination matching the provided destination specifier". The app is still
+  signed afterwards and installed with `xcrun devicectl`.
+
 ## [0.6.87] - 2026-10-03
 
 ### Fixed

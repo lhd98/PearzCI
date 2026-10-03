@@ -111,8 +111,13 @@ find "$IOS_PROJECT_PATH" -name '*.entitlements' -type f -print |
 # sau khi cập nhật iOS - thì quá ngắn, build hỏng dù một
 # phút sau máy đã sẵn sàng. Chờ lâu hơn không cứu được
 # ghép đôi hỏng thật, chỉ bỏ qua lúc máy chậm sẵn sàng.
+# Build unsigned cho generic iOS thay vì id của máy: Xcode
+# chỉ liệt kê iPhone làm destination khi tunnel CoreDevice
+# đang mở, còn máy "available (paired)" (màn khóa, qua
+# mạng) bị báo "Unable to find a destination". Bản build
+# không ký nên không cần máy thật; devicectl cài sau.
 run_xcodebuild_unsigned() {
-    xcodebuild_args="-scheme Unity-iPhone -configuration $XCODE_CONFIGURATION -destination id=$IOS_DEVICE_UDID -destination-timeout $IOS_DESTINATION_TIMEOUT -derivedDataPath $DERIVED_DATA_PATH CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build"
+    xcodebuild_args="-scheme Unity-iPhone -configuration $XCODE_CONFIGURATION -destination generic/platform=iOS -destination-timeout $IOS_DESTINATION_TIMEOUT -derivedDataPath $DERIVED_DATA_PATH CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build"
     if [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" ]; then
         xcodebuild -workspace "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" $xcodebuild_args > "$XCODEBUILD_LOG_PATH" 2>&1
     else
