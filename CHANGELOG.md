@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.2] - 2026-10-06
+
+### Changed
+
+- After a verified Google Drive upload, the version folder drops older
+  artifacts of the same type (APK, AAB or IPA) and their build info files,
+  so renaming `PRODUCT_NAME` or the Unity productName within one version
+  leaves a single file instead of several.
+- After an Android build, APK/AAB files from earlier names are deleted from
+  `Builds/Android` in the workspace; only this build's artifact is kept.
+
 ## [0.7.1] - 2026-10-06
 
 ### Fixed
