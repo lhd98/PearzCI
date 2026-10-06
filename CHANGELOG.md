@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.1] - 2026-10-06
+
+### Fixed
+
+- The Git LFS step now finds git-lfs installed by Homebrew
+  (`/opt/homebrew/bin`, `/usr/local/bin`) even when the Jenkins service PATH
+  does not include it, and configures the LFS filters with the absolute
+  git-lfs path so Git commands in other steps keep working.
+
 ## [0.7.0] - 2026-10-06
 
 ### Fixed
