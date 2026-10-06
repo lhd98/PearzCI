@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.0] - 2026-10-06
+
+### Fixed
+
+- The Checkout stage now downloads Git LFS content for the repository and any
+  submodule that declares `filter=lfs` in `.gitattributes`. Previously LFS
+  files stayed as pointer files, so Unity failed with missing-namespace
+  compiler errors for DLLs stored in LFS. Projects without LFS are unaffected;
+  projects with LFS fail early with a clear message when git-lfs is missing
+  on the agent.
+
 ## [0.6.89] - 2026-10-03
 
 ### Added

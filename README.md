@@ -9,6 +9,8 @@ Pearz CI pipelines.
 - Android Build Support when building Android players
 - Jenkins with Pipeline, Git, Credentials, Shared Library, and Generic Webhook Trigger support
 - rclone with a configured Google Drive remote
+- git-lfs on the Jenkins agent `PATH`, only for projects that track files with
+  Git LFS (`brew install git-lfs`); requires an SSH key repository credential
 - `curl` on macOS for Telegram notifications
 
 ## Installation

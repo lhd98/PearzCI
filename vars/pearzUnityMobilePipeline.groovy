@@ -286,6 +286,7 @@ def call(Map config = [:]) {
                             git submodule update --init --recursive
                         '''
 
+                        pullGitLfsObjects(repositoryCredentialsId)
                     }
                 }
             }
@@ -1291,6 +1292,81 @@ def isSupersededWebhookBuild() {
 
     return jenkins.model.Jenkins.get().queue.getItems(build.parent).any { item ->
         item.causes.any { it.class.name == webhookCause }
+    }
+}
+
+// Bước checkout của Jenkins không tải nội dung Git LFS: thiếu bước này các
+// file LFS chỉ là file con trỏ ~130 byte, và Unity báo lỗi compile khó hiểu
+// (thiếu namespace) vì không nạp được DLL. Chỉ chạy với repository/submodule
+// có khai `filter=lfs` trong .gitattributes, nên project không dùng LFS
+// không cần cài git-lfs và không đổi hành vi.
+def pullGitLfsObjects(String credentialsId) {
+    // Smudge bị tắt (`--skip`) để lần `git checkout` kế tiếp của Jenkins
+    // không tự tải LFS ngoài ngữ cảnh credential; filter clean vẫn bật để
+    // file đã tải không bị Git coi là thay đổi. Mọi lần tải đều đi qua
+    // `git lfs pull` bên dưới.
+    def lfsScript = '''
+        set -eu
+        if [ -n "${PEARZ_GIT_SSH_KEY:-}" ]; then
+            export GIT_SSH_COMMAND="ssh -i '$PEARZ_GIT_SSH_KEY' -o IdentitiesOnly=yes -o BatchMode=yes"
+        fi
+        {
+            echo .
+            git submodule foreach --quiet --recursive 'echo "$displaypath"'
+        } |
+        while IFS= read -r repository; do
+            if ! git -C "$repository" grep -q -e 'filter=lfs' -- ':(glob)**/.gitattributes'; then
+                continue
+            fi
+            if [ "$PEARZ_GIT_LFS_MODE" = detect ]; then
+                echo "$repository"
+                continue
+            fi
+            git -C "$repository" config --local filter.lfs.clean 'git-lfs clean -- %f'
+            git -C "$repository" config --local filter.lfs.smudge 'git-lfs smudge --skip -- %f'
+            git -C "$repository" config --local filter.lfs.process 'git-lfs filter-process --skip'
+            git -C "$repository" config --local filter.lfs.required true
+            git -C "$repository" lfs pull < /dev/null
+        done
+    '''
+
+    def lfsRepositories = withEnv(['PEARZ_GIT_LFS_MODE=detect']) {
+        sh(script: lfsScript, returnStdout: true).trim()
+    }
+    if (!lfsRepositories) {
+        return
+    }
+
+    if (sh(script: 'git lfs version', returnStatus: true) != 0) {
+        error(
+            'This repository uses Git LFS, but git-lfs is not available ' +
+            'on the Jenkins agent. Install it (brew install git-lfs) and ' +
+            'make sure it is on the PATH of the Jenkins agent.'
+        )
+    }
+
+    // GIT_TERMINAL_PROMPT=0 và timeout để bước này fail thay vì treo chờ
+    // đăng nhập khi xác thực hỏng.
+    def pull = {
+        withEnv(['PEARZ_GIT_LFS_MODE=pull', 'GIT_TERMINAL_PROMPT=0']) {
+            timeout(time: 30, unit: 'MINUTES') {
+                sh lfsScript
+            }
+        }
+    }
+
+    if (!credentialsId) {
+        pull()
+        return
+    }
+
+    withCredentials([
+        sshUserPrivateKey(
+            credentialsId: credentialsId,
+            keyFileVariable: 'PEARZ_GIT_SSH_KEY'
+        )
+    ]) {
+        pull()
     }
 }
 
