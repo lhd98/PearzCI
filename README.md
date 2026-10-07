@@ -614,7 +614,8 @@ only logs a warning; the message with the Drive link is already delivered.
 Every bot used in `TELEGRAM_CHANNEL` must be logged out of the cloud Bot API
 once (`https://api.telegram.org/bot<TOKEN>/logOut`), after which it only
 works through the local server. Use a dedicated bot for build notifications
-so other integrations keep using the cloud API.
+so other integrations keep using the cloud API. Setup guide (Vietnamese):
+[`Documentation~/telegram-send-apk.md`](Documentation~/telegram-send-apk.md).
 
 ## Versioning
 
