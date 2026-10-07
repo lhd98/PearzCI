@@ -10,7 +10,7 @@ Mỗi dev dùng domain/subdomain riêng trên tài khoản Cloudflare của mìn
 Jenkins (BUILD_PLATFORM = WebGL)
   → Unity BuildEntry.BuildWebGL → Builds/WebGL/site/ (Build/, StreamingAssets/)
   → cloudflare-pages-deploy.mjs:
-      1. ghi index.html (khung 9:16, độ phân giải WEB_RESOLUTION)
+      1. ghi index.html (khung 9:16, render 1080x1920)
       2. kiểm tra giới hạn 25 MiB/file của Pages
       3. tìm account từ token
       4. tìm project Pages đang gắn WEB_DOMAIN (chưa có thì tạo)
@@ -31,7 +31,6 @@ nên reload luôn tải đúng bản mới.
 | `BUILD_PLATFORM` | Choice | `Android` / `iOS` / `WebGL` | Bỏ `Windows` khỏi danh sách |
 | `WEB_DOMAIN` | String | `pg05.pearz.space` | Domain người chơi mở |
 | `CLOUDFLARE_CREDENTIAL` | Credentials (Secret text) | `cf-token-duc` | Token Cloudflare của dev |
-| `WEB_RESOLUTION` | Choice | `1080x1920` | `720x1280`, `1080x1920`, `1440x2560` |
 | `CLOUDFLARE_ACCOUNT_ID` | String | để trống | Chỉ cần khi token thấy nhiều account |
 
 `APP_VERSION`, `GIT_BRANCH`, `PROJECT_REPOSITORY_URL`, `SCRIPTING_DEFINE_SYMBOLS`,
@@ -40,7 +39,8 @@ nên reload luôn tải đúng bản mới.
 
 Các giá trị này cũng truyền được qua `pearzUnityPipeline(...)`:
 `webDomain`, `cloudflareCredentialsId`, `cloudflareAccountId`,
-`webResolution`, `wranglerVersion` (mặc định `4`).
+`webResolution` (mặc định `1080x1920`; `720x1280` hoặc `1440x2560`),
+`wranglerVersion` (mặc định `4`).
 
 ### Account ID và Pages project tự suy ra thế nào
 
@@ -89,9 +89,9 @@ Các giá trị này cũng truyền được qua `pearzUnityPipeline(...)`:
 ## Khung và độ phân giải
 
 UI game thiết kế 1440×2560 (9:16). Trang luôn giữ khung 9:16 và co vừa màn
-hình (điện thoại lẫn PC). `WEB_RESOLUTION` là kích thước canvas Unity render
-thật: `720x1280` nhẹ cho máy yếu, `1440x2560` nét nhất. Kích thước khung trên
-màn hình không đổi theo lựa chọn này.
+hình (điện thoại lẫn PC). Canvas Unity render cố định 1080x1920; đổi qua
+`pearzUnityPipeline(webResolution: '1440x2560')` nếu cần nét hơn, hoặc
+`'720x1280'` cho máy yếu. Kích thước khung trên màn hình không đổi.
 
 ## Giới hạn
 

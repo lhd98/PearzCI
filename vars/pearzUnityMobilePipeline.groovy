@@ -16,9 +16,9 @@ def call(Map config = [:]) {
     def cloudflareAccountId = config.get(
         'cloudflareAccountId', params.CLOUDFLARE_ACCOUNT_ID ?: ''
     ).toString().trim()
-    def webResolution = config.get(
-        'webResolution', params.WEB_RESOLUTION ?: '1080x1920'
-    ).toString().trim()
+    // Cố định 1080x1920 (9:16) để job bớt một tham số; khung trên trang tự
+    // co theo màn hình. Đổi được qua config webResolution nếu cần.
+    def webResolution = config.get('webResolution', '1080x1920').toString().trim()
     def wranglerVersion = config.get('wranglerVersion', '4').toString().trim()
     if (isWebGL) {
         if (!(webDomain ==~ /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/)) {
@@ -34,7 +34,7 @@ def call(Map config = [:]) {
         }
         if (!(webResolution in ['720x1280', '1080x1920', '1440x2560'])) {
             throw new IllegalArgumentException(
-                'WEB_RESOLUTION must be 720x1280, 1080x1920 or 1440x2560 ' +
+                'webResolution must be 720x1280, 1080x1920 or 1440x2560 ' +
                 "(got '${webResolution}')."
             )
         }
@@ -503,7 +503,7 @@ def call(Map config = [:]) {
                     script {
                         if (isWebGL) {
                             echo "WEB_DOMAIN = ${webDomain}"
-                            echo "WEB_RESOLUTION = ${webResolution}"
+                            echo "Web resolution = ${webResolution}"
                         } else {
                             echo "DRIVE_FILE_PATH = ${env.DRIVE_FILE_PATH}"
                         }

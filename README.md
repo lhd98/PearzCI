@@ -676,7 +676,6 @@ it to Cloudflare Pages; reloading the site plays the new build. A job needs:
 - Credentials `CLOUDFLARE_CREDENTIAL` (Secret text): the developer's Cloudflare
   API token with `Cloudflare Pages: Edit` (and `Zone: DNS: Edit` to let
   PearzCI create the CNAME)
-- Optional Choice `WEB_RESOLUTION`: `1080x1920`, `720x1280` or `1440x2560`
 - Optional String `CLOUDFLARE_ACCOUNT_ID`, only when the token sees several
   accounts
 
