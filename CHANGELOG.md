@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.5] - 2026-10-07
+
+### Changed
+
+- The Telegram message that carries the build file (`telegramSendFile`) no
+  longer includes the Changes section, instead of a shortened commit list.
+  The text message sent when the file cannot be sent, and every message
+  without a file, still list the commits.
+
 ## [0.7.4] - 2026-10-07
 
 ### Changed

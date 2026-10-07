@@ -15,44 +15,13 @@ def buildTelegramMessage() {
 }
 
 // Caption của sendDocument chỉ được 1024 ký tự (sendMessage là 4096), nên
-// bỏ dần commit cũ nhất trong danh sách cho tới khi vừa. Trả về chuỗi rỗng
-// khi phần cố định đã quá dài: lúc đó giữ cách gửi tin nhắn rồi file riêng.
+// bỏ hẳn phần Changes: đó là phần duy nhất dài không giới hạn. Trả về chuỗi
+// rỗng khi phần còn lại vẫn quá dài: lúc đó giữ cách gửi tin nhắn rồi file
+// riêng.
 def buildTelegramCaption() {
-    int maximumLength = 1024
-    def changeLines = (env.GIT_CHANGES?.trim() ?: '').readLines()
-    int hiddenCount = 0
+    def caption = renderAndroidTelegramMessage('')
 
-    // pearzGitChanges đã có thể thêm dòng đếm commit bị ẩn; cộng dồn vào đó
-    // thay vì để hai dòng đếm.
-    if (
-        changeLines &&
-        changeLines[-1] ==~ /- \.\.\. and \d+ more commit\(s\)\./
-    ) {
-        hiddenCount = changeLines[-1].replaceAll(/\D/, '').toInteger()
-        changeLines = changeLines.take(changeLines.size() - 1)
-    }
-
-    while (true) {
-        def shownLines = []
-        shownLines.addAll(changeLines)
-
-        if (hiddenCount > 0) {
-            shownLines << "- ... and ${hiddenCount} more commit(s)."
-        }
-
-        def caption = renderAndroidTelegramMessage(shownLines.join('\n'))
-
-        if (telegramVisibleLength(caption) <= maximumLength) {
-            return caption
-        }
-
-        if (!changeLines) {
-            return ''
-        }
-
-        changeLines = changeLines.take(changeLines.size() - 1)
-        hiddenCount++
-    }
+    return telegramVisibleLength(caption) <= 1024 ? caption : ''
 }
 
 // Telegram tính giới hạn trên text sau khi parse: thẻ HTML không tính, mỗi

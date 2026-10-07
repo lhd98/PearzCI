@@ -10,14 +10,12 @@ nào thì tải kiểu đó. Từ **0.7.4**, file và nội dung nằm chung **m
       Product: MyGame
       ...
       APK: https://drive.google.com/...   ← link Drive vẫn còn
-      Changes
-      - a1b2c3d - ...
-      - ... and 3 more commit(s).         ← commit cũ hơn được gộp thành số đếm
 ```
 
 - Telegram giới hạn nội dung đi kèm file ở **1024 ký tự** (tin nhắn thường là
-  4096), nên danh sách commit bị cắt bớt từ commit cũ nhất cho tới khi vừa.
-  Thường còn khoảng 4–5 commit.
+  4096), nên từ **0.7.5** tin gộp không có phần **Changes** (danh sách
+  commit). Tin không kèm file (build lỗi, iOS, job chưa bật
+  `telegramSendFile`) vẫn có Changes như cũ.
 - Tin chỉ xuất hiện sau khi upload xong file (khoảng 1 phút với APK 120 MB).
 - Gửi file lỗi (mạng lỗi, bot thiếu quyền gửi file...) chỉ ghi cảnh báo trong
   log. Khi đó tin nhắn thường có link Drive và đủ danh sách commit được gửi
@@ -169,5 +167,5 @@ curl -F chat_id=<CHAT_ID> -F document=@/path/to/game.apk \
 | Không có tin nhắn nào, build UNSTABLE | Server local không chạy (`curl http://127.0.0.1:8081`), hoặc bot chưa `logOut` khỏi server chính thức. |
 | Có tin nhắn, không có file, log có `WARNING: could not send the build file` | Bot thiếu quyền gửi file trong group/topic, file > 2 GB, hoặc server hết dung lượng đĩa. |
 | Có tin nhắn, không có file, không có cảnh báo | Job chưa đặt `telegramSendFile: true`, hoặc build không SUCCESS. |
-| Tin nhắn và file vẫn là hai tin riêng | Phần cố định của thông báo (chưa tính commit) đã dài hơn 1024 ký tự, nên không gộp được. |
+| Tin nhắn và file vẫn là hai tin riêng | Phần cố định của thông báo (không tính Changes) đã dài hơn 1024 ký tự, nên không gộp được. |
 | Job khác (chưa bật) mất thông báo | Job đó dùng chung bot đã `logOut`. Dùng bot riêng cho job gửi file. |
