@@ -95,6 +95,11 @@ def call(Map config = [:]) {
         'macRcloneExe',
         configuredRcloneExe ?: 'rclone'
     )
+    // telegramApiUrl: để trống là Bot API chính thức (file tối đa 50 MB).
+    // Đặt 'http://127.0.0.1:8081' khi chạy telegram-bot-api --local trên
+    // agent để gửi được file build đến 2 GB.
+    def telegramApiUrl = config.get('telegramApiUrl', '').toString().trim()
+    def telegramSendFile = config.get('telegramSendFile', false).toString().toBoolean()
     def driveRemote = config.get('driveRemote', 'gdrive')
     def driveRoot = config.get('driveRoot', 'JenkinsBuild')
     def buildsToKeep = config.get('buildsToKeep', 30).toString()
@@ -211,6 +216,8 @@ def call(Map config = [:]) {
             PEARZ_CI_VERSION = "${pearzCiVersion}"
             DRIVE_REMOTE = "${driveRemote}"
             DRIVE_ROOT = "${driveRoot}"
+            TELEGRAM_API_URL = "${telegramApiUrl}"
+            TELEGRAM_SEND_FILE = "${telegramSendFile}"
             MAC_RCLONE_EXE = "${macRcloneExe}"
             MAC_UNITY_HUB_ROOT = "${macUnityHubRoot}"
             IOS_BUILD_TO_DEVICE = "${iosBuildToDevice}"

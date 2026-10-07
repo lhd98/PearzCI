@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.3] - 2026-10-07
+
+### Added
+
+- `telegramApiUrl` and `telegramSendFile` pipeline options. With a local
+  `telegram-bot-api` server, successful Android builds send the APK/AAB to
+  Telegram as a reply to the build message (files up to 2 GB). A failed file
+  send only logs a warning. Defaults keep the current behavior.
+
 ## [0.7.2] - 2026-10-06
 
 ### Changed

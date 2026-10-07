@@ -213,6 +213,16 @@ def sendTelegramNotification(
             text: buildTelegramMessage()
         )
 
+        // telegramSendFile: gửi kèm APK/AAB sau tin nhắn. Chỉ gửi khi build
+        // thành công và file còn trong workspace.
+        def documentPath = ''
+        if (env.TELEGRAM_SEND_FILE == 'true' &&
+            currentBuild.currentResult == 'SUCCESS' &&
+            env.OUTPUT_PATH?.trim() &&
+            fileExists(env.OUTPUT_PATH)) {
+            documentPath = env.OUTPUT_PATH
+        }
+
         def sendTelegram = {
             writeFile(
                 file: 'send-telegram.sh',
@@ -223,7 +233,8 @@ def sendTelegramNotification(
             )
             withEnv([
                 'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
-                "TELEGRAM_SILENT=${telegramSilent}"
+                "TELEGRAM_SILENT=${telegramSilent}",
+                "TELEGRAM_DOCUMENT_PATH=${documentPath}"
             ]) {
                 sh 'sh ./send-telegram.sh'
             }

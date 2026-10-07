@@ -596,6 +596,26 @@ Example: pearzUnityMobilePipeline(telegramMaxCommits: 10)
 The Jenkins log reports the baseline source, total commits found, visible commits,
 and hidden commits.
 
+### Sending the build file to Telegram
+
+The official Bot API rejects files over 50 MB, so Android builds can send the
+APK/AAB through a local `telegram-bot-api` server (`--local`, files up to
+2 GB) running on the build Mac:
+
+```groovy
+pearzUnityMobilePipeline(
+    telegramApiUrl: 'http://127.0.0.1:8081',
+    telegramSendFile: true
+)
+```
+
+The message is sent first, then the file as a reply to it. A failed file send
+only logs a warning; the message with the Drive link is already delivered.
+Every bot used in `TELEGRAM_CHANNEL` must be logged out of the cloud Bot API
+once (`https://api.telegram.org/bot<TOKEN>/logOut`), after which it only
+works through the local server. Use a dedicated bot for build notifications
+so other integrations keep using the cloud API.
+
 ## Versioning
 
 Unity projects should use the stable UPM update channel:
