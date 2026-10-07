@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.8.1] - 2026-10-07
+
+### Fixed
+
+- Jenkins failed to load 0.8.0 with "Method too large" because the pipeline
+  method grew past the JVM limit. The WebGL steps (`vars/pearzWebGL.groovy`)
+  and the Google Drive upload (`vars/pearzDrive.groovy`) now live outside
+  the pipeline method, and Android and WebGL share one Unity invocation.
+
 ## [0.8.0] - 2026-10-07
 
 ### Added
