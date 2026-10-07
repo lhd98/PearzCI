@@ -2,7 +2,43 @@ def call(Map config = [:]) {
     def mobilePlatform = config.get('mobilePlatform', 'Android')
         .toString().trim()
     boolean isIos = mobilePlatform.equalsIgnoreCase('iOS')
-    boolean isAndroid = !isIos
+    boolean isWebGL = mobilePlatform.equalsIgnoreCase('WebGL')
+    boolean isAndroid = !isIos && !isWebGL
+    // WebGL: chỉ cần domain + token; account và project Pages tự suy ra
+    // trong cloudflare-pages-deploy.mjs.
+    def webDomain = config.get(
+        'webDomain', params.WEB_DOMAIN ?: ''
+    ).toString().trim().toLowerCase()
+        .replaceFirst(/^https?:\/\//, '').replaceAll(/\/+$/, '')
+    def cloudflareCredentialsId = config.get(
+        'cloudflareCredentialsId', params.CLOUDFLARE_CREDENTIAL ?: ''
+    ).toString().trim()
+    def cloudflareAccountId = config.get(
+        'cloudflareAccountId', params.CLOUDFLARE_ACCOUNT_ID ?: ''
+    ).toString().trim()
+    def webResolution = config.get(
+        'webResolution', params.WEB_RESOLUTION ?: '1080x1920'
+    ).toString().trim()
+    def wranglerVersion = config.get('wranglerVersion', '4').toString().trim()
+    if (isWebGL) {
+        if (!(webDomain ==~ /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/)) {
+            throw new IllegalArgumentException(
+                "WEB_DOMAIN must be a domain such as pg05.pearz.space (got '${webDomain}')."
+            )
+        }
+        if (!cloudflareCredentialsId) {
+            throw new IllegalArgumentException(
+                'CLOUDFLARE_CREDENTIAL is required for WebGL builds: choose ' +
+                'the Secret text credential that holds your Cloudflare API token.'
+            )
+        }
+        if (!(webResolution in ['720x1280', '1080x1920', '1440x2560'])) {
+            throw new IllegalArgumentException(
+                'WEB_RESOLUTION must be 720x1280, 1080x1920 or 1440x2560 ' +
+                "(got '${webResolution}')."
+            )
+        }
+    }
     def iosBuildToDevice = config.get(
         'iosBuildToDevice', params.IOS_BUILD_TO_DEVICE ?: false
     ).toString().trim().toBoolean()
@@ -377,7 +413,9 @@ def call(Map config = [:]) {
                         def artifactBuildNumber = env.BUILD_NUMBER
                         env.ARTIFACT_BUILD_NUMBER = artifactBuildNumber
 
-                        env.OUTPUT_EXTENSION = isIos
+                        env.OUTPUT_EXTENSION = isWebGL
+                            ? 'web'
+                            : isIos
                             ? 'ipa'
                             : (params.BUILD_APP_BUNDLE ? 'aab' : 'apk')
                         // Giữ một artifact Android duy nhất trong workspace để
@@ -392,8 +430,12 @@ def call(Map config = [:]) {
                         // archive.
                         env.DRIVE_OUTPUT_FILE_NAME =
                             "${outputName}.${env.OUTPUT_EXTENSION}"
-                        def buildFolder = isIos ? 'iOS' : 'Android'
-                        env.OUTPUT_PATH = "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
+                        def buildFolder = isWebGL ? 'WebGL' : (isIos ? 'iOS' : 'Android')
+                        // WebGL: OUTPUT_PATH là thư mục site deploy nguyên
+                        // lên Cloudflare Pages; metadata/log nằm cạnh nó.
+                        env.OUTPUT_PATH = isWebGL
+                            ? "${env.WORKSPACE}/Builds/WebGL/site"
+                            : "${env.WORKSPACE}/Builds/${buildFolder}/${env.OUTPUT_FILE_NAME}"
                         env.BUILD_INFO_FILE_NAME = "${outputName}_BUILD_INFO.txt"
                         env.BUILD_INFO_PATH =
                             "${env.WORKSPACE}/Builds/${buildFolder}/${env.BUILD_INFO_FILE_NAME}"
@@ -458,7 +500,14 @@ def call(Map config = [:]) {
                     echo "GIT_BRANCH = ${params.GIT_BRANCH}"
                     echo "UNITY_VERSION = ${env.UNITY_VERSION}"
                     echo "OUTPUT_PATH = ${env.OUTPUT_PATH}"
-                    echo "DRIVE_FILE_PATH = ${env.DRIVE_FILE_PATH}"
+                    script {
+                        if (isWebGL) {
+                            echo "WEB_DOMAIN = ${webDomain}"
+                            echo "WEB_RESOLUTION = ${webResolution}"
+                        } else {
+                            echo "DRIVE_FILE_PATH = ${env.DRIVE_FILE_PATH}"
+                        }
+                    }
                     echo "GIT_COMMIT_SHORT = ${env.GIT_COMMIT_SHORT}"
 
                     script {
@@ -491,6 +540,26 @@ def call(Map config = [:]) {
                         sh "\"${unityExe}\" -version"
                         if (isIos) {
                             sh 'xcodebuild -version'
+                        }
+                        if (isWebGL) {
+                            def webGlSupport = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
+                                '/PlaybackEngines/WebGLSupport'
+                            if (!fileExists(webGlSupport)) {
+                                error(
+                                    "WebGL Build Support is not installed for Unity ${env.UNITY_VERSION}. " +
+                                    'Add the module in Unity Hub on the agent.'
+                                )
+                            }
+                            def nodeStatus = sh(
+                                script: 'export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"; node --version && npx --version',
+                                returnStatus: true
+                            )
+                            if (nodeStatus != 0) {
+                                error(
+                                    'Node.js 18+ is required on the agent to deploy ' +
+                                    'WebGL builds (brew install node).'
+                                )
+                            }
                         }
 
                     }
@@ -587,6 +656,57 @@ def call(Map config = [:]) {
                                     exit "$unity_exit_code"
                                 '''
 
+                            }
+                        } finally {
+                            env.BUILD_TIME_MILLIS = (
+                                System.currentTimeMillis() - buildStartedAt
+                            ).toString()
+                        }
+                    }
+                }
+            }
+
+            stage('Build Unity WebGL') {
+                when { expression { isWebGL } }
+                options {
+                    timeout(time: 90, unit: 'MINUTES')
+                }
+
+                steps {
+                    script {
+                        if (isSupersededWebhookBuild()) {
+                            env.PEARZ_SUPERSEDED = 'true'
+                            error('A newer webhook build is queued; stopping before the Unity build.')
+                        }
+                        def buildStartedAt = System.currentTimeMillis()
+
+                        try {
+                            withEnv([
+                                "OUTPUT_PATH=${env.OUTPUT_PATH}",
+                                "APP_VERSION=${env.PEARZ_APP_VERSION}",
+                                "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
+                                "DEVELOPMENT_BUILD=${params.DEVELOPMENT_BUILD ?: false}",
+                                "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}"
+                            ]) {
+                                sh '''
+                                    set +e
+
+                                    "$UNITY_EXE" \
+                                        -batchmode \
+                                        -quit \
+                                        -projectPath "$UNITY_PROJECT_PATH" \
+                                        -buildTarget WebGL \
+                                        -executeMethod Pearz.CI.BuildEntry.BuildWebGL \
+                                        -logFile "$BUILD_LOG_PATH"
+
+                                    unity_exit_code=$?
+
+                                    if [ -f "$BUILD_LOG_PATH" ]; then
+                                        cat "$BUILD_LOG_PATH"
+                                    fi
+
+                                    exit "$unity_exit_code"
+                                '''
                             }
                         } finally {
                             env.BUILD_TIME_MILLIS = (
@@ -835,12 +955,16 @@ def call(Map config = [:]) {
                         } else if (isIos) {
                             env.BUILD_INFO_FOUND =
                                 pearzIos.resolveIosBuildInfo() ? 'true' : 'false'
+                        } else if (isWebGL && !fileExists("${env.OUTPUT_PATH}/Build")) {
+                            error("WebGL output has no Build folder: ${env.OUTPUT_PATH}")
                         }
 
                         echo "Build artifact created successfully: ${env.OUTPUT_PATH}"
 
                         archiveArtifacts(
-                            artifacts: isIos
+                            artifacts: isWebGL
+                                ? 'Builds/WebGL/build-metadata.json,Builds/WebGL/unity-build.log'
+                                : isIos
                                 ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/${env.BUILD_INFO_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
                                 : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
                             allowEmptyArchive: true,
@@ -874,8 +998,24 @@ def call(Map config = [:]) {
             // hết vào đây để bớt cột Stage View. Đánh đổi: hỏng ở bất kỳ bước
             // Drive nào cũng hiện đỏ chung một cột, không định vị ngay được bước
             // nào — xem log của stage để biết chi tiết.
+            stage('Deploy to Cloudflare Pages') {
+                when { expression { isWebGL } }
+                options { timeout(time: 30, unit: 'MINUTES') }
+                steps {
+                    script {
+                        deployWebGlToCloudflarePages(
+                            cloudflareCredentialsId,
+                            cloudflareAccountId,
+                            webDomain,
+                            webResolution,
+                            wranglerVersion
+                        )
+                    }
+                }
+            }
+
             stage('Upload to Google Drive') {
-                when { expression { !isIos || !iosBuildToDevice } }
+                when { expression { !isWebGL && (!isIos || !iosBuildToDevice) } }
                 options {
                     timeout(time: 30, unit: 'MINUTES')
                 }
@@ -1113,8 +1253,10 @@ def call(Map config = [:]) {
         post {
             success {
                 script {
-                    echo "Unity ${isIos ? 'iOS' : 'Android'} build completed: ${env.OUTPUT_FILE_NAME}"
-                    if (!isIos || !iosBuildToDevice) {
+                    echo "Unity ${mobilePlatform} build completed: ${env.OUTPUT_FILE_NAME}"
+                    if (isWebGL) {
+                        echo "Play: ${env.WEB_URL}"
+                    } else if (!isIos || !iosBuildToDevice) {
                         echo "Uploaded to Google Drive: ${env.DRIVE_FILE_PATH}"
                     }
 
@@ -1129,7 +1271,7 @@ def call(Map config = [:]) {
             }
 
             failure {
-                echo "Unity ${isIos ? 'iOS' : 'Android'} build failed."
+                echo "Unity ${mobilePlatform} build failed."
             }
 
             always {
@@ -1138,7 +1280,9 @@ def call(Map config = [:]) {
                 // artifact chính vì stage 'Archive Artifact' đã làm.
                 // Phải chạy trước khi gửi Telegram để link log có hiệu lực.
                 archiveArtifacts(
-                    artifacts: isIos
+                    artifacts: isWebGL
+                        ? 'Builds/WebGL/build-metadata.json,Builds/WebGL/unity-build.log'
+                        : isIos
                         ? 'Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log,Builds/iOS/upload.log'
                         : 'Builds/Android/build-metadata.json,Builds/Android/unity-build.log,Builds/Android/upload.log',
                     allowEmptyArchive: true
@@ -1162,6 +1306,11 @@ def call(Map config = [:]) {
                         echo 'Superseded by a newer webhook build; notification skipped.'
                     } else if (!sendNotifications) {
                         echo 'SEND_NOTIFICATIONS is disabled; notification skipped.'
+                    } else if (isWebGL) {
+                        pearzTelegram.sendWebTelegramNotification(
+                            telegramCredentialsId,
+                            telegramSilent
+                        )
                     } else if (isAndroid) {
                         pearzTelegram.sendTelegramNotification(
                             telegramCredentialsId,
@@ -1181,7 +1330,9 @@ def call(Map config = [:]) {
                         'rm -f send-telegram.sh ' +
                         'read-build-metadata.sh ' +
                         'remove-applovin-spm.rb ' +
-                        'telegram-message.txt telegram-caption.txt'
+                        'telegram-message.txt telegram-caption.txt ' +
+                        'cloudflare-pages-deploy.mjs webgl-index.html ' +
+                        'web-deploy-result.txt'
                     )
 
                     if (isAndroid) {
@@ -1208,6 +1359,66 @@ def call(Map config = [:]) {
                 }
             }
         }
+    }
+}
+
+// Sinh index.html, kiểm tra giới hạn 25 MiB của Pages, tìm account và
+// project Pages theo domain (tạo mới nếu chưa có), deploy bằng wrangler rồi
+// gắn domain/CNAME. Toàn bộ logic nằm trong cloudflare-pages-deploy.mjs.
+def deployWebGlToCloudflarePages(
+    String credentialsId,
+    String accountId,
+    String domain,
+    String resolution,
+    String wranglerVersion
+) {
+    writeFile(
+        file: 'cloudflare-pages-deploy.mjs',
+        encoding: 'UTF-8',
+        text: libraryResource('com/pearz/ci/cloudflare-pages-deploy.mjs')
+    )
+    writeFile(
+        file: 'webgl-index.html',
+        encoding: 'UTF-8',
+        text: libraryResource('com/pearz/ci/webgl-index.html')
+    )
+
+    def status
+    withCredentials([
+        string(credentialsId: credentialsId, variable: 'CLOUDFLARE_API_TOKEN')
+    ]) {
+        withEnv([
+            "CLOUDFLARE_ACCOUNT_ID=${accountId}",
+            "WEB_DOMAIN=${domain}",
+            "WEB_RESOLUTION=${resolution}",
+            "WEB_SITE_DIR=${env.OUTPUT_PATH}",
+            "WEB_INDEX_TEMPLATE=${env.WORKSPACE}/webgl-index.html",
+            "WEB_RESULT_FILE=${env.WORKSPACE}/web-deploy-result.txt",
+            "WRANGLER_VERSION=${wranglerVersion}"
+        ]) {
+            status = sh(
+                script: '''
+                    export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+                    node cloudflare-pages-deploy.mjs
+                ''',
+                returnStatus: true
+            )
+        }
+    }
+
+    if (fileExists('web-deploy-result.txt')) {
+        readFile(file: 'web-deploy-result.txt', encoding: 'UTF-8')
+            .readLines()
+            .each { line ->
+                def separator = line.indexOf('=')
+                if (separator > 0) {
+                    env[line.substring(0, separator)] = line.substring(separator + 1)
+                }
+            }
+    }
+
+    if (status != 0) {
+        error(env.WEB_DEPLOY_ERROR ?: 'Cloudflare Pages deploy failed.')
     }
 }
 

@@ -157,7 +157,7 @@ Required parameters:
 - String `GIT_BRANCH`, for example `main`
 - String `APP_VERSION`, for example `1.0.0` (Android/iOS; digits and dots only).
   It sets the app version and the Google Drive folder of the build.
-- Choice `BUILD_PLATFORM`: `Android` or `iOS` (default: `Android`)
+- Choice `BUILD_PLATFORM`: `Android`, `iOS` or `WebGL` (default: `Android`)
 
 Common optional parameters:
 
@@ -665,6 +665,25 @@ Groovy syntax of `vars/` and `jenkins/`, and `bash -n` plus ShellCheck
 Groovy strings, so they are checked too; `android-install-devices.sh` also runs
 against a stub adb (no device, several devices, mDNS reconnect, duplicate
 listing, serial filter, install failure, unset environment variables).
+
+## WebGL Jenkins pipeline
+
+Select `WebGL` from `BUILD_PLATFORM` to build a Unity WebGL player and deploy
+it to Cloudflare Pages; reloading the site plays the new build. A job needs:
+
+- String `WEB_DOMAIN`, the address players open, for example
+  `pg05.pearz.space`
+- Credentials `CLOUDFLARE_CREDENTIAL` (Secret text): the developer's Cloudflare
+  API token with `Cloudflare Pages: Edit` (and `Zone: DNS: Edit` to let
+  PearzCI create the CNAME)
+- Optional Choice `WEB_RESOLUTION`: `1080x1920`, `720x1280` or `1440x2560`
+- Optional String `CLOUDFLARE_ACCOUNT_ID`, only when the token sees several
+  accounts
+
+The Cloudflare account and the Pages project are found from the token and the
+domain; a domain no project uses yet gets a new project, custom domain and
+CNAME. The agent needs Node.js 18+ and Unity's WebGL Build Support module. See
+[Documentation~/webgl-cloudflare-pages.md](Documentation~/webgl-cloudflare-pages.md).
 
 ## iOS Jenkins pipeline
 

@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.8.0] - 2026-10-07
+
+### Added
+
+- `BUILD_PLATFORM=WebGL`: builds a Unity WebGL player
+  (`BuildEntry.BuildWebGL`) and deploys it to Cloudflare Pages. Reloading the
+  site plays the new build. A job needs only `WEB_DOMAIN` (for example
+  `pg05.pearz.space`) and `CLOUDFLARE_CREDENTIAL`; the Cloudflare account and
+  the Pages project are found from the token and the domain, and a new domain
+  gets its own project, custom domain and CNAME. `WEB_RESOLUTION` picks the
+  render size (720x1280, 1080x1920 or 1440x2560) inside a 9:16 frame.
+- The Telegram notification of a WebGL build carries the play link.
+- `Documentation~/webgl-cloudflare-pages.md`: setup and troubleshooting.
+
+### Removed
+
+- `BuildEntry.BuildWindows` and its Windows build settings. Selecting
+  `Windows` as `BUILD_PLATFORM` now fails as an unsupported platform.
+
 ## [0.7.5] - 2026-10-07
 
 ### Changed

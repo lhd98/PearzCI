@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>{{PRODUCT_NAME}}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14161c; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; color: #c9ced8; }
+  /* Khung luôn 9:16 và vừa khít màn hình; độ phân giải render nằm ở canvas.width/height. */
+  #frame { position: relative; aspect-ratio: {{WIDTH}} / {{HEIGHT}}; height: min(100dvh, calc(100vw * {{HEIGHT}} / {{WIDTH}})); background: #222632; }
+  #unity-canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+  #loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  #loading h1 { margin: 0; font-size: 28px; color: #e8ebf1; }
+  #bar { width: 60%; height: 6px; border-radius: 3px; background: #3a3f4d; overflow: hidden; }
+  #bar > div { width: 0; height: 100%; background: #e8ebf1; transition: width .2s; }
+  #error { display: none; max-width: 80%; text-align: center; color: #ff8a80; }
+  #version { position: absolute; right: 6px; bottom: 4px; font-size: 11px; opacity: .45; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="unity-canvas" width="{{WIDTH}}" height="{{HEIGHT}}" tabindex="-1"></canvas>
+  <div id="loading">
+    <h1>{{PRODUCT_NAME}}</h1>
+    <div id="bar"><div></div></div>
+    <div id="error"></div>
+  </div>
+  <div id="version">{{VERSION}}</div>
+</div>
+<script>
+  var buildQuery = "?v={{BUILD_ID}}";
+  var canvas = document.getElementById("unity-canvas");
+  var loading = document.getElementById("loading");
+  var barFill = document.querySelector("#bar > div");
+  var errorBox = document.getElementById("error");
+  var config = {
+    dataUrl: "Build/{{DATA}}" + buildQuery,
+    frameworkUrl: "Build/{{FRAMEWORK}}" + buildQuery,
+    codeUrl: "Build/{{WASM}}" + buildQuery,
+    streamingAssetsUrl: "StreamingAssets",
+    companyName: {{COMPANY_NAME_JSON}},
+    productName: {{PRODUCT_NAME_JSON}},
+    productVersion: {{VERSION_JSON}},
+    // Giữ đúng độ phân giải đã chọn trong Jenkins thay vì theo kích thước CSS.
+    matchWebGLToCanvasSize: false,
+    devicePixelRatio: 1
+  };
+  var script = document.createElement("script");
+  script.src = "Build/{{LOADER}}" + buildQuery;
+  script.onload = function () {
+    createUnityInstance(canvas, config, function (progress) {
+      barFill.style.width = Math.round(progress * 100) + "%";
+    }).then(function () {
+      loading.style.display = "none";
+    }).catch(function (message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    });
+  };
+  script.onerror = function () {
+    errorBox.textContent = "Could not load the game. Reload the page.";
+    errorBox.style.display = "block";
+  };
+  document.body.appendChild(script);
+</script>
+</body>
+</html>

@@ -315,6 +315,56 @@ def sendIosTelegramNotification(
     boolean deviceBuild,
     boolean telegramSilent = false
 ) {
+    sendTelegramText(telegramCredentialsId, telegramSilent) {
+        buildIosTelegramMessage(deviceBuild)
+    }
+}
+
+// WebGL không có file để gửi: chỉ một tin nhắn kèm link chơi trên web.
+def sendWebTelegramNotification(
+    String telegramCredentialsId,
+    boolean telegramSilent = false
+) {
+    sendTelegramText(telegramCredentialsId, telegramSilent) {
+        buildWebTelegramMessage()
+    }
+}
+
+def buildWebTelegramMessage() {
+    boolean succeeded = (currentBuild.currentResult ?: 'SUCCESS') == 'SUCCESS'
+    def changeDescription = env.GIT_CHANGES?.trim()
+    def errorSection = ''
+
+    if (!succeeded) {
+        def reason = env.WEB_DEPLOY_ERROR?.trim() ?:
+            env.META_ERROR_MESSAGE?.trim() ?:
+            'The WebGL build was not deployed.'
+        errorSection = '<blockquote><b>Error</b>\n' +
+            telegramHtmlEscape(reason) + '</blockquote>'
+    }
+
+    def values = [
+        PLATFORM: 'WEBGL',
+        STATUS: telegramBuildStatus(),
+        PEARZ_CI_VERSION: telegramHtmlEscape(env.PEARZ_CI_VERSION),
+        VERSION: telegramHtmlEscape(env.BUILD_VERSION),
+        PRODUCT_NAME: telegramHtmlEscape(env.PEARZ_PRODUCT_NAME),
+        BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
+        WEB: telegramHtmlEscape(succeeded ? env.WEB_URL : ''),
+        ERROR_SECTION: errorSection,
+        CHANGES_SECTION: changeDescription
+            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
+            : ''
+    ]
+
+    return truncateTelegramMessage(renderTelegramTemplate(values))
+}
+
+def sendTelegramText(
+    String telegramCredentialsId,
+    boolean telegramSilent,
+    Closure buildMessage
+) {
     boolean telegramConfigured = telegramCredentialsId ||
         "${params.TELEGRAM_CHANNEL ?: ''}".trim()
 
@@ -327,7 +377,7 @@ def sendIosTelegramNotification(
         writeFile(
             file: 'telegram-message.txt',
             encoding: 'UTF-8',
-            text: buildIosTelegramMessage(deviceBuild)
+            text: buildMessage()
         )
 
         def sendTelegram = {

@@ -15,16 +15,15 @@ def call(Map config = [:]) {
             // IOS_BUILD_TO_DEVICE; irrelevant stages are shown as skipped.
             pearzUnityMobilePipeline(config + [mobilePlatform: platform])
             break
-        case 'windows':
-        case 'windows64':
-            throw new IllegalArgumentException(
-                'Windows player builds were removed in PearzCI 0.6.75; ' +
-                'Jenkins now runs only on a macOS agent.'
-            )
+        case 'webgl':
+            // WebGL dùng chung graph để Stage View giữ nguyên bố cục; các
+            // stage Android/iOS hiện là skipped.
+            pearzUnityMobilePipeline(config + [mobilePlatform: 'WebGL'])
+            break
         default:
             throw new IllegalArgumentException(
                 "Unsupported BUILD_PLATFORM '${platform}'. " +
-                'Choose Android or iOS.'
+                'Choose Android, iOS or WebGL.'
             )
     }
 }

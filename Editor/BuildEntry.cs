@@ -223,55 +223,59 @@ public static class BuildEntry
     }
 
     /// <summary>
-    /// Jenkins entry point for a Windows standalone player:
-    /// -executeMethod Pearz.CI.BuildEntry.BuildWindows
+    /// Jenkins entry point for a WebGL player:
+    /// -executeMethod Pearz.CI.BuildEntry.BuildWebGL
+    /// OUTPUT_PATH là thư mục site (index.html + Build/); Jenkins deploy
+    /// nguyên thư mục này lên Cloudflare Pages.
     /// </summary>
-    public static void BuildWindows()
+    public static void BuildWebGL()
     {
-        WindowsBuildConfiguration configuration = null;
+        WebGLBuildConfiguration configuration = null;
         BuildReport report = null;
 
         try
         {
-            Log("Starting Windows standalone build");
+            Log("Starting WebGL build");
             string[] scenes = GetEnabledScenes();
             if (scenes.Length == 0)
                 throw new InvalidOperationException(
                     "Không có scene nào được bật trong Build Profiles / Build Settings.");
 
-            configuration = ReadWindowsConfiguration();
-            PrepareWindowsOutputDirectory(configuration.OutputPath);
-            ApplyWindowsSettings(configuration);
+            configuration = ReadWebGLConfiguration();
+            PrepareIosOutputDirectory(configuration.OutputPath);
+            ApplyWebGLSettings(configuration);
 
             report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes,
                 locationPathName = configuration.OutputPath,
-                target = BuildTarget.StandaloneWindows64,
-                targetGroup = BuildTargetGroup.Standalone,
-                options = BuildOptions.None
+                target = BuildTarget.WebGL,
+                targetGroup = BuildTargetGroup.WebGL,
+                options = configuration.DevelopmentBuild
+                    ? BuildOptions.Development
+                    : BuildOptions.None
             });
 
             PrintBuildSummary(report.summary);
             if (report.summary.result != BuildResult.Succeeded ||
-                !File.Exists(configuration.OutputPath))
+                !Directory.Exists(Path.Combine(configuration.OutputPath, "Build")))
             {
                 throw new Exception(
-                    $"Windows build failed. Result: {report.summary.result}, " +
+                    $"WebGL build failed. Result: {report.summary.result}, " +
                     $"Errors: {report.summary.totalErrors}");
             }
 
-            TryWriteWindowsBuildMetadata(report, configuration, string.Empty);
-            Log("WINDOWS BUILD SUCCEEDED");
+            TryWriteWebGLBuildMetadata(report, configuration, string.Empty);
+            Log("WEBGL BUILD SUCCEEDED");
             Log($"Output: {configuration.OutputPath}");
             ExitBatchMode(0);
         }
         catch (Exception exception)
         {
             Debug.LogException(exception);
-            Error("WINDOWS BUILD FAILED");
+            Error("WEBGL BUILD FAILED");
             Error(exception.Message);
-            TryWriteWindowsBuildMetadata(report, configuration, exception.Message);
+            TryWriteWebGLBuildMetadata(report, configuration, exception.Message);
             if (Application.isBatchMode)
             {
                 EditorApplication.Exit(1);
@@ -394,15 +398,16 @@ public static class BuildEntry
         };
     }
 
-    private static WindowsBuildConfiguration ReadWindowsConfiguration()
+    private static WebGLBuildConfiguration ReadWebGLConfiguration()
     {
         string outputPath = Path.GetFullPath(GetEnvironmentVariable(
             "OUTPUT_PATH",
-            Path.Combine(GetProjectPath(), "Builds", "Windows", "Game.exe")));
+            Path.Combine(GetProjectPath(), "Builds", "WebGL", "site")));
 
-        return new WindowsBuildConfiguration
+        return new WebGLBuildConfiguration
         {
-            OutputPath = Path.ChangeExtension(outputPath, ".exe"),
+            OutputPath = outputPath,
+            DevelopmentBuild = GetBooleanEnvironmentVariable("DEVELOPMENT_BUILD", false),
             ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
             ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
             AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
@@ -412,37 +417,37 @@ public static class BuildEntry
         };
     }
 
-    private static void PrepareWindowsOutputDirectory(string outputPath)
+    private static void ApplyWebGLSettings(WebGLBuildConfiguration configuration)
     {
-        PrepareOutputDirectory(outputPath);
-        string dataDirectory = Path.Combine(
-            Path.GetDirectoryName(outputPath) ?? string.Empty,
-            Path.GetFileNameWithoutExtension(outputPath) + "_Data");
-        if (Directory.Exists(dataDirectory))
-            FileUtil.DeleteFileOrDirectory(dataDirectory);
-    }
-
-    private static void ApplyWindowsSettings(WindowsBuildConfiguration configuration)
-    {
-        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 &&
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.WebGL &&
             !EditorUserBuildSettings.SwitchActiveBuildTarget(
-                BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64))
-            throw new Exception("Không thể chuyển active build target sang Windows 64-bit.");
+                BuildTargetGroup.WebGL, BuildTarget.WebGL))
+            throw new Exception(
+                "Không thể chuyển active build target sang WebGL. " +
+                "Kiểm tra Unity trên agent đã cài WebGL Build Support.");
 
         if (!string.IsNullOrWhiteSpace(configuration.ProductName))
             PlayerSettings.productName = configuration.ProductName;
         if (!string.IsNullOrWhiteSpace(configuration.ScriptingDefineSymbols))
-            SetWindowsScriptingDefineSymbols(configuration.ScriptingDefineSymbols);
+            SetWebGLScriptingDefineSymbols(configuration.ScriptingDefineSymbols);
         if (!string.IsNullOrWhiteSpace(configuration.AppVersion))
             PlayerSettings.bundleVersion = configuration.AppVersion;
         if (!string.IsNullOrWhiteSpace(configuration.Il2CppCodeGeneration))
-            PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Standalone,
+            PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL,
                 ParseIl2CppCodeGeneration(configuration.Il2CppCodeGeneration));
         if (!string.IsNullOrWhiteSpace(configuration.ManagedStrippingLevel))
-            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone,
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL,
                 ParseManagedStrippingLevel(configuration.ManagedStrippingLevel));
         if (configuration.StripEngineCode.HasValue)
             PlayerSettings.stripEngineCode = configuration.StripEngineCode.Value;
+
+        // Gzip + decompression fallback: loader tự giải nén bằng JS nên
+        // Cloudflare Pages không cần header Content-Encoding riêng. Tên file
+        // cố định (không hash) để Jenkins sinh index.html từ thư mục Build/.
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+        PlayerSettings.WebGL.decompressionFallback = true;
+        PlayerSettings.WebGL.nameFilesAsHashes = false;
+        PlayerSettings.WebGL.dataCaching = true;
     }
 
     private static void PrepareIosOutputDirectory(string outputPath)
@@ -931,22 +936,28 @@ public static class BuildEntry
         }
     }
 
-    private static void TryWriteWindowsBuildMetadata(
+    private static void TryWriteWebGLBuildMetadata(
         BuildReport report,
-        WindowsBuildConfiguration configuration,
+        WebGLBuildConfiguration configuration,
         string errorMessage)
     {
         try
         {
             string outputPath = configuration != null
                 ? configuration.OutputPath
-                : Path.Combine(GetProjectPath(), "Builds", "Windows", "Game.exe");
+                : Path.Combine(GetProjectPath(), "Builds", "WebGL", "site");
+            // Metadata nằm cạnh thư mục site, không bị deploy lên Pages.
             string outputDirectory = Path.GetDirectoryName(outputPath);
             Directory.CreateDirectory(outputDirectory);
             BuildSummary? summary = report != null ? report.summary : null;
-            FileInfo outputFile = new FileInfo(outputPath);
+            string buildDirectory = Path.Combine(outputPath, "Build");
+            long outputSize = Directory.Exists(buildDirectory)
+                ? new DirectoryInfo(buildDirectory)
+                    .GetFiles("*", SearchOption.AllDirectories)
+                    .Sum(file => file.Length)
+                : 0;
 
-            WindowsBuildMetadata metadata = new WindowsBuildMetadata
+            WebGLBuildMetadata metadata = new WebGLBuildMetadata
             {
                 schemaVersion = 1,
                 result = summary.HasValue ? summary.Value.result.ToString() : BuildResult.Failed.ToString(),
@@ -954,11 +965,10 @@ public static class BuildEntry
                 productName = PlayerSettings.productName,
                 versionName = PlayerSettings.bundleVersion,
                 unityVersion = Application.unityVersion,
-                scriptingBackend = PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone).ToString(),
-                managedStrippingLevel = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.Standalone).ToString(),
-                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetWindowsScriptingDefineSymbols()),
-                outputFileName = outputFile.Name,
-                outputSizeBytes = outputFile.Exists ? outputFile.Length : 0,
+                managedStrippingLevel = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.WebGL).ToString(),
+                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetWebGLScriptingDefineSymbols()),
+                outputFileName = Path.GetFileName(outputPath),
+                outputSizeBytes = outputSize,
                 buildDurationSeconds = summary.HasValue ? summary.Value.totalTime.TotalSeconds : 0d,
                 warningCount = summary.HasValue ? (int)summary.Value.totalWarnings : 0,
                 errorCount = summary.HasValue ? (int)summary.Value.totalErrors : 0,
@@ -969,7 +979,7 @@ public static class BuildEntry
         }
         catch (Exception exception)
         {
-            Warning("Could not write optional Windows build metadata: " + exception.Message);
+            Warning("Could not write optional WebGL build metadata: " + exception.Message);
         }
     }
 
@@ -1273,21 +1283,21 @@ public static class BuildEntry
 #endif
     }
 
-    private static void SetWindowsScriptingDefineSymbols(string value)
+    private static void SetWebGLScriptingDefineSymbols(string value)
     {
 #if UNITY_2021_2_OR_NEWER
-        PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.Standalone, value);
+        PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.WebGL, value);
 #else
-        PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, value);
+        PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.WebGL, value);
 #endif
     }
 
-    private static string GetWindowsScriptingDefineSymbols()
+    private static string GetWebGLScriptingDefineSymbols()
     {
 #if UNITY_2021_2_OR_NEWER
-        return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.Standalone);
+        return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.WebGL);
 #else
-        return PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone);
+        return PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.WebGL);
 #endif
     }
 
@@ -1365,9 +1375,10 @@ public static class BuildEntry
         public bool? StripEngineCode { get; set; }
     }
 
-    private sealed class WindowsBuildConfiguration
+    private sealed class WebGLBuildConfiguration
     {
         public string OutputPath { get; set; }
+        public bool DevelopmentBuild { get; set; }
         public string ProductName { get; set; }
         public string ScriptingDefineSymbols { get; set; }
         public string AppVersion { get; set; }
@@ -1377,7 +1388,7 @@ public static class BuildEntry
     }
 
     [Serializable]
-    private sealed class WindowsBuildMetadata
+    private sealed class WebGLBuildMetadata
     {
         public int schemaVersion;
         public string result;
@@ -1385,7 +1396,6 @@ public static class BuildEntry
         public string productName;
         public string versionName;
         public string unityVersion;
-        public string scriptingBackend;
         public string managedStrippingLevel;
         public string[] scriptingDefineSymbols;
         public string outputFileName;
