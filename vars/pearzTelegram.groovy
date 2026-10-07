@@ -9,6 +9,64 @@ def telegramBuildStatus() {
 }
 
 def buildTelegramMessage() {
+    return truncateTelegramMessage(
+        renderAndroidTelegramMessage(env.GIT_CHANGES?.trim())
+    )
+}
+
+// Caption của sendDocument chỉ được 1024 ký tự (sendMessage là 4096), nên
+// bỏ dần commit cũ nhất trong danh sách cho tới khi vừa. Trả về chuỗi rỗng
+// khi phần cố định đã quá dài: lúc đó giữ cách gửi tin nhắn rồi file riêng.
+def buildTelegramCaption() {
+    int maximumLength = 1024
+    def changeLines = (env.GIT_CHANGES?.trim() ?: '').readLines()
+    int hiddenCount = 0
+
+    // pearzGitChanges đã có thể thêm dòng đếm commit bị ẩn; cộng dồn vào đó
+    // thay vì để hai dòng đếm.
+    if (
+        changeLines &&
+        changeLines[-1] ==~ /- \.\.\. and \d+ more commit\(s\)\./
+    ) {
+        hiddenCount = changeLines[-1].replaceAll(/\D/, '').toInteger()
+        changeLines = changeLines.take(changeLines.size() - 1)
+    }
+
+    while (true) {
+        def shownLines = []
+        shownLines.addAll(changeLines)
+
+        if (hiddenCount > 0) {
+            shownLines << "- ... and ${hiddenCount} more commit(s)."
+        }
+
+        def caption = renderAndroidTelegramMessage(shownLines.join('\n'))
+
+        if (telegramVisibleLength(caption) <= maximumLength) {
+            return caption
+        }
+
+        if (!changeLines) {
+            return ''
+        }
+
+        changeLines = changeLines.take(changeLines.size() - 1)
+        hiddenCount++
+    }
+}
+
+// Telegram tính giới hạn trên text sau khi parse: thẻ HTML không tính, mỗi
+// entity tính một ký tự.
+def telegramVisibleLength(String message) {
+    return (message ?: '')
+        .replaceAll(/<[^>]+>/, '')
+        .replace('&lt;', '<')
+        .replace('&gt;', '>')
+        .replace('&amp;', '&')
+        .length()
+}
+
+def renderAndroidTelegramMessage(String changeDescription) {
     // Kết quả của Jenkins mới là kết quả thật: Unity có thể build xong
     // nhưng upload lên Drive vẫn hỏng sau đó.
     def versionParts = []
@@ -54,8 +112,6 @@ def buildTelegramMessage() {
         }
     }
 
-    def changeDescription = env.GIT_CHANGES?.trim()
-
     def values = [
         PLATFORM: 'ANDROID',
         STATUS: telegramBuildStatus(),
@@ -84,7 +140,7 @@ def buildTelegramMessage() {
             : ''
     ]
 
-    return truncateTelegramMessage(renderTelegramTemplate(values))
+    return renderTelegramTemplate(values)
 }
 
 // iOS không có build-metadata.json: BuildEntry chỉ ghi file đó trong
@@ -213,14 +269,27 @@ def sendTelegramNotification(
             text: buildTelegramMessage()
         )
 
-        // telegramSendFile: gửi kèm APK/AAB sau tin nhắn. Chỉ gửi khi build
-        // thành công và file còn trong workspace.
+        // telegramSendFile: gửi APK/AAB kèm nội dung thông báo làm caption,
+        // chung một tin. Chỉ gửi khi build thành công và file còn trong
+        // workspace. telegram-message.txt vẫn được ghi để gửi thay thế khi
+        // gửi file hỏng.
         def documentPath = ''
+        def captionFile = ''
         if (env.TELEGRAM_SEND_FILE == 'true' &&
             currentBuild.currentResult == 'SUCCESS' &&
             env.OUTPUT_PATH?.trim() &&
             fileExists(env.OUTPUT_PATH)) {
             documentPath = env.OUTPUT_PATH
+            def caption = buildTelegramCaption()
+
+            if (caption) {
+                captionFile = 'telegram-caption.txt'
+                writeFile(
+                    file: captionFile,
+                    encoding: 'UTF-8',
+                    text: caption
+                )
+            }
         }
 
         def sendTelegram = {
@@ -234,7 +303,8 @@ def sendTelegramNotification(
             withEnv([
                 'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
                 "TELEGRAM_SILENT=${telegramSilent}",
-                "TELEGRAM_DOCUMENT_PATH=${documentPath}"
+                "TELEGRAM_DOCUMENT_PATH=${documentPath}",
+                "TELEGRAM_CAPTION_FILE=${captionFile}"
             ]) {
                 sh 'sh ./send-telegram.sh'
             }

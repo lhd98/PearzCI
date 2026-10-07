@@ -1,22 +1,27 @@
 # Gửi file APK/AAB vào Telegram
 
 Từ PearzCI **0.7.3**, build Android có thể gửi file APK/AAB vào Telegram,
-**kèm theo** tin nhắn có link Google Drive như cũ. Ai thích tải kiểu nào thì
-tải kiểu đó.
+**kèm theo** nội dung thông báo có link Google Drive như cũ. Ai thích tải kiểu
+nào thì tải kiểu đó. Từ **0.7.4**, file và nội dung nằm chung **một tin**.
 
 ```
-[Bot] BUILD SUCCESS                       ← tin nhắn như hiện tại
-      Project: MyGame
+[Bot] 📎 MyGame.apk (120 MB)              ← file APK
+      ANDROID BUILD SUCCESS               ← nội dung như hiện tại, nằm dưới file
+      Product: MyGame
       ...
-      Download: https://drive.google.com/...   ← link Drive vẫn còn
-
-  ↳ [Bot] 📎 MyGame.apk (120 MB)          ← file APK, trả lời vào tin trên
+      APK: https://drive.google.com/...   ← link Drive vẫn còn
+      Changes
+      - a1b2c3d - ...
+      - ... and 3 more commit(s).         ← commit cũ hơn được gộp thành số đếm
 ```
 
-- Tin nhắn luôn được gửi trước, rồi file được gửi trả lời vào tin đó (cùng
-  group, cùng topic).
-- Gửi file lỗi (server tắt, mạng lỗi...) chỉ ghi cảnh báo trong log. Tin nhắn
-  có link Drive vẫn đến, build vẫn **SUCCESS**.
+- Telegram giới hạn nội dung đi kèm file ở **1024 ký tự** (tin nhắn thường là
+  4096), nên danh sách commit bị cắt bớt từ commit cũ nhất cho tới khi vừa.
+  Thường còn khoảng 4–5 commit.
+- Tin chỉ xuất hiện sau khi upload xong file (khoảng 1 phút với APK 120 MB).
+- Gửi file lỗi (mạng lỗi, bot thiếu quyền gửi file...) chỉ ghi cảnh báo trong
+  log. Khi đó tin nhắn thường có link Drive và đủ danh sách commit được gửi
+  thay thế, build vẫn **SUCCESS**.
 - Chỉ gửi file khi build thành công. Build hỏng vẫn chỉ có tin báo lỗi.
 - Hiện chỉ áp dụng cho Android. iOS vẫn chỉ gửi tin nhắn.
 
@@ -36,7 +41,7 @@ tuỳ chọn trong `Jenkinsfile` của từng game:
 | Tuỳ chọn | Mặc định | Ý nghĩa |
 |---|---|---|
 | `telegramApiUrl` | trống (= `https://api.telegram.org`) | Địa chỉ Bot API. Đặt `http://127.0.0.1:8081` để dùng server local. |
-| `telegramSendFile` | `false` | `true` thì gửi kèm file APK/AAB sau tin nhắn. |
+| `telegramSendFile` | `false` | `true` thì gửi file APK/AAB chung một tin với nội dung thông báo. |
 
 Job không đặt hai tuỳ chọn này chạy y như trước.
 
@@ -164,4 +169,5 @@ curl -F chat_id=<CHAT_ID> -F document=@/path/to/game.apk \
 | Không có tin nhắn nào, build UNSTABLE | Server local không chạy (`curl http://127.0.0.1:8081`), hoặc bot chưa `logOut` khỏi server chính thức. |
 | Có tin nhắn, không có file, log có `WARNING: could not send the build file` | Bot thiếu quyền gửi file trong group/topic, file > 2 GB, hoặc server hết dung lượng đĩa. |
 | Có tin nhắn, không có file, không có cảnh báo | Job chưa đặt `telegramSendFile: true`, hoặc build không SUCCESS. |
+| Tin nhắn và file vẫn là hai tin riêng | Phần cố định của thông báo (chưa tính commit) đã dài hơn 1024 ký tự, nên không gộp được. |
 | Job khác (chưa bật) mất thông báo | Job đó dùng chung bot đã `logOut`. Dùng bot riêng cho job gửi file. |

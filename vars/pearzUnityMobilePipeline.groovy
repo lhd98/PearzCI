@@ -1181,7 +1181,7 @@ def call(Map config = [:]) {
                         'rm -f send-telegram.sh ' +
                         'read-build-metadata.sh ' +
                         'remove-applovin-spm.rb ' +
-                        'telegram-message.txt'
+                        'telegram-message.txt telegram-caption.txt'
                     )
 
                     if (isAndroid) {

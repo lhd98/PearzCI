@@ -31,13 +31,15 @@ if [ -n "$document_path" ] && [ ! -f "$document_path" ]; then
     document_path=''
 fi
 
-# Gửi file build trả lời vào tin nhắn vừa gửi. Lỗi gửi file chỉ cảnh báo:
-# tin nhắn có link Drive đã đến nơi rồi.
+# Gửi file build. Có caption thì file và nội dung thông báo nằm chung một
+# tin; không thì file trả lời vào tin nhắn vừa gửi. Trả về 0 khi Telegram
+# nhận file.
 send_document() {
     doc_token=$1
     doc_chat_id=$2
     doc_thread_id=$3
     doc_reply_to=$4
+    doc_caption=$5
 
     # curl -F coi ; và , trong tên file là cú pháp, nên bọc tên trong "".
     escaped_path=$(printf '%s' "$document_path" | sed 's/[\\"]/\\&/g')
@@ -54,6 +56,12 @@ send_document() {
         set -- "$@" --form-string "reply_to_message_id=$doc_reply_to"
     fi
 
+    # --form-string: caption bắt đầu bằng thẻ HTML, mà -F coi < là đọc file.
+    if [ -n "$doc_caption" ]; then
+        set -- "$@" --form-string "caption=$doc_caption" \
+            --form-string "parse_mode=HTML"
+    fi
+
     doc_response=$(
         curl --fail --silent --show-error \
             --max-time 1800 \
@@ -61,12 +69,8 @@ send_document() {
             "$api_url/bot${doc_token}/sendDocument"
     ) || doc_response=''
 
-    if printf '%s' "$doc_response" |
-        grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'; then
-        echo "Build file sent to target #$target_count."
-    else
-        echo "WARNING: could not send the build file to target #$target_count." >&2
-    fi
+    printf '%s' "$doc_response" |
+        grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
 }
 
 message_file=${TELEGRAM_MESSAGE_FILE:-}
@@ -84,6 +88,16 @@ esac
 
 if [ -n "$message_file" ] && [ -f "$message_file" ]; then
     message=$(cat "$message_file")
+fi
+
+# Caption đã được pipeline cắt vừa giới hạn 1024 ký tự của sendDocument.
+# Không có caption thì giữ cách cũ: tin nhắn trước, file trả lời sau.
+caption_file=${TELEGRAM_CAPTION_FILE:-}
+caption=''
+
+if [ -n "$document_path" ] && [ -n "$caption_file" ] &&
+    [ -f "$caption_file" ]; then
+    caption=$(cat "$caption_file")
 fi
 
 if [ -z "$message" ]; then
@@ -158,7 +172,17 @@ while :; do
                 printf '%s' "$thread_id" | grep -Eq '[^0-9]'; then
                 echo "Target #$target_count has an invalid messageThreadId." >&2
                 error_count=$((error_count + 1))
+            elif [ -n "$caption" ] &&
+                send_document "$token" "$chat_id" "$thread_id" '' "$caption"; then
+                echo "Build file sent to target #$target_count."
+                success_count=$((success_count + 1))
             else
+                # Gửi file kèm caption hỏng thì vẫn phải có tin nhắn mang
+                # link Drive; không thử gửi lại file lần nữa.
+                if [ -n "$caption" ]; then
+                    echo "WARNING: could not send the build file to target #$target_count; sending the message only." >&2
+                fi
+
                 uri="$api_url/bot${token}/sendMessage"
 
                 if [ -n "$thread_id" ]; then
@@ -196,13 +220,19 @@ while :; do
                     echo "Telegram notification sent to target #$target_count."
                     success_count=$((success_count + 1))
 
-                    if [ -n "$document_path" ]; then
+                    if [ -n "$document_path" ] && [ -z "$caption" ]; then
                         message_id=$(
                             printf '%s' "$response" |
                                 sed -n 's/.*"message_id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' |
                                 head -n 1
                         )
-                        send_document "$token" "$chat_id" "$thread_id" "$message_id"
+
+                        if send_document "$token" "$chat_id" "$thread_id" \
+                            "$message_id" ''; then
+                            echo "Build file sent to target #$target_count."
+                        else
+                            echo "WARNING: could not send the build file to target #$target_count." >&2
+                        fi
                     fi
                 else
                     echo "Target #$target_count failed." >&2

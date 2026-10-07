@@ -609,8 +609,10 @@ pearzUnityMobilePipeline(
 )
 ```
 
-The message is sent first, then the file as a reply to it. A failed file send
-only logs a warning; the message with the Drive link is already delivered.
+The file and the notification are one message: the file with the notification
+as its caption. A caption is limited to 1024 characters, so the oldest commits
+in the list are replaced by a count until it fits. A failed file send logs a
+warning and the full text message with the Drive link is sent instead.
 Every bot used in `TELEGRAM_CHANNEL` must be logged out of the cloud Bot API
 once (`https://api.telegram.org/bot<TOKEN>/logOut`), after which it only
 works through the local server. Use a dedicated bot for build notifications

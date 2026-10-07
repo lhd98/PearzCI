@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.7.4] - 2026-10-07
+
+### Changed
+
+- With `telegramSendFile`, the APK/AAB and the build notification are now one
+  Telegram message: the file with the notification as its caption, instead of
+  a message followed by a file reply. A caption is limited to 1024 characters,
+  so the oldest commits in the list are replaced by a count until it fits. If
+  the file cannot be sent, the full text message is sent instead. Jobs without
+  `telegramSendFile`, failed builds and iOS builds are unchanged.
+
 ## [0.7.3] - 2026-10-07
 
 ### Added
