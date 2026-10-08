@@ -19,6 +19,12 @@ def readConfig(Map config) {
         // Cố định 1080x1920 (9:16) để job bớt một tham số; khung trên trang
         // tự co theo màn hình.
         resolution: config.get('webResolution', '1080x1920').toString().trim(),
+        // Package không chạy được trên web (SDK native Android/iOS): gỡ khỏi
+        // Packages/manifest.json của workspace trước khi build WebGL. Cách
+        // nhau bằng dấu phẩy/khoảng trắng/xuống dòng.
+        excludePackages: config.get(
+            'webExcludePackages', params.WEBGL_EXCLUDE_PACKAGES ?: ''
+        ).toString().split(/[\s,;]+/).collect { it.trim() }.findAll { it },
         wranglerVersion: config.get('wranglerVersion', '4').toString().trim()
     ]
 
@@ -87,8 +93,50 @@ def runUnity(String buildTarget, String method) {
     }
 }
 
-def buildUnity() {
+// Chỉ sửa file trong workspace; lần checkout sau (git checkout -f) trả
+// manifest về như trong repo, nên build Android/iOS không bị ảnh hưởng.
+def removeExcludedPackages(List packages) {
+    if (!packages) {
+        return
+    }
+    if (packages.any { !(it ==~ /[a-z0-9][a-z0-9._-]*/) }) {
+        error("WEBGL_EXCLUDE_PACKAGES contains an invalid package name: ${packages}")
+    }
+    withEnv(["PEARZ_EXCLUDE_PACKAGES=${packages.join(',')}"]) {
+        sh '''
+            set -eu
+            export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const names = process.env.PEARZ_EXCLUDE_PACKAGES.split(',');
+const dir = path.join(process.env.UNITY_PROJECT_PATH, 'Packages');
+for (const file of ['manifest.json', 'packages-lock.json']) {
+  const full = path.join(dir, file);
+  if (!fs.existsSync(full)) continue;
+  const json = JSON.parse(fs.readFileSync(full, 'utf8'));
+  for (const name of names) {
+    if (json.dependencies && name in json.dependencies) {
+      delete json.dependencies[name];
+      console.log(`WebGL: removed ${name} from Packages/${file}`);
+    }
+  }
+  fs.writeFileSync(full, JSON.stringify(json, null, 2) + '\\n');
+}
+for (const name of names) {
+  const embedded = path.join(dir, name);
+  if (fs.existsSync(embedded)) {
+    console.log(`WARNING: ${name} is embedded in Packages/; it stays in the WebGL build.`);
+  }
+}
+NODE
+        '''
+    }
+}
+
+def buildUnity(Map web) {
     def buildStartedAt = System.currentTimeMillis()
+    removeExcludedPackages(web.excludePackages)
 
     try {
         withEnv([

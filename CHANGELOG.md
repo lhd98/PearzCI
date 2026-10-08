@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.8.2] - 2026-10-08
+
+### Added
+
+- `WEBGL_EXCLUDE_PACKAGES` (or `webExcludePackages`): Unity packages removed
+  from the workspace `Packages/manifest.json` and `packages-lock.json` before
+  a WebGL build, for native SDKs that do not compile for the web. The
+  repository is untouched; the next checkout restores the manifest.
+
 ## [0.8.1] - 2026-10-07
 
 ### Fixed

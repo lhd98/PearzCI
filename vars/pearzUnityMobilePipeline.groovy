@@ -610,7 +610,7 @@ def call(Map config = [:]) {
                             env.PEARZ_SUPERSEDED = 'true'
                             error('A newer webhook build is queued; stopping before the Unity build.')
                         }
-                        pearzWebGL.buildUnity()
+                        pearzWebGL.buildUnity(web)
                     }
                 }
             }

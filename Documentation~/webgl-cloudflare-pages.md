@@ -32,6 +32,7 @@ nên reload luôn tải đúng bản mới.
 | `WEB_DOMAIN` | String | `pg05.pearz.space` | Domain người chơi mở |
 | `CLOUDFLARE_CREDENTIAL` | Credentials (Secret text) | `cf-token-duc` | Token Cloudflare của dev |
 | `CLOUDFLARE_ACCOUNT_ID` | String | để trống | Chỉ cần khi token thấy nhiều account |
+| `WEBGL_EXCLUDE_PACKAGES` | String | `com.funtap.global.sdk` | Package gỡ ra trước khi build WebGL |
 
 `APP_VERSION`, `GIT_BRANCH`, `PROJECT_REPOSITORY_URL`, `SCRIPTING_DEFINE_SYMBOLS`,
 `DEVELOPMENT_BUILD`, `IL2CPP_CODE_GENERATION`, `MANAGED_STRIPPING_LEVEL`,
@@ -85,6 +86,20 @@ Các giá trị này cũng truyền được qua `pearzUnityPipeline(...)`:
   `index.html` của Unity bị thay bằng `resources/com/pearz/ci/webgl-index.html`.
 - `build-metadata.json` và `unity-build.log` nằm ở `Builds/WebGL/`, cạnh
   thư mục `site/`, nên không bị deploy công khai.
+
+## SDK không hỗ trợ WebGL
+
+SDK native (Funtap, AppLovin, Firebase…) thường không biên dịch được cho
+WebGL. Không cần sửa SDK:
+
+1. Điền tên package vào `WEBGL_EXCLUDE_PACKAGES`, ví dụ
+   `com.funtap.global.sdk`. Trước khi build WebGL, PearzCI xoá package khỏi
+   `Packages/manifest.json` và `packages-lock.json` trong workspace (không
+   commit; lần checkout sau trả lại nguyên trạng). Package nhúng trong
+   `Packages/<tên>` không gỡ được theo cách này.
+2. Trong game, chỉ gọi SDK qua một lớp wrapper, phần gọi thật bọc trong
+   `#if !UNITY_WEBGL`, nhánh `#else` trả kết quả dummy. Code nào khác
+   `using` namespace của SDK cũng phải bọc `#if !UNITY_WEBGL`.
 
 ## Khung và độ phân giải
 
