@@ -674,7 +674,8 @@ it to Cloudflare Pages; reloading the site plays the new build. A job needs:
 - String `WEB_DOMAIN`, the address players open, for example
   `pg05.pearz.space`
 - Credentials `CLOUDFLARE_CREDENTIAL` (Secret text): the developer's Cloudflare
-  API token with `Cloudflare Pages: Edit` (and `Zone: DNS: Edit` to let
+  API token with `Cloudflare Pages: Edit` and `Account Settings: Read` (and
+  `Zone: DNS: Edit` to let
   PearzCI create the CNAME)
 - Optional String `CLOUDFLARE_ACCOUNT_ID`, only when the token sees several
   accounts

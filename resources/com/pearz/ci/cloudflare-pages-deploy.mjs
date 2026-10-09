@@ -33,6 +33,14 @@ const API = 'https://api.cloudflare.com/client/v4';
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const RESOLUTIONS = ['720x1280', '1080x1920', '1440x2560'];
 
+// Đặt trước mọi lời gọi fail(): fail ném Stop thay vì process.exit (xem fail).
+process.on('uncaughtException', (error) => {
+    if (!(error instanceof Stop)) {
+        console.error(error);
+    }
+    process.exitCode = 1;
+});
+
 const token = required('CLOUDFLARE_API_TOKEN');
 const domain = required('WEB_DOMAIN').trim().toLowerCase();
 const resultFile = required('WEB_RESULT_FILE');
@@ -66,8 +74,14 @@ function fail(message) {
     } catch {
         // Kết quả chỉ để báo lỗi gọn hơn trên Telegram.
     }
-    process.exit(1);
+    // Không gọi process.exit: trên Windows, thoát ngay khi fetch còn dở làm Node sập với
+    // "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)". Ném Stop để script tự chạy hết.
+    process.exitCode = 1;
+    throw new Stop();
 }
+
+// Dấu hiệu "đã báo lỗi xong, dừng lại"; là function để dùng được ở phần khởi tạo đầu file.
+function Stop() {}
 
 async function cf(method, apiPath, body) {
     const response = await fetch(API + apiPath, {
@@ -264,7 +278,10 @@ async function resolveAccountId() {
         return result[0].id;
     }
     if (result.length === 0) {
-        fail('The Cloudflare token cannot see any account. Give it the "Cloudflare Pages: Edit" permission.');
+        fail(
+            'The Cloudflare token cannot see any account. Add "Account: Account Settings: Read" ' +
+            'to it (next to "Cloudflare Pages: Edit"), or set CLOUDFLARE_ACCOUNT_ID.'
+        );
     }
     fail(
         'The Cloudflare token can see several accounts (' +
@@ -533,4 +550,8 @@ async function main() {
     );
 }
 
-main().catch((error) => fail(error.message));
+main().catch((error) => {
+    if (!(error instanceof Stop)) {
+        fail(error.message);
+    }
+});

@@ -64,6 +64,9 @@ Các giá trị này cũng truyền được qua `pearzUnityPipeline(...)`:
 1. (Tuỳ chọn) Mua domain và **Add a site** vào Cloudflare, đổi nameserver.
 2. Tạo API token: **My Profile → API Tokens → Create Token → Create Custom Token**
    - `Account` → `Cloudflare Pages` → `Edit`
+   - `Account` → `Account Settings` → `Read` (để PearzCI tự tìm ra tài
+     khoản; không có quyền này, hoặc quyền DNS bên dưới, thì phải điền
+     `CLOUDFLARE_ACCOUNT_ID`)
    - `Zone` → `DNS` → `Edit`, Zone Resources: chỉ zone domain của mình
      (bỏ qua nếu tự tạo CNAME bằng tay)
    - Account Resources: chỉ tài khoản của mình
@@ -168,8 +171,11 @@ node Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs --domain pg07
 (PowerShell: thay đường dẫn bằng
 `(Get-Item Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs)`.)
 
-- Cần biến môi trường `CLOUDFLARE_API_TOKEN` (quyền `Cloudflare Pages: Edit`)
-  và Node.js 18+.
+- Cần Node.js 18+ và biến môi trường `CLOUDFLARE_API_TOKEN`: một token riêng
+  cho máy dev với `Account → Cloudflare Pages → Edit` và
+  `Account → Account Settings → Read`. Không cần quyền DNS.
+- Lần publish đầu mất thêm thời gian tải wrangler; sau khi lệnh báo xong, vài
+  giây sau domain mới trả bản mới.
 - `--domain` bỏ được nếu `WebTool/pearz-tool.json` có `domain`.
 - `--watch`: đẩy lại mỗi lần lưu file trong `WebTool/`. GD reload là thấy cả
   bản đang sửa dở, nên chỉ bật khi chấp nhận điều đó.
@@ -273,7 +279,7 @@ commit vào repo game.
 
 | Lỗi | Cách xử lý |
 |---|---|
-| `token cannot see any account` | Token thiếu quyền `Cloudflare Pages: Edit` |
+| `token cannot see any account` | Thêm `Account → Account Settings → Read` vào token (chỉ `Cloudflare Pages: Edit` thì deploy được nhưng không liệt kê được tài khoản), hoặc điền `CLOUDFLARE_ACCOUNT_ID` |
 | `token can see several accounts` | Giới hạn token còn một account hoặc điền `CLOUDFLARE_ACCOUNT_ID` |
 | `could not create the DNS record` | Thêm quyền `Zone: DNS: Edit` hoặc tạo CNAME bằng tay theo log |
 | `WebGL Build Support is not installed` | Cài module WebGL cho đúng version Unity |

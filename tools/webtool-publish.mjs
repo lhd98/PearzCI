@@ -8,7 +8,8 @@
 // --domain   domain của dự án; bỏ trống thì đọc "domain" trong <tool-dir>/pearz-tool.json
 // --watch    đẩy lại mỗi khi file trong thư mục tool đổi (Ctrl+C để dừng)
 //
-// Cần biến môi trường CLOUDFLARE_API_TOKEN (quyền Cloudflare Pages: Edit) và
+// Cần biến môi trường CLOUDFLARE_API_TOKEN (quyền Account: Cloudflare Pages: Edit
+// và Account: Account Settings: Read) và
 // domain đã được job WebGL của Jenkins deploy ít nhất một lần: lệnh này chỉ
 // thay trang khung + tool/, không tạo project, không đụng DNS hay bản build.
 
@@ -63,7 +64,10 @@ if (!/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain)) {
     stop(`The domain must look like pg07.pearz.space (got '${domain}').`);
 }
 if (!(process.env.CLOUDFLARE_API_TOKEN || '').trim()) {
-    stop('Set CLOUDFLARE_API_TOKEN to a Cloudflare API token with "Cloudflare Pages: Edit".');
+    stop(
+        'Set CLOUDFLARE_API_TOKEN to a Cloudflare API token with ' +
+        '"Account: Cloudflare Pages: Edit" and "Account: Account Settings: Read".'
+    );
 }
 
 // Tiêu đề trang giống bản Jenkins deploy: lấy productName của project Unity.

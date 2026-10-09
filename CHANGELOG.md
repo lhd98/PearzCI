@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.10.1] - 2026-10-09
+
+### Fixed
+
+- `cloudflare-pages-deploy.mjs` no longer crashes Node on Windows with
+  `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` when it stops on an
+  error after a Cloudflare request.
+- The token instructions now ask for `Account Settings: Read` next to
+  `Cloudflare Pages: Edit`. A token with only the Pages permission can deploy
+  but cannot list its account, so the deploy stopped with "cannot see any
+  account"; the message now says which permission to add.
+
 ## [0.10.0] - 2026-10-09
 
 ### Changed
