@@ -681,7 +681,14 @@ it to Cloudflare Pages; reloading the site plays the new build. A job needs:
 
 The Cloudflare account and the Pages project are found from the token and the
 domain; a domain no project uses yet gets a new project, custom domain and
-CNAME. The agent needs Node.js 18+ and Unity's WebGL Build Support module. See
+CNAME. The agent needs Node.js 18+ and Unity's WebGL Build Support module.
+
+A Unity project that has a `WebTool/` folder with `panel.html` (and optionally
+`tool.js`, `tool.css`) is deployed as a level tool for game designers: on a
+landscape screen the game frame sits on the left and the game's panel fills
+the rest; phones still get the game alone. `tool.js` talks to the player
+through `window.pearzTool` (`send`, `saveFile`, `openFile`, `on`/`emit`).
+`webToolDir` changes the folder. See
 [Documentation~/webgl-cloudflare-pages.md](Documentation~/webgl-cloudflare-pages.md).
 
 ## iOS Jenkins pipeline

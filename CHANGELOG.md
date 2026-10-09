@@ -2,6 +2,21 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.9.0] - 2026-10-09
+
+### Added
+
+- Web-tool layout for WebGL builds. A Unity project that has
+  `WebTool/panel.html` (`webToolDir` to change the folder) is deployed with
+  the game frame on the left and the game's panel on the rest of a landscape
+  screen; `tool.css` and `tool.js` are linked when present and the whole
+  folder is published under `tool/`. Portrait or narrow screens hide the
+  panel. Projects without the folder get the 9:16 page as before.
+- `window.pearzTool` on the WebGL page, for a game's `tool.js`: `ready`,
+  `send` (calls a GameObject method through `SendMessage`), `saveFile`,
+  `openFile`, and `on`/`emit` for messages from the game. Payloads are passed
+  through untouched.
+
 ## [0.8.2] - 2026-10-08
 
 ### Added
