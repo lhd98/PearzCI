@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.11.0] - 2026-10-09
+
+### Added
+
+- Level store for a game's web-tool. With `"levels"` in
+  `WebTool/pearz-tool.json`, the tool site gets an API at `/api/...` backed by
+  a D1 database (created and bound on the first deploy): levels are opaque
+  blobs with a revision, an order, an enabled flag, a small JSON `meta` and a
+  history. Reads are public (`/api/levels`, `/api/levels/<id>`,
+  `/api/bundle`); writes go through `/api/edit/` behind Cloudflare Access and
+  the API verifies the Access token itself. Saving against a stale revision is
+  refused instead of overwriting.
+- `pearzTool.levels` on the frame page: `list`, `get`, `save`, `update`,
+  `remove`, `reorder`, `history`, `restore`, `me`, `login`.
+
+Projects without `"levels"` are deployed exactly as before.
+
 ## [0.10.1] - 2026-10-09
 
 ### Fixed

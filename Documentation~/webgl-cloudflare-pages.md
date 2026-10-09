@@ -147,7 +147,7 @@ import và không sinh `.meta`.
 | `panel.html` | có | Nội dung panel. Chỉ là fragment: không có `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` |
 | `tool.js` | không | Logic panel, nạp sau khi trang dựng xong |
 | `tool.css` | không | Giao diện panel |
-| `pearz-tool.json` | không | `{ "domain": "pg07.pearz.space" }` cho `webtool-publish.mjs` |
+| `pearz-tool.json` | không | `domain` cho `webtool-publish.mjs`; `levels` bật [kho level](#kho-level) |
 | file khác | không | Ảnh, font…; copy nguyên thư mục con |
 
 PearzCI nhận diện tool bằng `WebTool/panel.html`. Đổi thư mục bằng
@@ -265,8 +265,106 @@ public sealed class LevelToolBridge : IDisposable
 }
 ```
 
-Level GD lưu là file trên máy GD; muốn vào bản game chính thức thì vẫn phải
-commit vào repo game.
+`saveFile` / `openFile` lưu level thành file trên máy GD. Muốn level nằm trên
+server, dùng chung được và có lịch sử thì dùng [kho level](#kho-level).
+
+## Kho level
+
+Kho lưu level của dự án ngay trên domain của nó (`pgXX.pearz.space/api/...`),
+để GD sửa/thêm/bớt level trên panel và thấy ngay, không deploy gì. Mỗi dự án
+một kho riêng. Kho **không hiểu nội dung level**: mỗi level là một khối dữ
+liệu có tên (JSON hay nhị phân, tối đa 1,5 MB), kèm `revision`, thứ tự,
+bật/tắt và `meta` (một giá trị JSON nhỏ do game tự quy ước, ví dụ độ khó, để
+danh mục hiện được mà không phải tải cả level).
+
+### Bật kho
+
+Thêm `levels` vào `WebTool/pearz-tool.json`:
+
+```json
+{
+  "domain": "pg07.pearz.space",
+  "levels": {
+    "access": { "team": "<team Zero Trust>", "aud": "<AUD của ứng dụng Access>" },
+    "history": 20
+  }
+}
+```
+
+- Lần deploy đầu sau khi bật, PearzCI tạo database D1 `<project>-levels` và
+  gắn vào project Pages của domain. Lần đó token cần thêm
+  `Account → D1 → Edit`; các lần sau (kể cả `webtool-publish.mjs`) không cần.
+- `history`: số bản cũ giữ lại cho mỗi level (mặc định 20).
+- Thiếu `access` thì kho chỉ đọc được; mọi lệnh ghi trả lỗi `unconfigured`.
+
+### Đăng nhập để ghi (Cloudflare Access)
+
+Đọc thì công khai (game cần đọc); ghi thì phải đăng nhập bằng email + mã OTP.
+Cấu hình một lần cho mỗi dự án, trong dashboard Cloudflare **Zero Trust**:
+
+1. **Access → Applications → Add an application → Self-hosted**.
+2. Application domain: `pg07.pearz.space`, path: `api/edit`. Chỉ đường dẫn này
+   nằm sau Access; phần còn lại của trang vẫn mở công khai.
+3. Thêm policy **Allow**, điều kiện **Emails**: danh sách email được sửa level.
+   Phương thức đăng nhập: **One-time PIN**.
+4. Lưu, rồi chép **Application Audience (AUD) Tag** của ứng dụng vào `aud`.
+5. `team` là tên team Zero Trust (phần đứng trước `.cloudflareaccess.com`).
+
+Hai giá trị này không phải bí mật. API tự kiểm tra chữ ký đăng nhập của Access
+ở mọi lệnh ghi, nên địa chỉ `*.pages.dev` của project (không qua Access) không
+ghi được.
+
+### pearzTool.levels
+
+Có sẵn trên trang khung cho `tool.js`. Mọi hàm trả Promise; lỗi ném ra có
+`.code`: `login` (chưa đăng nhập), `conflict` (người khác đã sửa, `.revision`
+là bản hiện tại), `notfound`, `toolarge`, `unconfigured`, `unavailable` (dự
+án chưa bật kho).
+
+| Hàm | Chức năng |
+|---|---|
+| `list({ editing })` | `{ version, levels: [{ id, revision, enabled, meta, size, contentType, updatedAt }] }` theo thứ tự chơi. `editing: true` (cần đăng nhập) thêm `updatedBy` và level đã xoá |
+| `get(id, { as, revision })` | `{ id, revision, meta, contentType, data }`. `as`: `"text"` (mặc định), `"json"`, `"bytes"` (`Uint8Array`). `revision` lấy một bản cũ |
+| `save(id, data, { revision, meta, contentType })` | Lưu; trả `{ id, revision }`. `revision` là bản đang sửa, bỏ trống là tạo mới. `data`: chuỗi, object (ghi thành JSON), `ArrayBuffer`/TypedArray/`Blob` |
+| `update(id, { enabled, meta })` | Đổi bật/tắt hoặc meta, không tạo revision |
+| `remove(id, revision)` | Xoá mềm; lịch sử còn, `restore` lấy lại được |
+| `reorder(ids)` | Xếp lại thứ tự chơi |
+| `history(id)` | `{ revisions: [{ revision, size, savedAt, savedBy }] }` |
+| `restore(id, revision)` | Tạo revision mới mang nội dung bản cũ |
+| `me()` | `{ email }` hoặc `null` |
+| `login()` | Mở cửa sổ đăng nhập; gọi từ một cú click. Trả `{ email }` hoặc `null` |
+
+Hai người cùng sửa một level: người lưu sau nhận `conflict` thay vì ghi đè.
+Nạp lại (`get`) rồi quyết định lưu đè bằng `revision` mới hay bỏ.
+
+```js
+async function saveLevel(id, level, revision) {
+    try {
+        return await pearzTool.levels.save(id, level, { revision, meta: { difficulty: level.difficulty } });
+    } catch (error) {
+        if (error.code !== 'login') throw error;
+        if (!await pearzTool.levels.login()) throw error;   // gọi trong lúc xử lý cú click Lưu
+        return pearzTool.levels.save(id, level, { revision, meta: { difficulty: level.difficulty } });
+    }
+}
+
+// Chơi thử: lấy từ kho rồi đưa thẳng vào gameview.
+const level = await pearzTool.levels.get('level-012');
+pearzTool.post('playLevel', level.data);
+```
+
+### API đọc cho game và CI
+
+Công khai, CORS mở, luôn trả bản mới nhất:
+
+| Đường dẫn | Trả về |
+|---|---|
+| `GET /api/levels` | Danh mục như `list()`. `version` tăng ở mọi thay đổi (kể cả đổi thứ tự); gửi `If-None-Match` với `ETag` cũ để nhận `304` khi chưa có gì đổi |
+| `GET /api/levels/<id>` | Nội dung thô. `ETag` / `X-Pearz-Revision` là revision, `X-Pearz-Meta` là meta (URL-encoded). `?revision=N` lấy bản cũ |
+| `GET /api/bundle?after=<id>&limit=N` | Nhiều level một lần: `{ levels: [{ id, revision, enabled, meta, contentType, data }], next }`, `data` là base64. Gọi tiếp với `after=<next>` tới khi `next` là `null` |
+
+Level trong kho chưa tự vào bản build: game (hoặc một bước build) phải kéo về
+qua các đường dẫn trên.
 
 ## Giới hạn
 
@@ -274,6 +372,8 @@ commit vào repo game.
   `Deploy to Cloudflare Pages` dừng và nêu tên file; cần giảm dung lượng build
   (texture, audio, Addressables).
 - Tối đa 20.000 file mỗi deployment.
+- Kho level: mỗi level tối đa 1,5 MB, `meta` tối đa 4 KB; gói D1 miễn phí cho
+  500 MB mỗi database (tính cả lịch sử).
 
 ## Xử lý lỗi thường gặp
 
@@ -289,4 +389,8 @@ commit vào repo game.
 | Bấm nút trên panel game không phản ứng | Channel trong `pearzTool.post` phải khớp `PearzTool.On`; với `pearzTool.send` thì tên GameObject/method phải khớp và GameObject đang active. Xem Console của trình duyệt (chọn đúng khung của game) |
 | `Pages project '…-game' does not exist yet` khi chạy `webtool-publish.mjs` | Domain chưa được job WebGL deploy bằng bản PearzCI có hai site; chạy job một lần |
 | Khung game trắng ngay sau lần build đầu | Địa chỉ `*.pages.dev` của project `-game` mới tạo cần vài phút mới truy cập được |
+| `Could not set up the level store database` | Lần deploy đầu của kho level cần token có `Account → D1 → Edit` |
+| `pearzTool.levels` ném `unavailable` | Dự án chưa có `levels` trong `pearz-tool.json`, hoặc chưa deploy lại sau khi thêm |
+| `pearzTool.levels` ném `unconfigured` khi lưu | Thiếu `levels.access` (`team`, `aud`) |
+| Đăng nhập xong vẫn bị `login` | Ứng dụng Access phải đúng domain và path `api/edit`; `aud` phải là AUD của chính ứng dụng đó; email phải nằm trong policy |
 | Trang mở được nhưng domain báo SSL đang chờ | Lần đầu gắn domain Cloudflare cần vài phút cấp chứng chỉ |

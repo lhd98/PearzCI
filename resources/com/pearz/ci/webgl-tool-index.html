@@ -96,6 +96,149 @@
   // Trang không có tool.js thì không ai bắt lỗi của ready.
   pearzTool.ready.catch(function () {});
 
+  // Kho level của dự án (webtool-worker.mjs, bật bằng "levels" trong WebTool/pearz-tool.json). Kho không hiểu nội
+  // dung level: game tự quy ước dữ liệu và "meta" (giá trị JSON nhỏ hiện trong danh mục). Lỗi ném ra có .code:
+  // "login" (chưa đăng nhập), "conflict" (người khác đã sửa, .revision là bản hiện tại), "notfound", "unavailable"…
+  function levelError(code, message, extra) {
+    var error = new Error(message || code);
+    error.code = code;
+    if (extra && extra.revision !== undefined) error.revision = extra.revision;
+    return error;
+  }
+  function levelRequest(method, path, headers, body) {
+    return fetch(path, {
+      method: method,
+      // X-Pearz-Tool là điều kiện API đặt ra cho mọi lệnh ghi; redirect "manual" để nhận ra trang đăng nhập
+      // của Cloudflare Access thay vì đi theo nó.
+      headers: Object.assign({ "X-Pearz-Tool": "1" }, headers),
+      body: body,
+      cache: "no-store",
+      credentials: "same-origin",
+      redirect: "manual"
+    }).then(function (response) {
+      if (response.type === "opaqueredirect") throw levelError("login", "Sign in to edit levels.");
+      if (response.ok) return response;
+      return response.text().then(function (text) {
+        var info = {};
+        try { info = JSON.parse(text); } catch (error) { /* trang lỗi không phải JSON */ }
+        throw levelError(info.error || (response.status === 404 ? "unavailable" : "http" + response.status),
+          info.message || "The level store answered " + response.status + ".", info);
+      });
+    });
+  }
+  function levelBody(data, contentType) {
+    if (typeof data === "string") return { body: data, type: contentType || "text/plain; charset=utf-8" };
+    if (data instanceof Blob || data instanceof ArrayBuffer || ArrayBuffer.isView(data))
+      return { body: data, type: contentType || data.type || "application/octet-stream" };
+    return { body: JSON.stringify(data), type: contentType || "application/json" };
+  }
+  function levelPath(id) { return "/api/edit/levels/" + encodeURIComponent(id); }
+  function levelJson(response) { return response.json(); }
+  pearzTool.levels = {
+    // { version, levels: [{ id, revision, enabled, meta, size, contentType, updatedAt }] } theo thứ tự chơi.
+    // editing: true (cần đăng nhập) thêm updatedBy và cả level đã xoá (deleted: true).
+    list: function (options) {
+      return levelRequest("GET", options && options.editing ? "/api/edit/levels" : "/api/levels").then(levelJson);
+    },
+    // { id, revision, meta, contentType, data }. options.as: "text" (mặc định) | "json" | "bytes" (Uint8Array);
+    // options.revision lấy một bản cũ trong lịch sử.
+    get: function (id, options) {
+      options = options || {};
+      var query = options.revision ? "?revision=" + encodeURIComponent(options.revision) : "";
+      return levelRequest("GET", "/api/levels/" + encodeURIComponent(id) + query).then(function (response) {
+        var read = options.as === "json" ? response.json()
+          : options.as === "bytes" ? response.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); })
+          : response.text();
+        return read.then(function (data) {
+          var meta = null;
+          try { meta = JSON.parse(decodeURIComponent(response.headers.get("X-Pearz-Meta") || "null")); } catch (error) { /* giữ null */ }
+          return {
+            id: id,
+            revision: Number(response.headers.get("X-Pearz-Revision")),
+            meta: meta,
+            contentType: response.headers.get("Content-Type"),
+            data: data
+          };
+        });
+      });
+    },
+    // Lưu một level; trả { id, revision }. options.revision là bản đang sửa (bỏ trống = tạo mới); kho từ chối với
+    // code "conflict" nếu level đã bị người khác đổi. data: chuỗi, object (ghi thành JSON), ArrayBuffer/TypedArray/Blob.
+    // options.meta: giá trị JSON cho danh mục; bỏ trống khi sửa thì giữ meta cũ.
+    save: function (id, data, options) {
+      options = options || {};
+      var content = levelBody(data, options.contentType);
+      var headers = { "Content-Type": content.type };
+      if (options.revision) headers["If-Match"] = '"' + options.revision + '"';
+      else headers["If-None-Match"] = "*";
+      if (options.meta !== undefined) headers["X-Pearz-Meta"] = encodeURIComponent(JSON.stringify(options.meta));
+      return levelRequest("PUT", levelPath(id), headers, content.body).then(levelJson);
+    },
+    // Đổi enabled / meta mà không tạo revision mới: changes = { enabled?, meta? }.
+    update: function (id, changes) {
+      return levelRequest("PATCH", levelPath(id), { "Content-Type": "application/json" }, JSON.stringify(changes)).then(levelJson);
+    },
+    // Xoá mềm (lịch sử còn, restore lấy lại được). revision là bản đang thấy.
+    remove: function (id, revision) {
+      return levelRequest("DELETE", levelPath(id), { "If-Match": '"' + revision + '"' }).then(levelJson);
+    },
+    // Xếp lại thứ tự chơi theo mảng id.
+    reorder: function (ids) {
+      return levelRequest("PUT", "/api/edit/order", { "Content-Type": "application/json" }, JSON.stringify({ ids: ids })).then(levelJson);
+    },
+    // { id, revisions: [{ revision, size, savedAt, savedBy }] }, mới nhất trước.
+    history: function (id) {
+      return levelRequest("GET", levelPath(id) + "/revisions").then(levelJson);
+    },
+    // Tạo revision mới mang nội dung của một bản cũ; cũng lấy lại level đã xoá.
+    restore: function (id, revision) {
+      return levelRequest("POST", levelPath(id) + "/restore", { "Content-Type": "application/json" },
+        JSON.stringify({ revision: revision })).then(levelJson);
+    },
+    // { email } của người đang đăng nhập, hoặc null.
+    me: function () {
+      return levelRequest("GET", "/api/edit/me").then(levelJson, function (error) {
+        if (error.code === "login") return null;
+        throw error;
+      });
+    },
+    // Mở cửa sổ đăng nhập Cloudflare Access; gọi từ một cú click (trình duyệt chặn popup tự mở). Xong trả
+    // { email }, hoặc null nếu không đăng nhập (đóng cửa sổ giữa chừng thì có thể mất tới hai phút mới trả null).
+    // Popup bị chặn thì chuyển cả trang sang đăng nhập rồi quay lại.
+    login: function () {
+      var popup = window.open("/api/edit/login", "pearz-login", "width=520,height=680");
+      if (!popup) {
+        location.href = "/api/edit/login?return=" + encodeURIComponent(location.pathname + location.search);
+        return new Promise(function () {});
+      }
+      return new Promise(function (resolve) {
+        var channel = null, giveUp = null;
+        try { channel = new BroadcastChannel("pearz-login"); } catch (error) { /* trình duyệt cũ: còn postMessage */ }
+        function isDone(data) { return data && data.pearzTool === 1 && data.type === "login"; }
+        function onMessage(event) { if (event.origin === location.origin && isDone(event.data)) finish(); }
+        function finish(result) {
+          clearInterval(timer);
+          clearTimeout(giveUp);
+          window.removeEventListener("message", onMessage);
+          if (channel) channel.close();
+          resolve(result === undefined ? pearzTool.levels.me() : result);
+        }
+        // Trang đăng nhập của Access có thể làm popup trông như đã đóng dù người dùng còn đang nhập mã: thấy
+        // "đã đóng" mà chưa đăng nhập thì vẫn chờ tin báo xong thêm một lúc rồi mới coi là huỷ.
+        var timer = setInterval(function () {
+          if (!popup.closed) return;
+          clearInterval(timer);
+          pearzTool.levels.me().then(function (user) {
+            if (user) finish(user);
+            else giveUp = setTimeout(function () { finish(null); }, 120000);
+          }, function () { finish(null); });
+        }, 500);
+        window.addEventListener("message", onMessage);
+        if (channel) channel.onmessage = function (event) { if (isDone(event.data)) finish(); };
+      });
+    }
+  };
+
   window.addEventListener("message", function (event) {
     var message = event.data;
     if (event.source !== gameFrame.contentWindow || event.origin !== gameOrigin) return;

@@ -691,7 +691,9 @@ the rest; phones still get the game alone. The build and the tool are two
 Pages projects, so `tools/webtool-publish.mjs` republishes the tool from a
 developer machine without a Unity build. `tool.js` talks to the player
 through `window.pearzTool` (`send`, `post`, `saveFile`, `openFile`,
-`on`/`emit`), and the game answers through `Pearz.CI.PearzTool`.
+`on`/`emit`), and the game answers through `Pearz.CI.PearzTool`. An optional
+per-project level store (`pearzTool.levels`, Cloudflare D1 behind Cloudflare
+Access) lets designers save levels on the project's own domain.
 `webToolDir` changes the folder. See
 [Documentation~/webgl-cloudflare-pages.md](Documentation~/webgl-cloudflare-pages.md).
 

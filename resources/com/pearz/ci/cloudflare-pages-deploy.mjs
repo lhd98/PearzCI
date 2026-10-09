@@ -17,6 +17,8 @@
 //   WEB_TOOL_DIR           tuỳ chọn; thư mục web-tool của game (có panel.html)
 //   WEB_TOOL_TEMPLATE      file webgl-tool-index.html của PearzCI (trang khung); cần khi có WEB_TOOL_DIR
 //   WEB_TOOL_SITE_DIR      thư mục tạm để dựng site tool; cần khi có WEB_TOOL_DIR
+//   WEB_TOOL_WORKER        file webtool-worker.mjs của PearzCI (kho level); cần khi
+//                          <WEB_TOOL_DIR>/pearz-tool.json có "levels"
 //   WEB_RESULT_FILE        file ghi kết quả KEY=VALUE cho Jenkins
 //   PEARZ_PRODUCT_NAME, BUILD_VERSION, GIT_COMMIT_SHORT, GIT_COMMIT_MESSAGE
 //   WRANGLER_VERSION       mặc định 4
@@ -151,13 +153,52 @@ function readPanel() {
     return panel;
 }
 
+// <WEB_TOOL_DIR>/pearz-tool.json, không có thì {}. "levels" bật kho level của dự án:
+//   { "domain": "pg07.pearz.space",
+//     "levels": { "access": { "team": "<team Zero Trust>", "aud": "<AUD của ứng dụng Access>" }, "history": 20 } }
+// Thiếu "access" thì kho chỉ đọc được. Trả về cấu hình ghi vào worker, hoặc null khi không dùng kho.
+function readStoreConfig() {
+    const configFile = path.join(toolDir, 'pearz-tool.json');
+    if (!fs.existsSync(configFile)) {
+        return null;
+    }
+    let config;
+    try {
+        config = JSON.parse(fs.readFileSync(configFile, 'utf8').replace(/^\uFEFF/, ''));
+    } catch (error) {
+        fail(`Cannot read ${configFile}: ${error.message}`);
+    }
+    const configured = String(config.domain || '').trim().toLowerCase();
+    if (configured && configured !== domain) {
+        console.log(`WARNING: pearz-tool.json names ${configured} but this deploy targets ${domain}.`);
+    }
+    const levels = config.levels;
+    if (!levels) {
+        return null;
+    }
+    if (typeof levels !== 'object') {
+        fail(`"levels" in ${configFile} must be an object, for example { "access": { "team": "...", "aud": "..." } }.`);
+    }
+    const access = levels.access;
+    if (access && !(typeof access.team === 'string' && access.team.trim() &&
+        typeof access.aud === 'string' && access.aud.trim())) {
+        fail(`"levels.access" in ${configFile} needs both "team" and "aud".`);
+    }
+    return {
+        access: access ? { team: access.team.trim(), aud: access.aud.trim() } : null,
+        history: Number.isInteger(levels.history) && levels.history > 0 ? levels.history : 20
+    };
+}
+
 // Site tool: trang khung (iframe trỏ sang gameUrl + panel của game) và cả thư mục web-tool tại tool/.
 // panel.html nằm thẳng trong index.html nên đường dẫn tương đối trong đó tính từ gốc site (tool/anh.png).
-function writeToolSite(gameUrl) {
+// store khác null thì kèm _worker.js phục vụ /api/* (kho level); _routes.json giữ cho file tĩnh không đi qua worker.
+function writeToolSite(gameUrl, store) {
     const toolSiteDir = required('WEB_TOOL_SITE_DIR');
+    const ours = ['index.html', 'tool', '_worker.js', '_routes.json'];
     // Thư mục này bị xoá rồi dựng lại: chỉ xoá khi nó đúng là site tool của lần trước.
     if (fs.existsSync(toolSiteDir) &&
-        fs.readdirSync(toolSiteDir).some((name) => name !== 'index.html' && name !== 'tool')) {
+        fs.readdirSync(toolSiteDir).some((name) => !ours.includes(name))) {
         fail(`WEB_TOOL_SITE_DIR holds other files and will not be overwritten: ${toolSiteDir}`);
     }
     fs.rmSync(toolSiteDir, { recursive: true, force: true });
@@ -184,9 +225,16 @@ function writeToolSite(gameUrl) {
             ? `<script src="tool/tool.js?v=${toolId}"></script>`
             : ''
     }, path.join(toolSiteDir, 'index.html'));
+    if (store) {
+        renderTemplate('WEB_TOOL_WORKER', { STORE_CONFIG_JSON: JSON.stringify(store) },
+            path.join(toolSiteDir, '_worker.js'));
+        fs.writeFileSync(path.join(toolSiteDir, '_routes.json'),
+            JSON.stringify({ version: 1, include: ['/api/*'], exclude: [] }));
+    }
     console.log(
         `Web-tool site written from ${toolDir} (game ${gameUrl}, ` +
-        `tool.css: ${has('tool.css') ? 'yes' : 'no'}, tool.js: ${has('tool.js') ? 'yes' : 'no'}).`
+        `tool.css: ${has('tool.css') ? 'yes' : 'no'}, tool.js: ${has('tool.js') ? 'yes' : 'no'}, ` +
+        `level store: ${store ? (store.access ? 'yes' : 'read-only, no "access"') : 'no'}).`
     );
     return toolSiteDir;
 }
@@ -352,6 +400,37 @@ async function resolveProject(accountId, projects) {
 
 const pagesHost = (project) => project.subdomain || `${project.name}.pages.dev`;
 
+// Kho level cần một database D1 gắn vào project tool dưới tên DB. Làm một lần cho mỗi dự án: đã gắn rồi
+// thì không gọi gì tới D1, nên token chỉ có quyền Pages (máy dev) vẫn deploy lại tool được.
+async function ensureLevelStore(accountId, project) {
+    const projectPath = `/accounts/${accountId}/pages/projects/${project.name}`;
+    const { result: current } = await cf('GET', projectPath);
+    const bound = current.deployment_configs?.production?.d1_databases?.DB?.id;
+    if (bound) {
+        console.log(`Level store: D1 database ${bound} is bound to '${project.name}'.`);
+        return;
+    }
+    const name = `${project.name}-levels`;
+    let database;
+    try {
+        const { result } = await cf('GET', `/accounts/${accountId}/d1/database?name=${encodeURIComponent(name)}`);
+        database = result.find((candidate) => candidate.name === name);
+        if (!database) {
+            console.log(`Level store: creating D1 database '${name}'.`);
+            database = (await cf('POST', `/accounts/${accountId}/d1/database`, { name })).result;
+        }
+    } catch (error) {
+        fail(
+            `Could not set up the level store database (${error.message}). The first deploy of a ` +
+            'level store needs a token with "Account: D1: Edit"; later deploys do not.'
+        );
+    }
+    console.log(`Level store: binding D1 database '${name}' to '${project.name}' as DB.`);
+    await cf('PATCH', projectPath, {
+        deployment_configs: { production: { d1_databases: { DB: { id: database.uuid } } } }
+    });
+}
+
 // Project chứa bản build của game có web-tool: tên theo project gắn domain, không gắn domain riêng mà dùng
 // địa chỉ *.pages.dev Cloudflare cấp sẵn.
 async function resolveGameProject(accountId, projects, shell) {
@@ -506,10 +585,14 @@ async function main() {
     if (toolOnly && !toolDir) {
         fail('WEB_DEPLOY_PARTS=tool needs WEB_TOOL_DIR.');
     }
+    const store = toolDir ? readStoreConfig() : null;
     if (toolDir) {
         readPanel();
         required('WEB_TOOL_TEMPLATE');
         required('WEB_TOOL_SITE_DIR');
+    }
+    if (store) {
+        required('WEB_TOOL_WORKER');
     }
     if (!toolOnly) {
         findBuildFiles();
@@ -533,7 +616,10 @@ async function main() {
             writeGameIndexHtml([...new Set([url, `https://${pagesHost(project)}`])]);
             deploy(accountId, game, siteDir);
         }
-        const toolSiteDir = writeToolSite(gameUrl);
+        if (store) {
+            await ensureLevelStore(accountId, project);
+        }
+        const toolSiteDir = writeToolSite(gameUrl, store);
         checkFileSizes(toolSiteDir);
         deploy(accountId, project, toolSiteDir);
         results.push(`WEB_GAME_URL=${gameUrl}`, `WEB_GAME_PROJECT=${game.name}`);

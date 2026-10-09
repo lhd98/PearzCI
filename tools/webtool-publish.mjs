@@ -94,6 +94,7 @@ function publish() {
             WEB_DOMAIN: domain,
             WEB_TOOL_DIR: toolDir,
             WEB_TOOL_TEMPLATE: path.join(resources, 'webgl-tool-index.html'),
+            WEB_TOOL_WORKER: path.join(resources, 'webtool-worker.mjs'),
             WEB_TOOL_SITE_DIR: path.join(workDir, 'site'),
             WEB_RESULT_FILE: path.join(workDir, 'result.txt'),
             PEARZ_PRODUCT_NAME: process.env.PEARZ_PRODUCT_NAME || readProductName() || domain

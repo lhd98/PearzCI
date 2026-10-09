@@ -213,6 +213,11 @@ def deploy(Map web) {
         encoding: 'UTF-8',
         text: libraryResource('com/pearz/ci/webgl-tool-index.html')
     )
+    writeFile(
+        file: 'webtool-worker.mjs',
+        encoding: 'UTF-8',
+        text: libraryResource('com/pearz/ci/webtool-worker.mjs')
+    )
 
     def toolDir = resolveToolDir(web)
     def status
@@ -227,6 +232,7 @@ def deploy(Map web) {
             "WEB_TOOL_DIR=${toolDir}",
             "WEB_INDEX_TEMPLATE=${env.WORKSPACE}/webgl-index.html",
             "WEB_TOOL_TEMPLATE=${env.WORKSPACE}/webgl-tool-index.html",
+            "WEB_TOOL_WORKER=${env.WORKSPACE}/webtool-worker.mjs",
             // Cạnh thư mục site, nên được dọn cùng Builds/ sau mỗi lần chạy.
             "WEB_TOOL_SITE_DIR=${env.WORKSPACE}/Builds/WebGL/tool-site",
             "WEB_RESULT_FILE=${env.WORKSPACE}/web-deploy-result.txt",
