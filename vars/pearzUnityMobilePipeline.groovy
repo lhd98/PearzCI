@@ -308,6 +308,16 @@ def call(Map config = [:]) {
                         env.UNITY_PROJECT_PATH = unityProjectPath
                             ? "${env.WORKSPACE}/${unityProjectPath}"
                             : env.WORKSPACE
+                        // Project cũ đặt Unity ở gốc repository: nếu thư mục
+                        // con được cấu hình không có project thì dùng gốc.
+                        if (
+                            unityProjectPath &&
+                            !fileExists("${env.UNITY_PROJECT_PATH}/ProjectSettings/ProjectVersion.txt") &&
+                            fileExists("${env.WORKSPACE}/ProjectSettings/ProjectVersion.txt")
+                        ) {
+                            echo "No Unity project in '${unityProjectPath}'; using the repository root."
+                            env.UNITY_PROJECT_PATH = env.WORKSPACE
+                        }
                         env.UNITY_VERSION = readUnityEditorVersion(
                             env.UNITY_PROJECT_PATH
                         )

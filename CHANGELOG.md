@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.9.1] - 2026-10-09
+
+### Fixed
+
+- When `unityProjectPath` (or `UNITY_PROJECT_PATH`) points at a folder with no
+  Unity project but the repository root has one, the build uses the root
+  instead of failing. Older projects with Unity at the root no longer need
+  their job config changed.
+
 ## [0.9.0] - 2026-10-09
 
 ### Added
