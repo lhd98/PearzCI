@@ -25,6 +25,11 @@ def readConfig(Map config) {
         excludePackages: config.get(
             'webExcludePackages', params.WEBGL_EXCLUDE_PACKAGES ?: ''
         ).toString().split(/[\s,;]+/).collect { it.trim() }.findAll { it },
+        // Thư mục web-tool của game, tính từ thư mục project Unity. Xem
+        // resolveToolDir.
+        toolDir: config.get('webToolDir', 'WebTool').toString().trim()
+            .replaceAll(/^\/+|\/+$/, ''),
+        toolDirConfigured: config.containsKey('webToolDir'),
         wranglerVersion: config.get('wranglerVersion', '4').toString().trim()
     ]
 
@@ -44,7 +49,37 @@ def readConfig(Map config) {
         )
     }
 
+    if (web.toolDir &&
+        (web.toolDir.contains('..') ||
+            !(web.toolDir ==~ /[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*/))) {
+        error(
+            'webToolDir must be a folder inside the Unity project, such as ' +
+            "WebTool (got '${web.toolDir}')."
+        )
+    }
+
     return web
+}
+
+// Game có thư mục web-tool (nhận diện bằng panel.html) thì trang deploy ra
+// layout tool: khung game căn trái, panel của game bên phải. Không có thì giữ
+// khung 9:16 như cũ. Trả về đường dẫn tuyệt đối, hoặc '' khi không dùng.
+// Cần workspace đã checkout nên không gọi được trong readConfig.
+def resolveToolDir(Map web) {
+    if (!web.toolDir) {
+        return ''
+    }
+    def toolDir = "${env.UNITY_PROJECT_PATH}/${web.toolDir}"
+    if (fileExists("${toolDir}/panel.html")) {
+        echo "WebGL: web-tool panel found in ${web.toolDir}."
+        return toolDir
+    }
+    // Thư mục mặc định vắng mặt là chuyện thường; thư mục tự khai mà thiếu
+    // thì là cấu hình sai.
+    if (web.toolDirConfigured) {
+        error("webToolDir '${web.toolDir}' has no panel.html (looked in ${toolDir}).")
+    }
+    return ''
 }
 
 def validateAgent() {
@@ -136,6 +171,8 @@ NODE
 
 def buildUnity(Map web) {
     def buildStartedAt = System.currentTimeMillis()
+    // Báo cấu hình web-tool sai trước khi tốn thời gian build Unity.
+    resolveToolDir(web)
     removeExcludedPackages(web.excludePackages)
 
     try {
@@ -170,6 +207,7 @@ def deploy(Map web) {
         text: libraryResource('com/pearz/ci/webgl-index.html')
     )
 
+    def toolDir = resolveToolDir(web)
     def status
     withCredentials([
         string(credentialsId: web.credentialsId, variable: 'CLOUDFLARE_API_TOKEN')
@@ -179,6 +217,7 @@ def deploy(Map web) {
             "WEB_DOMAIN=${web.domain}",
             "WEB_RESOLUTION=${web.resolution}",
             "WEB_SITE_DIR=${env.OUTPUT_PATH}",
+            "WEB_TOOL_DIR=${toolDir}",
             "WEB_INDEX_TEMPLATE=${env.WORKSPACE}/webgl-index.html",
             "WEB_RESULT_FILE=${env.WORKSPACE}/web-deploy-result.txt",
             "WRANGLER_VERSION=${web.wranglerVersion}"
