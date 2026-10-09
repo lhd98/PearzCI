@@ -83,6 +83,41 @@ def resolveToolDir(Map web) {
     return ''
 }
 
+// Kéo level từ kho level của dự án về workspace trước khi Unity build, cho mọi
+// nền tảng. Chỉ chạy khi <webToolDir>/pearz-tool.json có "pullOnBuild": true;
+// thư mục đích và domain do levels-pull.mjs đọc từ chính file đó. File kéo về
+// chỉ nằm trong workspace: lần checkout sau trả project về như trong repo.
+def pullLevels(Map config) {
+    def toolDir = config.get('webToolDir', 'WebTool').toString().trim()
+        .replaceAll(/^\/+|\/+$/, '')
+    if (!toolDir || toolDir.contains('..')) {
+        return
+    }
+    def configFile = "${env.UNITY_PROJECT_PATH}/${toolDir}/pearz-tool.json"
+    if (!fileExists(configFile)) {
+        return
+    }
+    // Kiểm tra sơ bộ để build không dùng kho khỏi cần Node trên agent;
+    // levels-pull.mjs mới là nơi đọc cấu hình thật.
+    def text = readFile(file: configFile, encoding: 'UTF-8')
+    if (!(text ==~ /(?s).*"pullOnBuild"\s*:\s*true.*/)) {
+        return
+    }
+
+    writeFile(
+        file: 'levels-pull.mjs',
+        encoding: 'UTF-8',
+        text: libraryResource('com/pearz/ci/levels-pull.mjs')
+    )
+    withEnv(["PEARZ_TOOL_DIR=${toolDir}"]) {
+        sh '''
+            set -eu
+            export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            node levels-pull.mjs --project-dir "$UNITY_PROJECT_PATH" --tool-dir "$PEARZ_TOOL_DIR" --on-build
+        '''
+    }
+}
+
 def validateAgent() {
     def webGlSupport = "${env.UNITY_HUB_ROOT}/${env.UNITY_VERSION}" +
         '/PlaybackEngines/WebGLSupport'

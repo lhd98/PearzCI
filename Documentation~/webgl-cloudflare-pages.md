@@ -363,8 +363,46 @@ Công khai, CORS mở, luôn trả bản mới nhất:
 | `GET /api/levels/<id>` | Nội dung thô. `ETag` / `X-Pearz-Revision` là revision, `X-Pearz-Meta` là meta (URL-encoded). `?revision=N` lấy bản cũ |
 | `GET /api/bundle?after=<id>&limit=N` | Nhiều level một lần: `{ levels: [{ id, revision, enabled, meta, contentType, data }], next }`, `data` là base64. Gọi tiếp với `after=<next>` tới khi `next` là `null` |
 
-Level trong kho chưa tự vào bản build: game (hoặc một bước build) phải kéo về
-qua các đường dẫn trên.
+### Đưa level trong kho vào bản build
+
+Level GD lưu chỉ nằm trên web cho tới khi được kéo về project. Khai thư mục
+đích trong `pearz-tool.json` (tính từ thư mục project Unity):
+
+```json
+{
+  "domain": "pg07.pearz.space",
+  "levels": { "pull": "Assets/GameData/LevelStore", "pullOnBuild": true }
+}
+```
+
+- **Ở máy dev**, để kéo về rồi commit một bộ level đã chốt. Trong thư mục
+  project Unity (không cần token, chỉ dùng API đọc công khai):
+
+  ```bash
+  node Library/PackageCache/com.pearz.ci@*/resources/com/pearz/ci/levels-pull.mjs
+  ```
+
+- **Trên Jenkins**, khi `pullOnBuild` là `true`: mọi build (Android, iOS,
+  WebGL) kéo level mới nhất về workspace ngay trước bước Unity. Không khai
+  hoặc `false` thì build dùng đúng những gì đang có trong git. Kho không truy
+  cập được hoặc trả lỗi thì build dừng, không lặng lẽ dùng level cũ.
+
+Thư mục đích sau khi kéo:
+
+| File | Nội dung |
+|---|---|
+| `<id>.json` / `<id>.txt` / `<id>.bytes` | Nội dung nguyên trạng của từng level; đuôi theo kiểu nội dung lúc lưu, đều là đuôi Unity nhận làm `TextAsset` |
+| `_catalog.json` | `{ source, version, levels: [{ id, file, revision, enabled, meta, contentType, size }] }` theo thứ tự chơi |
+
+Kho không hiểu nội dung level, nên **biến các file này thành dữ liệu game là
+việc của game** (gộp, ký, đưa vào Addressables…), thường trong một bước
+`IPreprocessBuildWithReport` đọc `_catalog.json`. Level `enabled: false` vẫn
+được kéo về; game tự quyết định có đóng gói hay không.
+
+Lệnh chỉ ghi file có nội dung đổi, và chỉ xoá file do chính nó từng ghi mà nay
+không còn trong kho. Kho rỗng trong khi lần trước có level thì lệnh dừng
+(thường là trỏ nhầm domain); thêm `--allow-empty` nếu thật sự muốn xoá hết.
+Tuỳ chọn khác: `--out`, `--domain`, `--tool-dir`, `--project-dir`.
 
 ## Giới hạn
 
@@ -391,6 +429,8 @@ qua các đường dẫn trên.
 | Khung game trắng ngay sau lần build đầu | Địa chỉ `*.pages.dev` của project `-game` mới tạo cần vài phút mới truy cập được |
 | `Could not set up the level store database` | Lần deploy đầu của kho level cần token có `Account → D1 → Edit` |
 | `pearzTool.levels` ném `unavailable` | Dự án chưa có `levels` trong `pearz-tool.json`, hoặc chưa deploy lại sau khi thêm |
+| `Level pull: ... skipped` trong log Jenkins | `levels.pullOnBuild` chưa là `true`; đây không phải lỗi |
+| `The level store ... is empty but N levels were pulled before` | Kiểm tra `domain`; nếu đúng là muốn xoá hết thì chạy tay với `--allow-empty` |
 | `pearzTool.levels` ném `unconfigured` khi lưu | Thiếu `levels.access` (`team`, `aud`) |
 | Đăng nhập xong vẫn bị `login` | Ứng dụng Access phải đúng domain và path `api/edit`; `aud` phải là AUD của chính ứng dụng đó; email phải nằm trong policy |
 | Trang mở được nhưng domain báo SSL đang chờ | Lần đầu gắn domain Cloudflare cần vài phút cấp chứng chỉ |

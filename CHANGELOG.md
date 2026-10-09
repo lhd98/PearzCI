@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.12.0] - 2026-10-09
+
+### Added
+
+- `levels-pull.mjs`: downloads a project's level store into the Unity project
+  (`"levels": { "pull": "Assets/..." }` in `WebTool/pearz-tool.json`): one
+  file per level plus `_catalog.json` with the play order, revisions, enabled
+  flags and meta. It needs no token, rewrites only files that changed and
+  removes only files it wrote before.
+- With `"pullOnBuild": true`, every Jenkins build (Android, iOS, WebGL) pulls
+  the store into the workspace before the Unity build, and stops if the store
+  cannot be read. Without it, builds use what is in git, as before.
+
 ## [0.11.0] - 2026-10-09
 
 ### Added

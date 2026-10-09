@@ -521,6 +521,9 @@ def call(Map config = [:]) {
                         if (isWebGL) {
                             pearzWebGL.validateAgent()
                         }
+                        // Mọi nền tảng: dự án bật pullOnBuild thì level trong
+                        // kho được đưa vào workspace trước khi Unity build.
+                        pearzWebGL.pullLevels(config)
 
                     }
                 }
