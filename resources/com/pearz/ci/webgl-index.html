@@ -56,21 +56,81 @@
     matchWebGLToCanvasSize: false,
     devicePixelRatio: 1
   };
+  // API cho tool.js của game (thư mục WebTool). Dữ liệu đi qua là chuỗi do game tự quy ước; trang không đọc nội dung.
+  var unityReady, unityFailed, toolListeners = {};
+  var pearzTool = window.pearzTool = {
+    // Xong khi Unity nạp xong (trả về unityInstance); bị từ chối nếu game không nạp được.
+    ready: new Promise(function (resolve, reject) { unityReady = resolve; unityFailed = reject; }),
+    // Gọi một method của GameObject trong scene. Object/mảng thành chuỗi JSON; bỏ trống data thì gọi không tham số.
+    // Gọi trước khi game nạp xong thì tự chờ.
+    send: function (objectName, methodName, data) {
+      return pearzTool.ready.then(function (unity) {
+        if (data === undefined) unity.SendMessage(objectName, methodName);
+        else unity.SendMessage(objectName, methodName,
+          typeof data === "string" || typeof data === "number" ? data : JSON.stringify(data));
+      });
+    },
+    // Tải một file về máy. Object/mảng được ghi thành JSON thụt lề.
+    saveFile: function (name, data) {
+      var text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+      var link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([text], { type: /\.json$/i.test(name) ? "application/json" : "text/plain" }));
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+    },
+    // Mở hộp chọn file; trả về { name, text }, hoặc null nếu người dùng huỷ.
+    openFile: function (accept) {
+      return new Promise(function (resolve, reject) {
+        var input = document.createElement("input");
+        input.type = "file";
+        input.accept = accept || ".json,application/json";
+        input.onchange = function () {
+          var file = input.files[0];
+          if (!file) return resolve(null);
+          file.text().then(function (text) { resolve({ name: file.name, text: text }); }, reject);
+        };
+        input.oncancel = function () { resolve(null); };
+        input.click();
+      });
+    },
+    // Game báo ra panel: .jslib của game gọi pearzTool.emit(event, data), tool.js nghe bằng pearzTool.on.
+    // on trả về hàm huỷ đăng ký.
+    on: function (event, listener) {
+      (toolListeners[event] = toolListeners[event] || []).push(listener);
+      return function () {
+        toolListeners[event] = toolListeners[event].filter(function (l) { return l !== listener; });
+      };
+    },
+    emit: function (event, data) {
+      (toolListeners[event] || []).forEach(function (listener) {
+        try { listener(data); } catch (error) { console.error(error); }
+      });
+    }
+  };
+  // Trang không có tool.js thì không ai bắt lỗi của ready.
+  pearzTool.ready.catch(function () {});
+
   var script = document.createElement("script");
   script.src = "Build/{{LOADER}}" + buildQuery;
   script.onload = function () {
     createUnityInstance(canvas, config, function (progress) {
       barFill.style.width = Math.round(progress * 100) + "%";
-    }).then(function () {
+    }).then(function (unityInstance) {
       loading.style.display = "none";
+      unityReady(unityInstance);
     }).catch(function (message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
+      unityFailed(new Error(message));
     });
   };
   script.onerror = function () {
     errorBox.textContent = "Could not load the game. Reload the page.";
     errorBox.style.display = "block";
+    unityFailed(new Error("Could not load the game."));
   };
   document.body.appendChild(script);
 </script>
