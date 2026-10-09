@@ -16,18 +16,9 @@
   #bar > div { width: 0; height: 100%; background: #e8ebf1; transition: width .2s; }
   #error { display: none; max-width: 80%; text-align: center; color: #ff8a80; }
   #version { position: absolute; right: 6px; bottom: 4px; font-size: 11px; opacity: .45; pointer-events: none; }
-  /* Layout tool (body.tool, game có thư mục WebTool): khung game căn trái cao hết màn, panel của game chiếm phần còn lại.
-     Màn dọc hoặc hẹp thì panel ẩn và trang trở về khung 9:16 căn giữa ở trên. */
-  #tool-panel { display: none; }
-  @media (min-aspect-ratio: 1/1) and (min-width: 900px) {
-    body.tool { align-items: stretch; justify-content: flex-start; }
-    body.tool #frame { flex: none; height: 100dvh; }
-    body.tool #tool-panel { display: block; flex: 1; min-width: 0; height: 100dvh; box-sizing: border-box; overflow: auto; border-left: 1px solid #3a3f4d; }
-  }
 </style>
-{{TOOL_HEAD}}
 </head>
-<body class="{{BODY_CLASS}}">
+<body>
 <div id="frame">
   <canvas id="unity-canvas" width="{{WIDTH}}" height="{{HEIGHT}}" tabindex="-1"></canvas>
   <div id="loading">
@@ -37,7 +28,6 @@
   </div>
   <div id="version">{{VERSION}}</div>
 </div>
-{{TOOL_PANEL}}
 <script>
   var buildQuery = "?v={{BUILD_ID}}";
   var canvas = document.getElementById("unity-canvas");
@@ -56,7 +46,21 @@
     matchWebGLToCanvasSize: false,
     devicePixelRatio: 1
   };
-  // API cho tool.js của game (thư mục WebTool). Dữ liệu đi qua là chuỗi do game tự quy ước; trang không đọc nội dung.
+  // Game có web-tool: trang này nằm trong iframe của trang khung (webgl-tool-index.html, site khác) và nói chuyện
+  // với nó bằng postMessage. toolOrigins là các origin được phép ra lệnh; rỗng thì trang chỉ là game.
+  // pearzTool ở đây là đầu phía game: trang khung gọi send qua message, C#/.jslib của game gọi emit.
+  var toolOrigins = {{TOOL_ORIGINS_JSON}};
+  var toolOrigin = null, unityState = "loading", unityError = "";
+  function postToTool(message) {
+    if (!toolOrigin) return;
+    message.pearzTool = 1;
+    try { window.parent.postMessage(message, toolOrigin); } catch (error) { console.error(error); }
+  }
+  function setUnityState(state, error) {
+    unityState = state;
+    unityError = error || "";
+    postToTool({ type: "state", state: unityState, error: unityError });
+  }
   var unityReady, unityFailed, toolListeners = {};
   var pearzTool = window.pearzTool = {
     // Xong khi Unity nạp xong (trả về unityInstance); bị từ chối nếu game không nạp được.
@@ -108,10 +112,25 @@
       (toolListeners[event] || []).forEach(function (listener) {
         try { listener(data); } catch (error) { console.error(error); }
       });
+      postToTool({ type: "emit", event: event, data: data });
     }
   };
-  // Trang không có tool.js thì không ai bắt lỗi của ready.
+  // Không ai bắt lỗi của ready khi trang chạy một mình.
   pearzTool.ready.catch(function () {});
+  // Trang khung gửi "hello" mỗi lần iframe nạp xong: nhớ origin của nó rồi báo trạng thái hiện tại.
+  if (window.parent !== window && toolOrigins.length) {
+    window.addEventListener("message", function (event) {
+      var message = event.data;
+      if (event.source !== window.parent || toolOrigins.indexOf(event.origin) < 0) return;
+      if (!message || message.pearzTool !== 1) return;
+      if (message.type === "hello") {
+        toolOrigin = event.origin;
+        postToTool({ type: "state", state: unityState, error: unityError });
+      } else if (message.type === "send" && typeof message.object === "string" && typeof message.method === "string") {
+        pearzTool.send(message.object, message.method, message.data).catch(function (error) { console.error(error); });
+      }
+    });
+  }
 
   var script = document.createElement("script");
   script.src = "Build/{{LOADER}}" + buildQuery;
@@ -121,19 +140,21 @@
     }).then(function (unityInstance) {
       loading.style.display = "none";
       unityReady(unityInstance);
+      setUnityState("ready");
     }).catch(function (message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
       unityFailed(new Error(message));
+      setUnityState("failed", String(message));
     });
   };
   script.onerror = function () {
     errorBox.textContent = "Could not load the game. Reload the page.";
     errorBox.style.display = "block";
     unityFailed(new Error("Could not load the game."));
+    setUnityState("failed", "Could not load the game.");
   };
   document.body.appendChild(script);
 </script>
-{{TOOL_SCRIPT}}
 </body>
 </html>

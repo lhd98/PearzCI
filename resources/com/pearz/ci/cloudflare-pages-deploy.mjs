@@ -1,19 +1,28 @@
 // Deploy một bản build Unity WebGL lên Cloudflare Pages.
 //
+// Game không có web-tool: một project Pages, gắn WEB_DOMAIN, chứa bản build.
+// Game có web-tool (WEB_TOOL_DIR): hai project —
+//   <project>        gắn WEB_DOMAIN: trang khung + thư mục tool/ (nhỏ, deploy lại không cần build Unity)
+//   <project>-game   địa chỉ *.pages.dev: bản build, hiện trong iframe của trang khung
+//
 // Đầu vào (biến môi trường):
 //   CLOUDFLARE_API_TOKEN   token của dev (bắt buộc)
 //   CLOUDFLARE_ACCOUNT_ID  tuỳ chọn; để trống thì lấy tài khoản duy nhất token thấy
 //   WEB_DOMAIN             domain người chơi mở, ví dụ pg05.pearz.space (bắt buộc)
-//   WEB_SITE_DIR           thư mục site Unity xuất ra (có Build/)
-//   WEB_INDEX_TEMPLATE     file webgl-index.html của PearzCI
+//   WEB_DEPLOY_PARTS       all (mặc định) | tool — tool: chỉ deploy lại trang khung + tool/,
+//                          không cần bản build (project game phải có sẵn từ một lần deploy đầy đủ)
+//   WEB_SITE_DIR           thư mục site Unity xuất ra (có Build/); không cần khi WEB_DEPLOY_PARTS=tool
+//   WEB_INDEX_TEMPLATE     file webgl-index.html của PearzCI (trang game)
 //   WEB_RESOLUTION         720x1280 | 1080x1920 | 1440x2560
 //   WEB_TOOL_DIR           tuỳ chọn; thư mục web-tool của game (có panel.html)
+//   WEB_TOOL_TEMPLATE      file webgl-tool-index.html của PearzCI (trang khung); cần khi có WEB_TOOL_DIR
+//   WEB_TOOL_SITE_DIR      thư mục tạm để dựng site tool; cần khi có WEB_TOOL_DIR
 //   WEB_RESULT_FILE        file ghi kết quả KEY=VALUE cho Jenkins
 //   PEARZ_PRODUCT_NAME, BUILD_VERSION, GIT_COMMIT_SHORT, GIT_COMMIT_MESSAGE
 //   WRANGLER_VERSION       mặc định 4
 //
-// Các bước: copy web-tool (nếu có) -> sinh index.html -> kiểm tra giới hạn 25 MiB -> tìm account ->
-// tìm project Pages đang gắn domain (không có thì tạo) -> wrangler deploy ->
+// Các bước: kiểm tra đầu vào + giới hạn 25 MiB -> tìm account -> tìm project Pages đang gắn domain
+// (không có thì tạo) -> [có tool: tìm/tạo project game, deploy game, dựng site tool] -> wrangler deploy ->
 // gắn domain + CNAME nếu còn thiếu.
 
 import { spawnSync } from 'node:child_process';
@@ -26,8 +35,10 @@ const RESOLUTIONS = ['720x1280', '1080x1920', '1440x2560'];
 
 const token = required('CLOUDFLARE_API_TOKEN');
 const domain = required('WEB_DOMAIN').trim().toLowerCase();
-const siteDir = required('WEB_SITE_DIR');
 const resultFile = required('WEB_RESULT_FILE');
+const toolOnly = (process.env.WEB_DEPLOY_PARTS || 'all').trim().toLowerCase() === 'tool';
+const toolDir = (process.env.WEB_TOOL_DIR || '').trim();
+const siteDir = toolOnly ? '' : required('WEB_SITE_DIR');
 
 class CloudflareError extends Error {
     constructor(message, status, codes) {
@@ -86,19 +97,32 @@ async function cf(method, apiPath, body) {
     return json;
 }
 
-// Web-tool của game: copy cả thư mục vào <site>/tool và trả về các đoạn HTML
-// chèn vào template. panel.html nằm thẳng trong index.html nên đường dẫn
-// tương đối trong đó tính từ gốc site (tool/anh.png). Không có WEB_TOOL_DIR
-// thì mọi đoạn đều rỗng và trang là khung 9:16 căn giữa.
-function prepareTool(buildId) {
-    const publishDir = path.join(siteDir, 'tool');
-    // Site là thư mục Unity ghi đè chứ không dọn: bỏ bản tool của lần trước.
-    fs.rmSync(publishDir, { recursive: true, force: true });
+const escapeHtml = (text) => text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+// JSON nằm trong <script>: chặn "</script>" thoát khỏi thẻ.
+const escapeJs = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 
-    const toolDir = (process.env.WEB_TOOL_DIR || '').trim();
-    if (!toolDir) {
-        return { BODY_CLASS: '', TOOL_HEAD: '', TOOL_PANEL: '', TOOL_SCRIPT: '' };
+function renderTemplate(templateEnv, values, outputFile) {
+    const template = fs.readFileSync(required(templateEnv), 'utf8');
+    const output = template.replace(/\{\{([A-Z_]+)\}\}/g, (placeholder, key) =>
+        Object.prototype.hasOwnProperty.call(values, key) ? values[key] : placeholder
+    );
+    fs.writeFileSync(outputFile, output);
+}
+
+function frameSize() {
+    const resolution = (process.env.WEB_RESOLUTION || '1080x1920').trim();
+    if (!RESOLUTIONS.includes(resolution)) {
+        fail(`WEB_RESOLUTION must be one of ${RESOLUTIONS.join(', ')} (got '${resolution}').`);
     }
+    const [width, height] = resolution.split('x');
+    return { resolution, width, height };
+}
+
+function readPanel() {
     const panelFile = path.join(toolDir, 'panel.html');
     if (!fs.existsSync(panelFile)) {
         fail(`The web-tool folder has no panel.html: ${toolDir}`);
@@ -110,26 +134,50 @@ function prepareTool(buildId) {
             'without <!DOCTYPE>, <html>, <head> or <body>.'
         );
     }
-
-    fs.cpSync(toolDir, publishDir, { recursive: true });
-    const has = (name) => fs.existsSync(path.join(toolDir, name));
-    console.log(
-        `Web-tool panel from ${toolDir}` +
-        ` (tool.css: ${has('tool.css') ? 'yes' : 'no'}, tool.js: ${has('tool.js') ? 'yes' : 'no'}).`
-    );
-    return {
-        BODY_CLASS: 'tool',
-        TOOL_HEAD: has('tool.css')
-            ? `<link rel="stylesheet" href="tool/tool.css?v=${buildId}">`
-            : '',
-        TOOL_PANEL: `<aside id="tool-panel">\n${panel}\n</aside>`,
-        TOOL_SCRIPT: has('tool.js')
-            ? `<script src="tool/tool.js?v=${buildId}"></script>`
-            : ''
-    };
+    return panel;
 }
 
-function writeIndexHtml() {
+// Site tool: trang khung (iframe trỏ sang gameUrl + panel của game) và cả thư mục web-tool tại tool/.
+// panel.html nằm thẳng trong index.html nên đường dẫn tương đối trong đó tính từ gốc site (tool/anh.png).
+function writeToolSite(gameUrl) {
+    const toolSiteDir = required('WEB_TOOL_SITE_DIR');
+    // Thư mục này bị xoá rồi dựng lại: chỉ xoá khi nó đúng là site tool của lần trước.
+    if (fs.existsSync(toolSiteDir) &&
+        fs.readdirSync(toolSiteDir).some((name) => name !== 'index.html' && name !== 'tool')) {
+        fail(`WEB_TOOL_SITE_DIR holds other files and will not be overwritten: ${toolSiteDir}`);
+    }
+    fs.rmSync(toolSiteDir, { recursive: true, force: true });
+    fs.mkdirSync(toolSiteDir, { recursive: true });
+
+    const panel = readPanel();
+    fs.cpSync(toolDir, path.join(toolSiteDir, 'tool'), { recursive: true });
+    const has = (name) => fs.existsSync(path.join(toolDir, name));
+    // File tool đổi mà không build lại game, nên mã chống cache theo lần deploy chứ không theo version game.
+    const toolId = Date.now().toString(36);
+    const productName = process.env.PEARZ_PRODUCT_NAME || 'Game';
+    const { width, height } = frameSize();
+    renderTemplate('WEB_TOOL_TEMPLATE', {
+        PRODUCT_NAME: escapeHtml(productName),
+        PRODUCT_NAME_JSON: escapeJs(productName),
+        WIDTH: width,
+        HEIGHT: height,
+        GAME_URL_JSON: escapeJs(gameUrl),
+        TOOL_HEAD: has('tool.css')
+            ? `<link rel="stylesheet" href="tool/tool.css?v=${toolId}">`
+            : '',
+        TOOL_PANEL: panel,
+        TOOL_SCRIPT: has('tool.js')
+            ? `<script src="tool/tool.js?v=${toolId}"></script>`
+            : ''
+    }, path.join(toolSiteDir, 'index.html'));
+    console.log(
+        `Web-tool site written from ${toolDir} (game ${gameUrl}, ` +
+        `tool.css: ${has('tool.css') ? 'yes' : 'no'}, tool.js: ${has('tool.js') ? 'yes' : 'no'}).`
+    );
+    return toolSiteDir;
+}
+
+function findBuildFiles() {
     const buildDir = path.join(siteDir, 'Build');
     if (!fs.existsSync(buildDir)) {
         fail(`Unity WebGL output has no Build folder: ${buildDir}`);
@@ -142,53 +190,45 @@ function writeIndexHtml() {
         }
         return match;
     };
-    const loader = pick('loader', (f) => f.endsWith('.loader.js'));
-    const data = pick('data', (f) => /\.data(\.|$)/.test(f));
-    const framework = pick('framework', (f) => /\.framework\.js(\.|$)/.test(f));
-    const wasm = pick('wasm', (f) => /\.wasm(\.|$)/.test(f));
+    return {
+        loader: pick('loader', (f) => f.endsWith('.loader.js')),
+        data: pick('data', (f) => /\.data(\.|$)/.test(f)),
+        framework: pick('framework', (f) => /\.framework\.js(\.|$)/.test(f)),
+        wasm: pick('wasm', (f) => /\.wasm(\.|$)/.test(f))
+    };
+}
 
-    const resolution = (process.env.WEB_RESOLUTION || '1080x1920').trim();
-    if (!RESOLUTIONS.includes(resolution)) {
-        fail(`WEB_RESOLUTION must be one of ${RESOLUTIONS.join(', ')} (got '${resolution}').`);
-    }
-    const [width, height] = resolution.split('x');
+// toolOrigins: các origin của trang khung được phép ra lệnh cho game qua postMessage; rỗng khi game không có
+// web-tool và trang này là trang người chơi mở thẳng.
+function writeGameIndexHtml(toolOrigins) {
+    const { loader, data, framework, wasm } = findBuildFiles();
+    const { resolution, width, height } = frameSize();
     const productName = process.env.PEARZ_PRODUCT_NAME || 'Game';
     const version = process.env.BUILD_VERSION || '';
-    const html = (text) => text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    // JSON nằm trong <script>: chặn "</script>" thoát khỏi thẻ.
-    const js = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
-    const buildId = encodeURIComponent(version || String(Date.now()));
-    const values = {
-        PRODUCT_NAME: html(productName),
-        PRODUCT_NAME_JSON: js(productName),
-        COMPANY_NAME_JSON: js(process.env.PEARZ_COMPANY_NAME || 'DefaultCompany'),
-        VERSION: html(version),
-        VERSION_JSON: js(version),
-        BUILD_ID: buildId,
+    // Site là thư mục Unity ghi đè chứ không dọn: bỏ bản tool mà PearzCI cũ từng chép vào đây.
+    fs.rmSync(path.join(siteDir, 'tool'), { recursive: true, force: true });
+    renderTemplate('WEB_INDEX_TEMPLATE', {
+        PRODUCT_NAME: escapeHtml(productName),
+        PRODUCT_NAME_JSON: escapeJs(productName),
+        COMPANY_NAME_JSON: escapeJs(process.env.PEARZ_COMPANY_NAME || 'DefaultCompany'),
+        VERSION: escapeHtml(version),
+        VERSION_JSON: escapeJs(version),
+        BUILD_ID: encodeURIComponent(version || String(Date.now())),
         WIDTH: width,
         HEIGHT: height,
         LOADER: encodeURIComponent(loader),
         DATA: encodeURIComponent(data),
         FRAMEWORK: encodeURIComponent(framework),
         WASM: encodeURIComponent(wasm),
-        ...prepareTool(buildId)
-    };
-    const template = fs.readFileSync(required('WEB_INDEX_TEMPLATE'), 'utf8');
-    const output = template.replace(/\{\{([A-Z_]+)\}\}/g, (token, key) =>
-        Object.prototype.hasOwnProperty.call(values, key) ? values[key] : token
-    );
-    fs.writeFileSync(path.join(siteDir, 'index.html'), output);
+        TOOL_ORIGINS_JSON: escapeJs(toolOrigins)
+    }, path.join(siteDir, 'index.html'));
     console.log(
         `index.html written (${resolution}, loader ${loader}, ` +
-        `${values.BODY_CLASS === 'tool' ? 'web-tool layout' : '9:16 layout'}).`
+        `${toolOrigins.length ? `embedded by ${toolOrigins.join(', ')}` : '9:16 layout'}).`
     );
 }
 
-function checkFileSizes() {
+function checkFileSizes(rootDir) {
     const tooLarge = [];
     const walk = (dir) => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -198,12 +238,12 @@ function checkFileSizes() {
             } else {
                 const size = fs.statSync(full).size;
                 if (size > MAX_FILE_BYTES) {
-                    tooLarge.push(`${path.relative(siteDir, full)} (${(size / 1048576).toFixed(1)} MiB)`);
+                    tooLarge.push(`${path.relative(rootDir, full)} (${(size / 1048576).toFixed(1)} MiB)`);
                 }
             }
         }
     };
-    walk(siteDir);
+    walk(rootDir);
     if (tooLarge.length) {
         fail(
             'Cloudflare Pages accepts files up to 25 MiB. Too large: ' +
@@ -259,8 +299,7 @@ function projectNameFromDomain() {
     return name;
 }
 
-async function resolveProject(accountId) {
-    const projects = await listProjects(accountId);
+async function resolveProject(accountId, projects) {
     const byDomain = projects.find((p) =>
         (p.domains || []).map((d) => d.toLowerCase()).includes(domain) ||
         (p.subdomain || '').toLowerCase() === domain
@@ -268,6 +307,12 @@ async function resolveProject(accountId) {
     if (byDomain) {
         console.log(`Pages project '${byDomain.name}' serves ${domain}.`);
         return { project: byDomain, created: false };
+    }
+    if (toolOnly) {
+        fail(
+            `No Pages project serves ${domain} yet. Run the WebGL job once ` +
+            'before publishing the web-tool on its own.'
+        );
     }
     if (domain.endsWith('.pages.dev')) {
         fail(`No Pages project in this account uses ${domain}.`);
@@ -288,13 +333,38 @@ async function resolveProject(accountId) {
     return { project: result, created: true };
 }
 
-function deploy(accountId, project) {
+const pagesHost = (project) => project.subdomain || `${project.name}.pages.dev`;
+
+// Project chứa bản build của game có web-tool: tên theo project gắn domain, không gắn domain riêng mà dùng
+// địa chỉ *.pages.dev Cloudflare cấp sẵn.
+async function resolveGameProject(accountId, projects, shell) {
+    const name = `${shell.name.slice(0, 53).replace(/-+$/g, '')}-game`;
+    const existing = projects.find((p) => p.name === name);
+    if (existing) {
+        console.log(`Pages project '${name}' holds the game build.`);
+        return existing;
+    }
+    if (toolOnly) {
+        fail(
+            `Pages project '${name}' does not exist yet. Run the WebGL job once ` +
+            'before publishing the web-tool on its own.'
+        );
+    }
+    console.log(`Creating Pages project '${name}' for the game build.`);
+    const { result } = await cf('POST', `/accounts/${accountId}/pages/projects`, {
+        name,
+        production_branch: 'main'
+    });
+    return result;
+}
+
+function deploy(accountId, project, directory) {
     const wranglerVersion = (process.env.WRANGLER_VERSION || '4').trim();
     const branch = project.production_branch || 'main';
     const commitMessage = (process.env.GIT_COMMIT_MESSAGE || '').slice(0, 300);
     const args = [
         '--yes', `wrangler@${wranglerVersion}`,
-        'pages', 'deploy', siteDir,
+        'pages', 'deploy', directory,
         '--project-name', project.name,
         '--branch', branch,
         '--commit-dirty=true'
@@ -305,15 +375,21 @@ function deploy(accountId, project) {
     if (commitMessage) {
         args.push('--commit-message', commitMessage);
     }
-    console.log(`Deploying ${siteDir} to Pages project '${project.name}' (branch ${branch})...`);
-    const run = spawnSync('npx', args, {
+    console.log(`Deploying ${directory} to Pages project '${project.name}' (branch ${branch})...`);
+    // Windows: npx là file .cmd, Node chỉ chạy được qua shell, nên tham số có ký tự đặc biệt phải tự bọc nháy.
+    const windows = process.platform === 'win32';
+    const quote = (arg) => /[\s"&|<>^]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg;
+    const options = {
         stdio: 'inherit',
         env: {
             ...process.env,
             CLOUDFLARE_ACCOUNT_ID: accountId,
             WRANGLER_SEND_METRICS: 'false'
         }
-    });
+    };
+    const run = windows
+        ? spawnSync(['npx.cmd', ...args.map(quote)].join(' '), { ...options, shell: true })
+        : spawnSync('npx', args, options);
     if (run.error) {
         fail(`Could not run npx wrangler: ${run.error.message}. Install Node.js 18+ on the agent.`);
     }
@@ -347,7 +423,7 @@ async function ensureDomain(accountId, project) {
     if (domain.endsWith('.pages.dev')) {
         return;
     }
-    const target = `${project.subdomain || `${project.name}.pages.dev`}`;
+    const target = pagesHost(project);
     const attached = (project.domains || []).map((d) => d.toLowerCase()).includes(domain);
 
     if (!attached) {
@@ -409,17 +485,52 @@ async function ensureDomain(accountId, project) {
 
 async function main() {
     fs.writeFileSync(resultFile, '');
-    writeIndexHtml();
-    checkFileSizes();
+    // Kiểm tra mọi thứ làm được ở máy trước khi gọi Cloudflare.
+    if (toolOnly && !toolDir) {
+        fail('WEB_DEPLOY_PARTS=tool needs WEB_TOOL_DIR.');
+    }
+    if (toolDir) {
+        readPanel();
+        required('WEB_TOOL_TEMPLATE');
+        required('WEB_TOOL_SITE_DIR');
+    }
+    if (!toolOnly) {
+        findBuildFiles();
+        checkFileSizes(siteDir);
+    }
 
     const accountId = await resolveAccountId();
-    const { project } = await resolveProject(accountId);
-    deploy(accountId, project);
-    await ensureDomain(accountId, project);
-
+    const projects = await listProjects(accountId);
+    const { project } = await resolveProject(accountId, projects);
     const url = `https://${domain}`;
-    fs.appendFileSync(resultFile, `WEB_URL=${url}\nWEB_PAGES_PROJECT=${project.name}\n`);
-    console.log(`Deployed. Reload ${url} to play the new build.`);
+    const results = [`WEB_URL=${url}`, `WEB_PAGES_PROJECT=${project.name}`];
+
+    if (!toolDir) {
+        writeGameIndexHtml([]);
+        deploy(accountId, project, siteDir);
+    } else {
+        // Game trước, trang khung sau: trang khung không bao giờ trỏ vào một project chưa có bản build.
+        const game = await resolveGameProject(accountId, projects, project);
+        const gameUrl = `https://${pagesHost(game)}/`;
+        if (!toolOnly) {
+            writeGameIndexHtml([...new Set([url, `https://${pagesHost(project)}`])]);
+            deploy(accountId, game, siteDir);
+        }
+        const toolSiteDir = writeToolSite(gameUrl);
+        checkFileSizes(toolSiteDir);
+        deploy(accountId, project, toolSiteDir);
+        results.push(`WEB_GAME_URL=${gameUrl}`, `WEB_GAME_PROJECT=${game.name}`);
+    }
+    if (!toolOnly) {
+        await ensureDomain(accountId, project);
+    }
+
+    fs.appendFileSync(resultFile, results.join('\n') + '\n');
+    console.log(
+        toolOnly
+            ? `Web-tool published. Reload ${url} to use it.`
+            : `Deployed. Reload ${url} to play the new build.`
+    );
 }
 
 main().catch((error) => fail(error.message));

@@ -2,6 +2,35 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.10.0] - 2026-10-09
+
+### Changed
+
+- A game with a web-tool is now deployed as two Pages projects: the Unity
+  build goes to `<project>-game` (its `*.pages.dev` address, created on the
+  first run) and the domain serves a small frame page that embeds the build in
+  an `iframe` next to the game's panel. `WEB_DOMAIN` and the job stay the
+  same. The first build after upgrading moves the game to a new origin, so
+  progress saved in the browser starts over once. Games without a `WebTool/`
+  folder are deployed exactly as before.
+- `pearzTool.ready` no longer resolves with `unityInstance`; the game runs in
+  another frame and is reached through `pearzTool.send` / `pearzTool.post`.
+
+### Added
+
+- `tools/webtool-publish.mjs`: republishes the frame page and `tool/` from a
+  developer machine without a Unity build (`--domain`, or `domain` in
+  `WebTool/pearz-tool.json`; `--watch` republishes on every save). It never
+  creates projects or touches DNS or the game build.
+- `Pearz.CI.PearzTool` in the runtime assembly: `On`/`Off` receive what the
+  panel sends with the new `pearzTool.post(channel, data)`, `Emit` reports
+  back to `pearzTool.on`. A game no longer needs its own bridge GameObject or
+  `.jslib`.
+
+### Fixed
+
+- `cloudflare-pages-deploy.mjs` can run wrangler on Windows.
+
 ## [0.9.1] - 2026-10-09
 
 ### Fixed

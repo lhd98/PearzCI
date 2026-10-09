@@ -61,9 +61,10 @@ def readConfig(Map config) {
     return web
 }
 
-// Game có thư mục web-tool (nhận diện bằng panel.html) thì trang deploy ra
-// layout tool: khung game căn trái, panel của game bên phải. Không có thì giữ
-// khung 9:16 như cũ. Trả về đường dẫn tuyệt đối, hoặc '' khi không dùng.
+// Game có thư mục web-tool (nhận diện bằng panel.html) thì deploy thành hai
+// site: bản build ở project <tên>-game, còn domain trỏ vào trang khung (khung
+// game căn trái, panel của game bên phải). Không có thì domain là bản build
+// như cũ. Trả về đường dẫn tuyệt đối, hoặc '' khi không dùng.
 // Cần workspace đã checkout nên không gọi được trong readConfig.
 def resolveToolDir(Map web) {
     if (!web.toolDir) {
@@ -194,7 +195,8 @@ def buildUnity(Map web) {
 
 // Sinh index.html, kiểm tra giới hạn 25 MiB của Pages, tìm account và
 // project Pages theo domain (tạo mới nếu chưa có), deploy bằng wrangler rồi
-// gắn domain/CNAME. Toàn bộ logic nằm trong cloudflare-pages-deploy.mjs.
+// gắn domain/CNAME; game có web-tool thì deploy thêm site trang khung. Toàn
+// bộ logic nằm trong cloudflare-pages-deploy.mjs.
 def deploy(Map web) {
     writeFile(
         file: 'cloudflare-pages-deploy.mjs',
@@ -205,6 +207,11 @@ def deploy(Map web) {
         file: 'webgl-index.html',
         encoding: 'UTF-8',
         text: libraryResource('com/pearz/ci/webgl-index.html')
+    )
+    writeFile(
+        file: 'webgl-tool-index.html',
+        encoding: 'UTF-8',
+        text: libraryResource('com/pearz/ci/webgl-tool-index.html')
     )
 
     def toolDir = resolveToolDir(web)
@@ -219,6 +226,9 @@ def deploy(Map web) {
             "WEB_SITE_DIR=${env.OUTPUT_PATH}",
             "WEB_TOOL_DIR=${toolDir}",
             "WEB_INDEX_TEMPLATE=${env.WORKSPACE}/webgl-index.html",
+            "WEB_TOOL_TEMPLATE=${env.WORKSPACE}/webgl-tool-index.html",
+            // Cạnh thư mục site, nên được dọn cùng Builds/ sau mỗi lần chạy.
+            "WEB_TOOL_SITE_DIR=${env.WORKSPACE}/Builds/WebGL/tool-site",
             "WEB_RESULT_FILE=${env.WORKSPACE}/web-deploy-result.txt",
             "WRANGLER_VERSION=${web.wranglerVersion}"
         ]) {

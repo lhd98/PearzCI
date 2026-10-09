@@ -10,13 +10,14 @@ Mỗi dev dùng domain/subdomain riêng trên tài khoản Cloudflare của mìn
 Jenkins (BUILD_PLATFORM = WebGL)
   → Unity BuildEntry.BuildWebGL → Builds/WebGL/site/ (Build/, StreamingAssets/)
   → cloudflare-pages-deploy.mjs:
-      1. ghi index.html (khung 9:16, render 1080x1920); game có WebTool/
-         thì copy vào tool/ và ghép panel vào trang
-      2. kiểm tra giới hạn 25 MiB/file của Pages
-      3. tìm account từ token
-      4. tìm project Pages đang gắn WEB_DOMAIN (chưa có thì tạo)
+      1. kiểm tra giới hạn 25 MiB/file của Pages
+      2. tìm account từ token
+      3. tìm project Pages đang gắn WEB_DOMAIN (chưa có thì tạo)
+      4. ghi index.html (khung 9:16, render 1080x1920)
       5. wrangler pages deploy (production branch)
       6. gắn domain + CNAME nếu còn thiếu
+     game có WebTool/ thì bước 4-5 chạy hai lần: bản build vào project
+     <tên>-game, trang khung + tool/ vào project gắn domain
   → Telegram: link chơi + version/build
 ```
 
@@ -115,8 +116,22 @@ hình (điện thoại lẫn PC). Canvas Unity render cố định 1080x1920; đ
 Game có thư mục `WebTool/` thì trang deploy ra thành công cụ dựng level trên
 PC: khung game 9:16 căn trái cao hết màn, panel của game chiếm phần còn lại
 (màn 1920x1080: game 608px, panel 1313px). Màn dọc hoặc hẹp hơn 900px (điện
-thoại) thì panel ẩn, trang là khung 9:16 căn giữa như game không có tool. Cùng
-một bản build dùng cho cả hai, không cần job hay khai báo gì thêm.
+thoại) thì panel ẩn, trang là khung 9:16 căn giữa như game không có tool. Không
+cần job hay khai báo gì thêm.
+
+### Hai site
+
+Game và tool là hai project Pages riêng, để sửa tool không phải build lại game:
+
+| Project | Địa chỉ | Chứa gì | Ai deploy |
+|---|---|---|---|
+| `<tên>` | `WEB_DOMAIN` (ví dụ `pg07.pearz.space`) | Trang khung + `tool/` | Job WebGL, hoặc `webtool-publish.mjs` ở máy dev |
+| `<tên>-game` | `<tên>-game.pages.dev` (Cloudflare cấp sẵn) | Bản build Unity | Chỉ job WebGL |
+
+Mọi người vẫn chỉ mở `WEB_DOMAIN`; trang khung nhúng bản build bằng `iframe`.
+Project `-game` được tạo tự động ở lần chạy job đầu tiên. Dự án đang chạy bản
+PearzCI cũ: lần build đầu sau khi nâng cấp chuyển bản build sang project
+`-game`, nên dữ liệu game lưu trong trình duyệt (PlayerPrefs) bắt đầu lại.
 
 ### Thư mục WebTool
 
@@ -129,6 +144,7 @@ import và không sinh `.meta`.
 | `panel.html` | có | Nội dung panel. Chỉ là fragment: không có `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` |
 | `tool.js` | không | Logic panel, nạp sau khi trang dựng xong |
 | `tool.css` | không | Giao diện panel |
+| `pearz-tool.json` | không | `{ "domain": "pg07.pearz.space" }` cho `webtool-publish.mjs` |
 | file khác | không | Ảnh, font…; copy nguyên thư mục con |
 
 PearzCI nhận diện tool bằng `WebTool/panel.html`. Đổi thư mục bằng
@@ -140,21 +156,58 @@ nên đường dẫn trong đó tính từ gốc site (`tool/img/a.png`); trong 
 thì viết tương đối như thường (`img/a.png`). Mọi file trong `WebTool/` đều
 công khai trên web, đừng để gì nhạy cảm ở đó.
 
-Sửa panel cũng phải chạy lại job WebGL (kể cả bước Unity) mới lên web.
+### Sửa tool không build lại game
+
+Sau khi job WebGL đã chạy ít nhất một lần cho domain, dev đẩy riêng tool từ
+máy mình. Trong thư mục project Unity:
+
+```bash
+node Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs --domain pg07.pearz.space
+```
+
+(PowerShell: thay đường dẫn bằng
+`(Get-Item Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs)`.)
+
+- Cần biến môi trường `CLOUDFLARE_API_TOKEN` (quyền `Cloudflare Pages: Edit`)
+  và Node.js 18+.
+- `--domain` bỏ được nếu `WebTool/pearz-tool.json` có `domain`.
+- `--watch`: đẩy lại mỗi lần lưu file trong `WebTool/`. GD reload là thấy cả
+  bản đang sửa dở, nên chỉ bật khi chấp nhận điều đó.
+- `--tool-dir`: thư mục tool khác `WebTool`.
+
+Lệnh chỉ thay trang khung và `tool/` của project gắn domain; không tạo
+project, không đụng DNS hay bản build. Xong thì reload `WEB_DOMAIN`.
+
+Job WebGL deploy lại trang khung từ git, nên tool đã đẩy mà **chưa commit sẽ
+bị bản trong git thay thế** ở lần build kế tiếp; lệnh in nhắc khi `WebTool/`
+còn thay đổi chưa commit.
 
 ### pearzTool
 
-Trang có sẵn `window.pearzTool` cho `tool.js`. PearzCI chỉ chuyển dữ liệu,
-không đọc nội dung: cấu trúc JSON của level do từng game tự quy ước.
+Trang khung có sẵn `window.pearzTool` cho `tool.js`. Game chạy trong `iframe`
+ở origin khác, nên mọi lệnh đi qua `postMessage`; trang game chỉ nhận lệnh từ
+`WEB_DOMAIN` và địa chỉ `*.pages.dev` của chính project đó. PearzCI chỉ chuyển
+dữ liệu, không đọc nội dung: cấu trúc level do từng game tự quy ước.
 
 | Hàm | Chức năng |
 |---|---|
-| `pearzTool.ready` | Promise xong khi Unity nạp xong (trả `unityInstance`); bị từ chối nếu game không nạp được |
-| `pearzTool.send(object, method, data)` | Gọi `method` trên GameObject tên `object` (qua `SendMessage`). Object/mảng thành chuỗi JSON, chuỗi và số giữ nguyên, bỏ `data` thì gọi không tham số. Gọi trước khi game nạp xong thì tự chờ. Trả về Promise |
+| `pearzTool.ready` | Promise xong khi Unity nạp xong; bị từ chối nếu game không nạp được. Không còn trả `unityInstance` |
+| `pearzTool.post(channel, data)` | Gửi tới `PearzTool.On(channel, ...)` trong C#. Object/mảng thành chuỗi JSON. Gọi trước khi game nạp xong thì tự chờ. Trả về Promise |
+| `pearzTool.send(object, method, data)` | Gọi thẳng `method` trên GameObject tên `object` (qua `SendMessage`), cho game tự viết bridge riêng |
 | `pearzTool.saveFile(name, data)` | Tải file về máy. Object/mảng ghi thành JSON thụt lề |
 | `pearzTool.openFile(accept)` | Hộp chọn file (mặc định `.json`). Trả Promise `{ name, text }`, hoặc `null` nếu huỷ |
-| `pearzTool.on(event, fn)` | Nghe sự kiện game báo ra; trả về hàm huỷ đăng ký |
-| `pearzTool.emit(event, data)` | Phát sự kiện; `.jslib` của game gọi hàm này. `data` chuyển nguyên vẹn |
+| `pearzTool.on(event, fn)` | Nghe sự kiện game báo ra (`PearzTool.Emit`); trả về hàm huỷ đăng ký |
+
+### Phía game: Pearz.CI.PearzTool
+
+Package có sẵn đầu nhận trong C#, game không cần GameObject hay `.jslib` riêng:
+
+| API | Chức năng |
+|---|---|
+| `PearzTool.On(channel, handler)` | Nhận chuỗi panel gửi bằng `pearzTool.post`. Tin tới trước khi đăng ký (game còn đang khởi động) được giữ và giao ngay khi đăng ký, tối đa 16 tin mỗi channel |
+| `PearzTool.Off(channel, handler)` | Huỷ đăng ký |
+| `PearzTool.Emit(event, data)` | Báo ra panel (`pearzTool.on`). Ngoài bản WebGL thì không làm gì |
+| `PearzTool.Dispatch(channel, data)` | Giả lập một tin từ panel, để test trong Editor |
 
 ### Ví dụ tối thiểu
 
@@ -176,7 +229,7 @@ const json = document.getElementById('level-json');
 const status = document.getElementById('status');
 
 document.getElementById('play').onclick = () =>
-    pearzTool.send('LevelToolBridge', 'PlayLevel', json.value);
+    pearzTool.post('playLevel', json.value);
 document.getElementById('save').onclick = () =>
     pearzTool.saveFile(`${JSON.parse(json.value).id}.json`, json.value);
 document.getElementById('open').onclick = async () => {
@@ -186,47 +239,24 @@ document.getElementById('open').onclick = async () => {
 pearzTool.on('levelFinished', (result) => { status.textContent = result; });
 ```
 
-Phía game (mẫu tham khảo, mỗi game tự viết): một GameObject tên đúng
-`LevelToolBridge`, đang active trong scene, nhận chuỗi JSON rồi parse bằng
-class level của chính game đó.
+Phía game (mỗi game tự viết phần xử lý level):
 
 ```csharp
-public sealed class LevelToolBridge : MonoBehaviour
+using Pearz.CI;
+
+public sealed class LevelToolBridge : IDisposable
 {
-#if UNITY_WEBGL && !UNITY_EDITOR
-    [DllImport("__Internal")]
-    private static extern void PearzToolEmit(string eventName, string data);
-#else
-    private static void PearzToolEmit(string eventName, string data) { }
-#endif
+    public LevelToolBridge() => PearzTool.On("playLevel", PlayLevel);
+    public void Dispose() => PearzTool.Off("playLevel", PlayLevel);
 
-    private void Awake()
+    private void PlayLevel(string json)
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        // Mặc định Unity nuốt mọi phím: ô nhập trong panel sẽ không gõ được.
-        WebGLInput.captureAllKeyboardInput = false;
-#endif
-        DontDestroyOnLoad(gameObject);
+        // Parse bằng class level của game rồi chơi level này; không đụng tới
+        // save/tiến trình người chơi.
     }
 
-    // tool.js: pearzTool.send('LevelToolBridge', 'PlayLevel', json)
-    public void PlayLevel(string json)
-    {
-        // Parse và chơi level này; không đụng tới save/tiến trình người chơi.
-    }
-
-    public void ReportFinished(string result) => PearzToolEmit("levelFinished", result);
+    public void ReportFinished(string result) => PearzTool.Emit("levelFinished", result);
 }
-```
-
-`Assets/Plugins/WebGL/PearzTool.jslib` (chỉ cần khi game báo ngược ra panel):
-
-```js
-mergeInto(LibraryManager.library, {
-    PearzToolEmit: function (eventName, data) {
-        window.pearzTool.emit(UTF8ToString(eventName), UTF8ToString(data));
-    }
-});
 ```
 
 Level GD lưu là file trên máy GD; muốn vào bản game chính thức thì vẫn phải
@@ -250,6 +280,7 @@ commit vào repo game.
 | `webToolDir '…' has no panel.html` | Thư mục khai trong `webToolDir` thiếu `panel.html`, hoặc sai đường dẫn (tính từ thư mục project Unity) |
 | `panel.html must be an HTML fragment` | Bỏ `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` khỏi `panel.html`, chỉ giữ nội dung panel |
 | Có `WebTool/` nhưng trang vẫn là khung 9:16 | Thiếu `panel.html`, thư mục không nằm trong project Unity, hoặc cửa sổ hẹp hơn 900px / màn dọc |
-| Không gõ được vào ô nhập của panel | Game đặt `WebGLInput.captureAllKeyboardInput = false` |
-| Bấm nút trên panel game không phản ứng | Tên GameObject/method trong `pearzTool.send` phải khớp và GameObject đang active; xem Console của trình duyệt |
+| Bấm nút trên panel game không phản ứng | Channel trong `pearzTool.post` phải khớp `PearzTool.On`; với `pearzTool.send` thì tên GameObject/method phải khớp và GameObject đang active. Xem Console của trình duyệt (chọn đúng khung của game) |
+| `Pages project '…-game' does not exist yet` khi chạy `webtool-publish.mjs` | Domain chưa được job WebGL deploy bằng bản PearzCI có hai site; chạy job một lần |
+| Khung game trắng ngay sau lần build đầu | Địa chỉ `*.pages.dev` của project `-game` mới tạo cần vài phút mới truy cập được |
 | Trang mở được nhưng domain báo SSL đang chờ | Lần đầu gắn domain Cloudflare cần vài phút cấp chứng chỉ |
