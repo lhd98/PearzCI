@@ -16,9 +16,18 @@
   #bar > div { width: 0; height: 100%; background: #e8ebf1; transition: width .2s; }
   #error { display: none; max-width: 80%; text-align: center; color: #ff8a80; }
   #version { position: absolute; right: 6px; bottom: 4px; font-size: 11px; opacity: .45; pointer-events: none; }
+  /* Layout tool (body.tool, game có thư mục WebTool): khung game căn trái cao hết màn, panel của game chiếm phần còn lại.
+     Màn dọc hoặc hẹp thì panel ẩn và trang trở về khung 9:16 căn giữa ở trên. */
+  #tool-panel { display: none; }
+  @media (min-aspect-ratio: 1/1) and (min-width: 900px) {
+    body.tool { align-items: stretch; justify-content: flex-start; }
+    body.tool #frame { flex: none; height: 100dvh; }
+    body.tool #tool-panel { display: block; flex: 1; min-width: 0; height: 100dvh; box-sizing: border-box; overflow: auto; border-left: 1px solid #3a3f4d; }
+  }
 </style>
+{{TOOL_HEAD}}
 </head>
-<body>
+<body class="{{BODY_CLASS}}">
 <div id="frame">
   <canvas id="unity-canvas" width="{{WIDTH}}" height="{{HEIGHT}}" tabindex="-1"></canvas>
   <div id="loading">
@@ -28,6 +37,7 @@
   </div>
   <div id="version">{{VERSION}}</div>
 </div>
+{{TOOL_PANEL}}
 <script>
   var buildQuery = "?v={{BUILD_ID}}";
   var canvas = document.getElementById("unity-canvas");
@@ -64,5 +74,6 @@
   };
   document.body.appendChild(script);
 </script>
+{{TOOL_SCRIPT}}
 </body>
 </html>

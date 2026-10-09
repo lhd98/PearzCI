@@ -129,7 +129,12 @@ function writeIndexHtml() {
         LOADER: encodeURIComponent(loader),
         DATA: encodeURIComponent(data),
         FRAMEWORK: encodeURIComponent(framework),
-        WASM: encodeURIComponent(wasm)
+        WASM: encodeURIComponent(wasm),
+        // Layout tool: để trống thì trang là khung 9:16 căn giữa.
+        BODY_CLASS: '',
+        TOOL_HEAD: '',
+        TOOL_PANEL: '',
+        TOOL_SCRIPT: ''
     };
     const template = fs.readFileSync(required('WEB_INDEX_TEMPLATE'), 'utf8');
     const output = template.replace(/\{\{([A-Z_]+)\}\}/g, (token, key) =>
