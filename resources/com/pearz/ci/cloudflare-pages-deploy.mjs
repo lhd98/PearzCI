@@ -7,11 +7,12 @@
 //   WEB_SITE_DIR           thư mục site Unity xuất ra (có Build/)
 //   WEB_INDEX_TEMPLATE     file webgl-index.html của PearzCI
 //   WEB_RESOLUTION         720x1280 | 1080x1920 | 1440x2560
+//   WEB_TOOL_DIR           tuỳ chọn; thư mục web-tool của game (có panel.html)
 //   WEB_RESULT_FILE        file ghi kết quả KEY=VALUE cho Jenkins
 //   PEARZ_PRODUCT_NAME, BUILD_VERSION, GIT_COMMIT_SHORT, GIT_COMMIT_MESSAGE
 //   WRANGLER_VERSION       mặc định 4
 //
-// Các bước: sinh index.html -> kiểm tra giới hạn 25 MiB -> tìm account ->
+// Các bước: copy web-tool (nếu có) -> sinh index.html -> kiểm tra giới hạn 25 MiB -> tìm account ->
 // tìm project Pages đang gắn domain (không có thì tạo) -> wrangler deploy ->
 // gắn domain + CNAME nếu còn thiếu.
 
@@ -85,6 +86,49 @@ async function cf(method, apiPath, body) {
     return json;
 }
 
+// Web-tool của game: copy cả thư mục vào <site>/tool và trả về các đoạn HTML
+// chèn vào template. panel.html nằm thẳng trong index.html nên đường dẫn
+// tương đối trong đó tính từ gốc site (tool/anh.png). Không có WEB_TOOL_DIR
+// thì mọi đoạn đều rỗng và trang là khung 9:16 căn giữa.
+function prepareTool(buildId) {
+    const publishDir = path.join(siteDir, 'tool');
+    // Site là thư mục Unity ghi đè chứ không dọn: bỏ bản tool của lần trước.
+    fs.rmSync(publishDir, { recursive: true, force: true });
+
+    const toolDir = (process.env.WEB_TOOL_DIR || '').trim();
+    if (!toolDir) {
+        return { BODY_CLASS: '', TOOL_HEAD: '', TOOL_PANEL: '', TOOL_SCRIPT: '' };
+    }
+    const panelFile = path.join(toolDir, 'panel.html');
+    if (!fs.existsSync(panelFile)) {
+        fail(`The web-tool folder has no panel.html: ${toolDir}`);
+    }
+    const panel = fs.readFileSync(panelFile, 'utf8').replace(/^﻿/, '');
+    if (/<(!doctype|html|head|body)[\s>]/i.test(panel)) {
+        fail(
+            'panel.html must be an HTML fragment (the content of the panel only), ' +
+            'without <!DOCTYPE>, <html>, <head> or <body>.'
+        );
+    }
+
+    fs.cpSync(toolDir, publishDir, { recursive: true });
+    const has = (name) => fs.existsSync(path.join(toolDir, name));
+    console.log(
+        `Web-tool panel from ${toolDir}` +
+        ` (tool.css: ${has('tool.css') ? 'yes' : 'no'}, tool.js: ${has('tool.js') ? 'yes' : 'no'}).`
+    );
+    return {
+        BODY_CLASS: 'tool',
+        TOOL_HEAD: has('tool.css')
+            ? `<link rel="stylesheet" href="tool/tool.css?v=${buildId}">`
+            : '',
+        TOOL_PANEL: `<aside id="tool-panel">\n${panel}\n</aside>`,
+        TOOL_SCRIPT: has('tool.js')
+            ? `<script src="tool/tool.js?v=${buildId}"></script>`
+            : ''
+    };
+}
+
 function writeIndexHtml() {
     const buildDir = path.join(siteDir, 'Build');
     if (!fs.existsSync(buildDir)) {
@@ -117,31 +161,31 @@ function writeIndexHtml() {
         .replace(/"/g, '&quot;');
     // JSON nằm trong <script>: chặn "</script>" thoát khỏi thẻ.
     const js = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
+    const buildId = encodeURIComponent(version || String(Date.now()));
     const values = {
         PRODUCT_NAME: html(productName),
         PRODUCT_NAME_JSON: js(productName),
         COMPANY_NAME_JSON: js(process.env.PEARZ_COMPANY_NAME || 'DefaultCompany'),
         VERSION: html(version),
         VERSION_JSON: js(version),
-        BUILD_ID: encodeURIComponent(version || String(Date.now())),
+        BUILD_ID: buildId,
         WIDTH: width,
         HEIGHT: height,
         LOADER: encodeURIComponent(loader),
         DATA: encodeURIComponent(data),
         FRAMEWORK: encodeURIComponent(framework),
         WASM: encodeURIComponent(wasm),
-        // Layout tool: để trống thì trang là khung 9:16 căn giữa.
-        BODY_CLASS: '',
-        TOOL_HEAD: '',
-        TOOL_PANEL: '',
-        TOOL_SCRIPT: ''
+        ...prepareTool(buildId)
     };
     const template = fs.readFileSync(required('WEB_INDEX_TEMPLATE'), 'utf8');
     const output = template.replace(/\{\{([A-Z_]+)\}\}/g, (token, key) =>
         Object.prototype.hasOwnProperty.call(values, key) ? values[key] : token
     );
     fs.writeFileSync(path.join(siteDir, 'index.html'), output);
-    console.log(`index.html written (${resolution}, loader ${loader}).`);
+    console.log(
+        `index.html written (${resolution}, loader ${loader}, ` +
+        `${values.BODY_CLASS === 'tool' ? 'web-tool layout' : '9:16 layout'}).`
+    );
 }
 
 function checkFileSizes() {
