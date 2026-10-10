@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.13.0] - 2026-10-10
+
+### Changed
+
+- Android App Bundle builds (`BUILD_APP_BUNDLE`) are now always compiled with
+  the `RELEASE` scripting define, so store builds can compile out test-only
+  code with `#if !RELEASE` without anyone having to fill in
+  `SCRIPTING_DEFINE_SYMBOLS`. The define is added on top of the project's or
+  the parameter's symbols for that build only and is not written to
+  ProjectSettings. APK, iOS and WebGL builds are unchanged. Editor code does
+  not see the define; build steps can read the `BUILD_APP_BUNDLE` environment
+  variable instead.
+
 ## [0.12.1] - 2026-10-10
 
 ### Changed

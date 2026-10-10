@@ -16,6 +16,7 @@ public static class BuildEntry
 {
     private const string LogPrefix = "[Pearz.CI]";
     private const string IosDeviceBuildMarkerFileName = ".pearz-ci-ios-device-build";
+    private const string ReleaseDefineSymbol = "RELEASE";
 
     /// <summary>
     /// Jenkins entry point:
@@ -87,8 +88,15 @@ public static class BuildEntry
                 targetGroup      = BuildTargetGroup.Android,
                 options          = GetAndroidCompressionBuildOptions(
                     configuration.BuildAppBundle,
-                    configuration.DevelopmentBuild)
+                    configuration.DevelopmentBuild),
+                extraScriptingDefines = GetAndroidExtraScriptingDefines(configuration)
             };
+
+            Log(
+                "Extra scripting defines for this build: " +
+                (buildPlayerOptions.extraScriptingDefines.Length > 0
+                    ? string.Join(";", buildPlayerOptions.extraScriptingDefines)
+                    : "<none>"));
 
             Log("Calling BuildPipeline.BuildPlayer...");
 
@@ -893,7 +901,9 @@ public static class BuildEntry
                     PlayerSettings.Android.targetArchitectures.ToString(),
                 scriptingDefineSymbols =
                     SplitScriptingDefineSymbols(
-                        GetAndroidScriptingDefineSymbols()),
+                            GetAndroidScriptingDefineSymbols())
+                        .Concat(GetAndroidExtraScriptingDefines(configuration))
+                        .ToArray(),
                 buildAppBundle =
                     configuration != null && configuration.BuildAppBundle,
                 outputFileName = outputFile != null
@@ -1065,6 +1075,26 @@ public static class BuildEntry
         }
 
         return options;
+    }
+
+    // AAB là bản đưa lên store, nên luôn được biên dịch với RELEASE để game tắt
+    // được các đường chỉ dành cho bản test (#if !RELEASE) mà không phụ thuộc vào
+    // việc ai đó nhớ điền SCRIPTING_DEFINE_SYMBOLS. Truyền qua
+    // extraScriptingDefines: cộng thêm vào define của project/tham số, chỉ có
+    // hiệu lực trong lần build này và không ghi vào ProjectSettings, nên APK
+    // build sau đó trong cùng workspace không bị dính.
+    private static string[] GetAndroidExtraScriptingDefines(
+        BuildConfiguration configuration)
+    {
+        if (configuration == null || !configuration.BuildAppBundle)
+        {
+            return Array.Empty<string>();
+        }
+
+        return SplitScriptingDefineSymbols(GetAndroidScriptingDefineSymbols())
+                .Contains(ReleaseDefineSymbol)
+            ? Array.Empty<string>()
+            : new[] { ReleaseDefineSymbol };
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)

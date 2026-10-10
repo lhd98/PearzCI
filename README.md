@@ -165,7 +165,11 @@ Common optional parameters:
   `botToken|chatId|messageThreadId`; separate targets with semicolons
 - Optional String `PRODUCT_NAME`, for example `MyGame`. When left empty,
   artifact names use Unity's `productName` from `ProjectSettings.asset`.
-- Multi-line String `SCRIPTING_DEFINE_SYMBOLS`
+- Multi-line String `SCRIPTING_DEFINE_SYMBOLS`. When set it replaces the
+  project's define symbols for the build. Android App Bundle builds
+  (`BUILD_APP_BUNDLE`) always get `RELEASE` added on top, for that build only,
+  so store builds can compile out test-only code with `#if !RELEASE`; APK,
+  iOS and WebGL builds get it only if you list it here.
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,
