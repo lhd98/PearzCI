@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.12.1] - 2026-10-10
+
+### Changed
+
+- Documentation only: the web-tool guide now gives the PowerShell form of the
+  `webtool-publish.mjs` and `levels-pull.mjs` commands, the command that sets
+  `CLOUDFLARE_API_TOKEN` once per Windows account, and a `publish-webtool.bat`
+  template to copy into a Unity project.
+
 ## [0.12.0] - 2026-10-09
 
 ### Added

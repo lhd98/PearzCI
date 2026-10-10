@@ -168,12 +168,20 @@ máy mình. Trong thư mục project Unity:
 node Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs --domain pg07.pearz.space
 ```
 
-(PowerShell: thay đường dẫn bằng
-`(Get-Item Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs)`.)
+Lệnh trên dành cho Git Bash. PowerShell không tự mở rộng `@*`, nên viết:
+
+```powershell
+node (Get-Item Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs) --domain pg07.pearz.space
+```
 
 - Cần Node.js 18+ và biến môi trường `CLOUDFLARE_API_TOKEN`: một token riêng
   cho máy dev với `Account → Cloudflare Pages → Edit` và
-  `Account → Account Settings → Read`. Không cần quyền DNS.
+  `Account → Account Settings → Read`. Không cần quyền DNS. Đặt một lần cho
+  tài khoản Windows rồi mở lại terminal (đừng ghi token vào file trong repo):
+
+  ```powershell
+  [Environment]::SetEnvironmentVariable('CLOUDFLARE_API_TOKEN', '<token>', 'User')
+  ```
 - Lần publish đầu mất thêm thời gian tải wrangler; sau khi lệnh báo xong, vài
   giây sau domain mới trả bản mới.
 - `--domain` bỏ được nếu `WebTool/pearz-tool.json` có `domain`.
@@ -183,6 +191,48 @@ node Library/PackageCache/com.pearz.ci@*/tools/webtool-publish.mjs --domain pg07
 
 Lệnh chỉ thay trang khung và `tool/` của project gắn domain; không tạo
 project, không đụng DNS hay bản build. Xong thì reload `WEB_DOMAIN`.
+
+#### File `.bat` để khỏi nhớ lệnh (Windows)
+
+Lưu nội dung dưới đây thành `publish-webtool.bat` trong thư mục project Unity
+(cạnh `Assets/`), với `domain` đã khai trong `WebTool/pearz-tool.json`. Sửa
+tool xong thì bấm đúp; thêm tham số khi chạy từ terminal, ví dụ
+`publish-webtool.bat --watch`. File tự tìm package nên không phải sửa khi
+PearzCI lên bản mới. Lưu với xuống dòng kiểu Windows (CRLF).
+
+```bat
+@echo off
+setlocal
+cd /d "%~dp0"
+
+if "%CLOUDFLARE_API_TOKEN%"=="" (
+    echo ERROR: Chua co bien moi truong CLOUDFLARE_API_TOKEN.
+    echo Dat mot lan trong PowerShell roi mo lai cua so nay:
+    echo   [Environment]::SetEnvironmentVariable('CLOUDFLARE_API_TOKEN', '^<token^>', 'User'^)
+    goto :failed
+)
+
+set "SCRIPT="
+for /d %%D in ("Library\PackageCache\com.pearz.ci@*") do set "SCRIPT=%%D\tools\webtool-publish.mjs"
+if not exist "%SCRIPT%" (
+    echo ERROR: Khong thay package com.pearz.ci trong Library\PackageCache.
+    echo Mo project bang Unity mot lan de Unity tai package ve.
+    goto :failed
+)
+
+node "%SCRIPT%" %*
+if errorlevel 1 goto :failed
+
+echo.
+echo Xong. Cho vai giay roi reload trang.
+pause
+exit /b 0
+
+:failed
+echo.
+pause
+exit /b 1
+```
 
 Job WebGL deploy lại trang khung từ git, nên tool đã đẩy mà **chưa commit sẽ
 bị bản trong git thay thế** ở lần build kế tiếp; lệnh in nhắc khi `WebTool/`
@@ -380,6 +430,12 @@ Level GD lưu chỉ nằm trên web cho tới khi được kéo về project. Kh
 
   ```bash
   node Library/PackageCache/com.pearz.ci@*/resources/com/pearz/ci/levels-pull.mjs
+  ```
+
+  PowerShell:
+
+  ```powershell
+  node (Get-Item Library/PackageCache/com.pearz.ci@*/resources/com/pearz/ci/levels-pull.mjs)
   ```
 
 - **Trên Jenkins**, khi `pullOnBuild` là `true`: mọi build (Android, iOS,
