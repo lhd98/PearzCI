@@ -9,9 +9,9 @@ def telegramBuildStatus() {
 }
 
 def buildTelegramMessage() {
-    return truncateTelegramMessage(
-        renderAndroidTelegramMessage(env.GIT_CHANGES?.trim())
-    )
+    return renderWithinTelegramLimit(env.GIT_CHANGES?.trim()) { changes ->
+        renderAndroidTelegramMessage(changes)
+    }
 }
 
 // Caption của sendDocument chỉ được 1024 ký tự (sendMessage là 4096), nên
@@ -101,12 +101,8 @@ def renderAndroidTelegramMessage(String changeDescription) {
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
         INSTALL_STATUS: telegramHtmlEscape(env.ANDROID_INSTALL_STATUS),
-        ERROR_SECTION: env.META_ERROR_MESSAGE?.trim()
-            ? "<blockquote><b>Error</b>\n${telegramHtmlEscape(env.META_ERROR_MESSAGE.trim())}</blockquote>"
-            : '',
-        CHANGES_SECTION: changeDescription
-            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
-            : ''
+        ERROR_SECTION: telegramErrorSection(env.META_ERROR_MESSAGE),
+        CHANGES_SECTION: telegramChangesSection(changeDescription)
     ]
 
     return renderTelegramTemplate(values)
@@ -151,8 +147,7 @@ def buildIosTelegramMessage(boolean deviceBuild) {
             reason = 'The IPA was built but the TestFlight upload failed.'
         }
 
-        errorSection = '<blockquote><b>Error</b>\n' +
-            telegramHtmlEscape(reason) + '</blockquote>'
+        errorSection = telegramErrorSection(reason)
     }
 
     def values = [
@@ -174,26 +169,81 @@ def buildIosTelegramMessage(boolean deviceBuild) {
                 ? 'Installed on the connected device.'
                 : 'Not installed.')
             : '',
-        ERROR_SECTION: errorSection,
-        CHANGES_SECTION: changeDescription
-            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
-            : ''
+        ERROR_SECTION: errorSection
     ]
 
-    return truncateTelegramMessage(renderTelegramTemplate(values))
+    return renderWithinTelegramLimit(changeDescription) { changes ->
+        renderTelegramTemplate(
+            values + [CHANGES_SECTION: telegramChangesSection(changes)]
+        )
+    }
 }
 
-// Telegram sendMessage từ chối text dài hơn 4096 ký tự. Cắt bớt để một
-// khoảng cách commit lớn không làm hỏng toàn bộ thông báo.
-def truncateTelegramMessage(String message) {
+// Telegram sendMessage từ chối text dài hơn 4096 ký tự (đếm sau khi parse
+// HTML). Không cắt chuỗi HTML đã render: điểm cắt có thể rơi vào giữa một thẻ
+// và Telegram từ chối cả tin. Thay vào đó bớt phần Changes - phần duy nhất dài
+// không giới hạn - theo từng dòng commit rồi render lại; vẫn quá dài thì bỏ
+// hẳn phần đó.
+def renderWithinTelegramLimit(String changeDescription, Closure render) {
     int maximumLength = 4096
+    def message = render(changeDescription)
+    int overflow = telegramVisibleLength(message) - maximumLength
 
-    if (!message || message.length() <= maximumLength) {
+    if (overflow <= 0 || !changeDescription) {
         return message
     }
 
-    def notice = '\n... (message truncated)'
-    return message.substring(0, maximumLength - notice.length()) + notice
+    // Phần Changes đếm đúng bằng độ dài chuỗi gốc (mỗi entity tính một ký
+    // tự), nên bớt đi overflow ký tự là vừa giới hạn.
+    def notice = '- ... (more changes omitted)'
+    int budget = changeDescription.length() - overflow - notice.length() - 1
+    def kept = []
+    int used = 0
+
+    for (def line : changeDescription.readLines()) {
+        int cost = line.length() + (kept ? 1 : 0)
+
+        if (used + cost > budget) {
+            // Commit mới nhất đã dài quá: giữ phần đầu của nó.
+            if (!kept && budget > 3) {
+                kept << line.take(budget - 3) + '...'
+            }
+            break
+        }
+
+        kept << line
+        used += cost
+    }
+
+    message = render(kept ? (kept + [notice]).join('\n') : '')
+
+    return telegramVisibleLength(message) <= maximumLength
+        ? message
+        : render('')
+}
+
+def telegramChangesSection(String changeDescription) {
+    return changeDescription
+        ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
+        : ''
+}
+
+// Lỗi Unity/Cloudflare có thể rất dài (stack, danh sách file). Giới hạn để
+// phần còn lại của tin luôn vừa 4096 ký tự khi đã bỏ phần Changes.
+def telegramErrorSection(String reason) {
+    def text = reason?.trim()
+
+    if (!text) {
+        return ''
+    }
+
+    int maximumLength = 1000
+
+    if (text.length() > maximumLength) {
+        text = text.take(maximumLength - 3) + '...'
+    }
+
+    return "<blockquote><b>Error</b>\n${telegramHtmlEscape(text)}</blockquote>"
 }
 
 // Telegram HTML chỉ cho phép một tập thẻ giới hạn; escape toàn bộ dữ liệu
@@ -339,8 +389,7 @@ def buildWebTelegramMessage() {
         def reason = env.WEB_DEPLOY_ERROR?.trim() ?:
             env.META_ERROR_MESSAGE?.trim() ?:
             'The WebGL build was not deployed.'
-        errorSection = '<blockquote><b>Error</b>\n' +
-            telegramHtmlEscape(reason) + '</blockquote>'
+        errorSection = telegramErrorSection(reason)
     }
 
     def values = [
@@ -351,13 +400,14 @@ def buildWebTelegramMessage() {
         PRODUCT_NAME: telegramHtmlEscape(env.PEARZ_PRODUCT_NAME),
         BRANCH: telegramHtmlEscape(params.GIT_BRANCH),
         WEB: telegramHtmlEscape(succeeded ? env.WEB_URL : ''),
-        ERROR_SECTION: errorSection,
-        CHANGES_SECTION: changeDescription
-            ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
-            : ''
+        ERROR_SECTION: errorSection
     ]
 
-    return truncateTelegramMessage(renderTelegramTemplate(values))
+    return renderWithinTelegramLimit(changeDescription) { changes ->
+        renderTelegramTemplate(
+            values + [CHANGES_SECTION: telegramChangesSection(changes)]
+        )
+    }
 }
 
 def sendTelegramText(

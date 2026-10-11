@@ -31,6 +31,23 @@ if [ -n "$document_path" ] && [ ! -f "$document_path" ]; then
     document_path=''
 fi
 
+# Không dùng curl --fail: lỗi HTTP 4xx thì Telegram trả
+# {"ok":false,"description":"..."} và đó là thông tin duy nhất cho biết vì
+# sao tin bị từ chối (sai chat ID, HTML hỏng...). Thành công được xác định
+# bằng "ok":true.
+telegram_ok() {
+    printf '%s' "$1" | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
+}
+
+telegram_error() {
+    reason=$(
+        printf '%s' "$1" |
+            sed -n 's/.*"description"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+            head -n 1
+    )
+    [ -z "$reason" ] || echo "Telegram: $reason" >&2
+}
+
 # Gửi file build. Có caption thì file và nội dung thông báo nằm chung một
 # tin; không thì file trả lời vào tin nhắn vừa gửi. Trả về 0 khi Telegram
 # nhận file.
@@ -63,14 +80,18 @@ send_document() {
     fi
 
     doc_response=$(
-        curl --fail --silent --show-error \
+        curl --silent --show-error \
             --max-time 1800 \
             "$@" \
             "$api_url/bot${doc_token}/sendDocument"
     ) || doc_response=''
 
-    printf '%s' "$doc_response" |
-        grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
+    if telegram_ok "$doc_response"; then
+        return 0
+    fi
+
+    telegram_error "$doc_response"
+    return 1
 }
 
 message_file=${TELEGRAM_MESSAGE_FILE:-}
@@ -187,7 +208,7 @@ while :; do
 
                 if [ -n "$thread_id" ]; then
                     response=$(
-                        curl --fail --silent --show-error \
+                        curl --silent --show-error \
                             --request POST \
                             --data-urlencode "chat_id=$chat_id" \
                             --data-urlencode "text=$message" \
@@ -202,7 +223,7 @@ while :; do
                     ) || response=''
                 else
                     response=$(
-                        curl --fail --silent --show-error \
+                        curl --silent --show-error \
                             --request POST \
                             --data-urlencode "chat_id=$chat_id" \
                             --data-urlencode "text=$message" \
@@ -215,8 +236,7 @@ while :; do
                     ) || response=''
                 fi
 
-                if printf '%s' "$response" |
-                    grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'; then
+                if telegram_ok "$response"; then
                     echo "Telegram notification sent to target #$target_count."
                     success_count=$((success_count + 1))
 
@@ -236,6 +256,7 @@ while :; do
                     fi
                 else
                     echo "Target #$target_count failed." >&2
+                    telegram_error "$response"
                     error_count=$((error_count + 1))
                 fi
             fi

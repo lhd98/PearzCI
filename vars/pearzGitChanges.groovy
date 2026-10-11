@@ -35,36 +35,48 @@ def collectGitChanges(int maximumChanges) {
     }
 
     def hasValidPreviousCommit = previousBuildCommit != null
-    def logOutput = ''
 
     echo(
         previousBuildCommit
             ? 'Telegram commit baseline: ' + previousBuildCommit +
                 ' (source: ' + previousBuildSource + ').'
-            : 'Telegram commit baseline unavailable; using HEAD only.'
+            : 'Telegram commit baseline unavailable; using the Jenkins ' +
+                'checkout changelog or HEAD.'
     )
-    def changes = collectJenkinsChangeSets()
-    if (!changes) {
-        withEnv([
-        "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
-        "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
-        ]) {
-        logOutput = sh(
-            script: '''
-                if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
-                    git log --pretty=format:'%h%x09%an%x09%B%x1e' \
-                        "$PREVIOUS_BUILD_COMMIT..HEAD"
-                else
-                    git log -1 --pretty=format:'%h%x09%an%x09%B%x1e'
-                fi
-            ''',
-            returnStdout: true
-        ).trim()
-        }
 
+    // Có mốc thì luôn dùng git log từ mốc đó. Changelog của Jenkins chỉ
+    // tính từ build liền trước (kể cả build hỏng), nên dùng nó trước sẽ làm
+    // sót commit của build hỏng; chỉ dùng khi không có mốc nào hợp lệ.
+    // --no-merges giữ cùng kiểu danh sách với changelog của Jenkins.
+    def changes = []
+    def changesSource = previousBuildSource
+
+    if (!hasValidPreviousCommit) {
+        changes = collectJenkinsChangeSets()
+        changesSource = changes ? 'Jenkins checkout changelog' : 'HEAD'
     }
 
     if (!changes) {
+        def logOutput = ''
+
+        withEnv([
+            "PREVIOUS_BUILD_COMMIT=${previousBuildCommit ?: ''}",
+            "HAS_VALID_PREVIOUS_COMMIT=${hasValidPreviousCommit}"
+        ]) {
+            logOutput = sh(
+                script: '''
+                    if [ "$HAS_VALID_PREVIOUS_COMMIT" = "true" ]; then
+                        git log --no-merges \
+                            --pretty=format:'%h%x09%an%x09%B%x1e' \
+                            "$PREVIOUS_BUILD_COMMIT..HEAD"
+                    else
+                        git log -1 --pretty=format:'%h%x09%an%x09%B%x1e'
+                    fi
+                ''',
+                returnStdout: true
+            ).trim()
+        }
+
         changes = logOutput
             .split('\u001e')
             .collect { record ->
@@ -79,16 +91,11 @@ def collectGitChanges(int maximumChanges) {
             .findAll { it }
     }
 
-    if (changes) {
-        previousBuildSource = previousBuildCommit
-            ? previousBuildSource
-            : 'Jenkins checkout changelog'
-    }
     int totalChanges = changes.size()
     int hiddenCount = Math.max(0, totalChanges - maximumChanges)
 
     echo(
-        'Telegram commit summary: source=' + previousBuildSource +
+        'Telegram commit summary: source=' + changesSource +
         ', total=' + totalChanges +
         ', shown=' + Math.min(totalChanges, maximumChanges) +
         ', hidden=' + hiddenCount + '.'
@@ -144,7 +151,7 @@ def formatCommitMessage(String message) {
 
     return message
         .readLines()
-        .collect { it.trim().replaceFirst(/^[-*•]\\s+/, '') }
+        .collect { it.trim().replaceFirst(/^[-*•]\s+/, '') }
         .findAll { it }
         .join(' • ')
 }
