@@ -162,3 +162,37 @@ def resolveIosBuildInfo() {
     echo "Build info file found: ${foundPath}"
     return true
 }
+
+// Đường dẫn export options do job khai; rỗng nghĩa là PearzCI tự sinh file
+// method app-store lúc export IPA.
+def exportOptionsPath(Map config) {
+    return config.get(
+        'iosExportOptionsPlistPath',
+        params.IOS_EXPORT_OPTIONS_PLIST_PATH ?: ''
+    ).toString().trim()
+}
+
+// IPA xuất theo method app-store là bản lên App Store Connect: chính file đó
+// được TestFlight rồi nộp duyệt, Apple không cho build lại ở giữa, nên nó
+// được biên dịch với RELEASE như AAB. Export options tự khai mà method khác
+// (ad-hoc, development, enterprise...) là bản cài thử, không phải bản store.
+def isStoreExport(String exportOptionsPath) {
+    if (!exportOptionsPath) {
+        return true
+    }
+    if (!fileExists(exportOptionsPath)) {
+        // Stage export sẽ báo lỗi đường dẫn; ở đây coi như không phải store.
+        return false
+    }
+
+    def method = withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}"]) {
+        sh(
+            script:
+                '/usr/libexec/PlistBuddy -c "Print :method" ' +
+                '"$IOS_EXPORT_OPTIONS" 2>/dev/null || true',
+            returnStdout: true
+        ).trim()
+    }
+
+    return method in ['app-store', 'app-store-connect']
+}

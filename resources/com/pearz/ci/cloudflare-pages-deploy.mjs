@@ -272,6 +272,10 @@ function writeGameIndexHtml(toolOrigins) {
     renderTemplate('WEB_INDEX_TEMPLATE', {
         PRODUCT_NAME: escapeHtml(productName),
         PRODUCT_NAME_JSON: escapeJs(productName),
+        // Cố ý giữ 'DefaultCompany' thay vì Company Name của Player Settings: mọi game đã deploy
+        // đều chạy với giá trị này, và loader của Unity có thể dùng nó cho dữ liệu lưu trong trình
+        // duyệt; đổi đi có thể làm người chơi mất dữ liệu đã lưu một lần. Đặt PEARZ_COMPANY_NAME
+        // nếu một game mới thật sự cần giá trị khác.
         COMPANY_NAME_JSON: escapeJs(process.env.PEARZ_COMPANY_NAME || 'DefaultCompany'),
         VERSION: escapeHtml(version),
         VERSION_JSON: escapeJs(version),

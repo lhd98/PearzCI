@@ -627,6 +627,12 @@ def call(Map config = [:]) {
                         def iosBuildNumber =
                             params.IOS_BUILD_NUMBER?.toString()?.trim() ?:
                             env.ARTIFACT_BUILD_NUMBER
+                        // Bản store (IPA app-store) được biên dịch với RELEASE
+                        // như AAB; device build và export ad-hoc/development
+                        // thì không. Xem pearzIos.isStoreExport.
+                        def iosStoreBuild = !iosBuildToDevice &&
+                            pearzIos.isStoreExport(pearzIos.exportOptionsPath(config))
+                        echo "iOS store build (RELEASE define): ${iosStoreBuild}"
                         // BuildEntry đọc marker này để gỡ capability In-App
                         // Purchase khi export cho device build. Marker phải nằm
                         // trong thư mục project Unity (BuildEntry tìm ở đó), không
@@ -647,6 +653,7 @@ def call(Map config = [:]) {
                                     "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
                                     "IOS_BUILD_NUMBER=${iosBuildNumber}",
                                     "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
+                                    "PEARZ_STORE_BUILD=${iosStoreBuild}",
                                     "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                     "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
                                     // Job không khai tham số này thì params trả null;
@@ -705,7 +712,7 @@ def call(Map config = [:]) {
                 options { timeout(time: 45, unit: 'MINUTES') }
                 steps {
                     script {
-                        def exportOptionsPath = config.get('iosExportOptionsPlistPath', params.IOS_EXPORT_OPTIONS_PLIST_PATH ?: '').toString().trim()
+                        def exportOptionsPath = pearzIos.exportOptionsPath(config)
                         def developmentTeam = config.get('iosDevelopmentTeam', params.IOS_DEVELOPMENT_TEAM ?: '').toString().trim()
                         def profileSpecifier = config.get('iosProvisioningProfileSpecifier', params.IOS_PROVISIONING_PROFILE_SPECIFIER ?: '').toString().trim()
                         def xcodeConfiguration = config.get('xcodeConfiguration', params.XCODE_CONFIGURATION ?: 'Release').toString().trim()
