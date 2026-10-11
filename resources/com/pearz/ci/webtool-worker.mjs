@@ -559,8 +559,18 @@ async function authenticate(request) {
 // tool rồi tự đóng; mở thẳng thì quay về trang trước đó. Báo qua cả BroadcastChannel vì trang đăng nhập của
 // Access có thể cắt liên kết window.opener.
 function loginPage(url) {
-    const target = url.searchParams.get('return') || '/';
-    const back = /^\/(?!\/)/.test(target) ? target : '/';
+    // Chỉ quay về trang cùng origin. Không so chuỗi kiểu "bắt đầu bằng /": trình duyệt coi
+    // "/\evil.com" và "/<tab>/evil.com" là "//evil.com". Trả URL tuyệt đối đã phân giải, vì
+    // một đường dẫn như "/.//evil.com" vẫn chuẩn hoá thành "//evil.com".
+    let back = `${url.origin}/`;
+    try {
+        const resolved = new URL(url.searchParams.get('return') || '/', url.origin);
+        if (resolved.origin === url.origin) {
+            back = resolved.href;
+        }
+    } catch {
+        // Giữ trang gốc.
+    }
     return new Response(
         '<!DOCTYPE html><meta charset="utf-8"><title>Signed in</title>' +
         '<p style="font-family: system-ui, sans-serif">Signed in. You can close this window.</p><script>' +

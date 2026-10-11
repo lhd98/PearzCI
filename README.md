@@ -497,9 +497,13 @@ message can contain:
   consume the changelog and leave the next build reporting no changes.
 - Jenkins artifact links for `unity-build.log` and `upload.log` when present.
 
-Telegram rejects a message longer than 4096 characters, so the rendered
-message is truncated at that limit and marked with `... (message truncated)`.
-The commit list is capped first because it is the only unbounded section.
+Telegram rejects a message longer than 4096 characters, so when the message
+would be longer, whole commit lines are dropped from the end of the commit list
+(the only unbounded section) and replaced with `- ... (more changes omitted)`;
+the rendered HTML itself is never cut, because a cut inside a tag makes
+Telegram reject the whole message. The `Error` block is limited to 1000
+characters. When Telegram rejects a message anyway, the Jenkins log shows the
+reason Telegram gave.
 
 The notification keeps the existing `TELEGRAM_CHANNEL` format and supports
 multiple semicolon-separated targets. Build metadata and notification helper
@@ -753,7 +757,10 @@ The remaining shared optional values are also supported: `SCRIPTING_DEFINE_SYMBO
 `STRIP_ENGINE_CODE`.
 
 The pipeline first exports `Unity-iPhone.xcodeproj`, then invokes
-`xcodebuild archive` and `xcodebuild -exportArchive`. The final signed IPA,
+`xcodebuild archive` and `xcodebuild -exportArchive`. When the export contains
+`Unity-iPhone.xcworkspace` (CocoaPods through the External Dependency Manager)
+the archive is built from the workspace so the Pods are linked; otherwise from
+the project. The final signed IPA,
 Unity log, and Xcode log are archived in Jenkins and uploaded to the configured
 Google Drive remote just like Android artifacts.
 

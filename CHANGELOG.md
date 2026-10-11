@@ -2,6 +2,36 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.13.1] - 2026-10-11
+
+### Fixed
+
+- The Telegram commit list now really starts at the last successful build.
+  The Jenkins checkout changelog was read first, and it only covers changes
+  since the previous build, failed or not, so the commits of a failed build
+  were missing from the next message. It is now used only when there is no
+  successful build to compare with. Merge commits are left out, as in the
+  Jenkins changelog.
+- Leading `-`, `*` and `•` bullets in commit bodies are stripped in the
+  Telegram commit list again; the pattern never matched.
+- An iOS job without a `STRIP_ENGINE_CODE` parameter no longer fails in Unity
+  with `STRIP_ENGINE_CODE phải là true/false`: the missing parameter was
+  passed as the text `null`. It now keeps the Project Settings value.
+- iOS IPA builds archive from `Unity-iPhone.xcworkspace` when the export has
+  one (CocoaPods through the External Dependency Manager), so the Pods are
+  linked; connected-device builds already did this. Paths and provisioning
+  profile names with spaces are passed intact, and the Xcode log is printed
+  in the console when the archive or export fails.
+- The Editor assembly no longer needs iOS Build Support to compile, so the
+  package works on machines that only build Android or WebGL.
+- A long Telegram message no longer gets rejected as a whole. It used to be
+  cut at 4096 characters of HTML, which could stop inside a tag; now whole
+  commit lines are dropped from the commit list instead, and the `Error`
+  block is limited to 1000 characters. When Telegram does reject a message,
+  the Jenkins log shows the reason it gave.
+- Signing in to the level store can no longer redirect to another site:
+  `return=/\evil.com` and similar paths were accepted.
+
 ## [0.13.0] - 2026-10-10
 
 ### Changed

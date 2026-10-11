@@ -659,7 +659,10 @@ def call(Map config = [:]) {
                                 "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
                                 "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
                                 "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
-                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE}"
+                                // Job không khai tham số này thì params trả null;
+                                // nội suy thẳng sẽ thành chuỗi "null" và BuildEntry
+                                // từ chối. Rỗng = giữ Project Settings.
+                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE == null ? '' : params.STRIP_ENGINE_CODE}"
                             ]) {
                                 sh '''
                                     set +e
@@ -766,14 +769,26 @@ def call(Map config = [:]) {
                             sh '''
                                 set -eu
                                 [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" ]
-                                rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
+                                rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH" "$XCODEBUILD_LOG_PATH"
                                 mkdir -p "$EXPORT_PATH"
-                                signing_args=""
-                                [ -z "$IOS_DEVELOPMENT_TEAM" ] || signing_args="$signing_args DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
-                                [ -z "$IOS_PROFILE_SPECIFIER" ] || signing_args="$signing_args CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
-                                xcodebuild -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" -scheme Unity-iPhone -configuration "$XCODE_CONFIGURATION" -archivePath "$ARCHIVE_PATH" archive $signing_args > "$XCODEBUILD_LOG_PATH" 2>&1
+                                # In log cả khi xcodebuild hỏng: set -e dừng script
+                                # trước mọi lệnh cat đặt sau nó.
+                                trap '[ ! -f "$XCODEBUILD_LOG_PATH" ] || cat "$XCODEBUILD_LOG_PATH"' EXIT
+                                # Project có CocoaPods (EDM4U) thì Unity sinh
+                                # workspace; archive từ .xcodeproj sẽ thiếu Pods.
+                                # Tham số đi qua "$@" để đường dẫn/tên profile có
+                                # dấu cách không bị tách.
+                                if [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace" ]; then
+                                    set -- -workspace "$IOS_PROJECT_PATH/Unity-iPhone.xcworkspace"
+                                else
+                                    set -- -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+                                fi
+                                set -- "$@" -scheme Unity-iPhone -configuration "$XCODE_CONFIGURATION" -archivePath "$ARCHIVE_PATH" archive
+                                [ -z "$IOS_DEVELOPMENT_TEAM" ] || set -- "$@" "DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
+                                [ -z "$IOS_PROFILE_SPECIFIER" ] || set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                echo "xcodebuild $1 $2"
+                                xcodebuild "$@" > "$XCODEBUILD_LOG_PATH" 2>&1
                                 xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportOptionsPlist "$IOS_EXPORT_OPTIONS" -exportPath "$EXPORT_PATH" >> "$XCODEBUILD_LOG_PATH" 2>&1
-                                cat "$XCODEBUILD_LOG_PATH"
                                 ipa=$(find "$EXPORT_PATH" -maxdepth 1 -type f -name '*.ipa' -print -quit)
                                 [ -n "$ipa" ]
                                 cp "$ipa" "$OUTPUT_PATH"

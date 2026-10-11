@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
-using UnityEditor.iOS.Xcode;
 using UnityEngine;
 
 namespace Pearz.CI
@@ -304,7 +303,12 @@ public static class BuildEntry
         if (!File.Exists(markerPath))
             return;
 
-        string projectPath = PBXProject.GetPBXProjectPath(outputPath);
+        // Tương đương PBXProject.GetPBXProjectPath, nhưng không cần
+        // UnityEditor.iOS.Xcode: assembly đó chỉ có khi máy cài iOS Build
+        // Support, thiếu nó thì package không compile được trên máy chỉ build
+        // Android/WebGL.
+        string projectPath = Path.Combine(
+            outputPath, "Unity-iPhone.xcodeproj", "project.pbxproj");
         if (!File.Exists(projectPath))
             throw new FileNotFoundException("Exported Xcode project file was not found.", projectPath);
 
