@@ -104,16 +104,12 @@ def pullLevels(Map config) {
         return
     }
 
-    writeFile(
-        file: 'levels-pull.mjs',
-        encoding: 'UTF-8',
-        text: libraryResource('com/pearz/ci/levels-pull.mjs')
-    )
-    withEnv(["PEARZ_TOOL_DIR=${toolDir}"]) {
+    def script = pearzScript.resource('levels-pull.mjs')
+    withEnv(["PEARZ_TOOL_DIR=${toolDir}", "PEARZ_LEVELS_PULL=${script}"]) {
         sh '''
             set -eu
             export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-            node levels-pull.mjs --project-dir "$UNITY_PROJECT_PATH" --tool-dir "$PEARZ_TOOL_DIR" --on-build
+            node "$PEARZ_LEVELS_PULL" --project-dir "$UNITY_PROJECT_PATH" --tool-dir "$PEARZ_TOOL_DIR" --on-build
         '''
     }
 }
@@ -133,34 +129,6 @@ def validateAgent() {
     )
     if (nodeStatus != 0) {
         error('Node.js 18+ is required on the agent to deploy WebGL builds (brew install node).')
-    }
-}
-
-// Gọi Unity batchmode với BuildEntry.<method>, in log Unity vào console.
-def runUnity(String buildTarget, String method) {
-    withEnv([
-        "PEARZ_UNITY_BUILD_TARGET=${buildTarget}",
-        "PEARZ_UNITY_METHOD=Pearz.CI.BuildEntry.${method}"
-    ]) {
-        sh '''
-            set +e
-
-            "$UNITY_EXE" \
-                -batchmode \
-                -quit \
-                -projectPath "$UNITY_PROJECT_PATH" \
-                -buildTarget "$PEARZ_UNITY_BUILD_TARGET" \
-                -executeMethod "$PEARZ_UNITY_METHOD" \
-                -logFile "$BUILD_LOG_PATH"
-
-            unity_exit_code=$?
-
-            if [ -f "$BUILD_LOG_PATH" ]; then
-                cat "$BUILD_LOG_PATH"
-            fi
-
-            exit "$unity_exit_code"
-        '''
     }
 }
 
@@ -206,25 +174,18 @@ NODE
 }
 
 def buildUnity(Map web) {
-    def buildStartedAt = System.currentTimeMillis()
     // Báo cấu hình web-tool sai trước khi tốn thời gian build Unity.
     resolveToolDir(web)
     removeExcludedPackages(web.excludePackages)
 
-    try {
-        withEnv([
-            "OUTPUT_PATH=${env.OUTPUT_PATH}",
-            "APP_VERSION=${env.PEARZ_APP_VERSION}",
-            "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
-            "DEVELOPMENT_BUILD=${params.DEVELOPMENT_BUILD ?: false}",
-            "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}"
-        ]) {
-            runUnity('WebGL', 'BuildWebGL')
-        }
-    } finally {
-        env.BUILD_TIME_MILLIS = (
-            System.currentTimeMillis() - buildStartedAt
-        ).toString()
+    withEnv([
+        "OUTPUT_PATH=${env.OUTPUT_PATH}",
+        "APP_VERSION=${env.PEARZ_APP_VERSION}",
+        "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
+        "DEVELOPMENT_BUILD=${params.DEVELOPMENT_BUILD ?: false}",
+        "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}"
+    ]) {
+        pearzUnity.run('WebGL', 'BuildWebGL')
     }
 }
 
@@ -233,26 +194,10 @@ def buildUnity(Map web) {
 // gắn domain/CNAME; game có web-tool thì deploy thêm site trang khung. Toàn
 // bộ logic nằm trong cloudflare-pages-deploy.mjs.
 def deploy(Map web) {
-    writeFile(
-        file: 'cloudflare-pages-deploy.mjs',
-        encoding: 'UTF-8',
-        text: libraryResource('com/pearz/ci/cloudflare-pages-deploy.mjs')
-    )
-    writeFile(
-        file: 'webgl-index.html',
-        encoding: 'UTF-8',
-        text: libraryResource('com/pearz/ci/webgl-index.html')
-    )
-    writeFile(
-        file: 'webgl-tool-index.html',
-        encoding: 'UTF-8',
-        text: libraryResource('com/pearz/ci/webgl-tool-index.html')
-    )
-    writeFile(
-        file: 'webtool-worker.mjs',
-        encoding: 'UTF-8',
-        text: libraryResource('com/pearz/ci/webtool-worker.mjs')
-    )
+    def deployScript = pearzScript.resource('cloudflare-pages-deploy.mjs')
+    def indexTemplate = pearzScript.resource('webgl-index.html')
+    def toolTemplate = pearzScript.resource('webgl-tool-index.html')
+    def toolWorker = pearzScript.resource('webtool-worker.mjs')
 
     def toolDir = resolveToolDir(web)
     def status
@@ -265,9 +210,10 @@ def deploy(Map web) {
             "WEB_RESOLUTION=${web.resolution}",
             "WEB_SITE_DIR=${env.OUTPUT_PATH}",
             "WEB_TOOL_DIR=${toolDir}",
-            "WEB_INDEX_TEMPLATE=${env.WORKSPACE}/webgl-index.html",
-            "WEB_TOOL_TEMPLATE=${env.WORKSPACE}/webgl-tool-index.html",
-            "WEB_TOOL_WORKER=${env.WORKSPACE}/webtool-worker.mjs",
+            "WEB_INDEX_TEMPLATE=${indexTemplate}",
+            "WEB_TOOL_TEMPLATE=${toolTemplate}",
+            "WEB_TOOL_WORKER=${toolWorker}",
+            "PEARZ_DEPLOY_SCRIPT=${deployScript}",
             // Cạnh thư mục site, nên được dọn cùng Builds/ sau mỗi lần chạy.
             "WEB_TOOL_SITE_DIR=${env.WORKSPACE}/Builds/WebGL/tool-site",
             "WEB_RESULT_FILE=${env.WORKSPACE}/web-deploy-result.txt",
@@ -276,7 +222,7 @@ def deploy(Map web) {
             status = sh(
                 script: '''
                     export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-                    node cloudflare-pages-deploy.mjs
+                    node "$PEARZ_DEPLOY_SCRIPT"
                 ''',
                 returnStatus: true
             )

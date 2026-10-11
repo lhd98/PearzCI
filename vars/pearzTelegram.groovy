@@ -263,98 +263,17 @@ def sendTelegramNotification(
     String telegramCredentialsId,
     boolean telegramSilent = false
 ) {
-    boolean telegramConfigured = telegramCredentialsId ||
-        "${params.TELEGRAM_CHANNEL ?: ''}".trim()
-
-    if (!telegramConfigured) {
-        echo 'No Telegram target configured; notification skipped.'
-        return
-    }
-
-    try {
-        // Build hỏng thì stage 'Read Build Metadata' chưa từng chạy.
-        pearzAndroid.readBuildMetadata()
-
-        if (env.PIPELINE_START_MILLIS?.trim()) {
-            env.TOTAL_TIME_MILLIS = (
-                System.currentTimeMillis() -
-                env.PIPELINE_START_MILLIS.toLong()
-            ).toString()
-        }
-
-        writeFile(
-            file: 'telegram-message.txt',
-            encoding: 'UTF-8',
-            text: buildTelegramMessage()
-        )
-
-        // telegramSendFile: gửi APK/AAB kèm nội dung thông báo làm caption,
-        // chung một tin. Chỉ gửi khi build thành công và file còn trong
-        // workspace. telegram-message.txt vẫn được ghi để gửi thay thế khi
-        // gửi file hỏng.
-        def documentPath = ''
-        def captionFile = ''
-        if (env.TELEGRAM_SEND_FILE == 'true' &&
-            currentBuild.currentResult == 'SUCCESS' &&
-            env.OUTPUT_PATH?.trim() &&
-            fileExists(env.OUTPUT_PATH)) {
-            documentPath = env.OUTPUT_PATH
-            def caption = buildTelegramCaption()
-
-            if (caption) {
-                captionFile = 'telegram-caption.txt'
-                writeFile(
-                    file: captionFile,
-                    encoding: 'UTF-8',
-                    text: caption
-                )
-            }
-        }
-
-        def sendTelegram = {
-            writeFile(
-                file: 'send-telegram.sh',
-                encoding: 'UTF-8',
-                text: libraryResource(
-                    'com/pearz/ci/send-telegram.sh'
-                )
-            )
-            withEnv([
-                'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
-                "TELEGRAM_SILENT=${telegramSilent}",
-                "TELEGRAM_DOCUMENT_PATH=${documentPath}",
-                "TELEGRAM_CAPTION_FILE=${captionFile}"
-            ]) {
-                sh 'sh ./send-telegram.sh'
-            }
-
-        }
-
-        if (telegramCredentialsId) {
-            withCredentials([
-                string(
-                    credentialsId: telegramCredentialsId,
-                    variable: 'TELEGRAM_CHANNEL'
-                )
-            ]) {
-                sendTelegram()
-            }
-        } else {
-            withEnv([
-                "TELEGRAM_CHANNEL=${params.TELEGRAM_CHANNEL ?: ''}"
-            ]) {
-                sendTelegram()
-            }
-        }
-    } catch (Exception exception) {
-        // Không để lỗi thông báo ghi đè kết quả build thật. Chỉ hạ xuống
-        // UNSTABLE khi build vốn đang thành công, để sự cố không bị chìm.
-        echo("Telegram notification failed: ${exception.message}")
-
-        if (currentBuild.currentResult == 'SUCCESS') {
-            currentBuild.result = 'UNSTABLE'
-        }
-    }
+    sendTelegramText(
+        telegramCredentialsId,
+        telegramSilent,
+        {
+            // Build hỏng thì stage 'Verify & Archive Artifact' chưa đọc
+            // metadata; lần gọi thứ hai không làm gì.
+            pearzAndroid.readBuildMetadata()
+            buildTelegramMessage()
+        },
+        { buildTelegramCaption() }
+    )
 }
 
 // Dùng cho cả iOS IPA lẫn iOS device. Trước đây chỉ device build mới được
@@ -410,10 +329,15 @@ def buildWebTelegramMessage() {
     }
 }
 
+// buildCaption khác null: kèm file build (APK/AAB) khi job bật
+// telegramSendFile, build thành công và file còn trong workspace. Nội dung
+// thông báo đi làm caption, chung một tin; telegram-message.txt vẫn được ghi
+// để gửi thay thế khi gửi file hỏng hoặc caption quá dài.
 def sendTelegramText(
     String telegramCredentialsId,
     boolean telegramSilent,
-    Closure buildMessage
+    Closure buildMessage,
+    Closure buildCaption = null
 ) {
     boolean telegramConfigured = telegramCredentialsId ||
         "${params.TELEGRAM_CHANNEL ?: ''}".trim()
@@ -430,19 +354,35 @@ def sendTelegramText(
             text: buildMessage()
         )
 
-        def sendTelegram = {
-            writeFile(
-                file: 'send-telegram.sh',
-                encoding: 'UTF-8',
-                text: libraryResource(
-                    'com/pearz/ci/send-telegram.sh'
+        def documentPath = ''
+        def captionFile = ''
+        if (buildCaption != null &&
+            env.TELEGRAM_SEND_FILE == 'true' &&
+            currentBuild.currentResult == 'SUCCESS' &&
+            env.OUTPUT_PATH?.trim() &&
+            fileExists(env.OUTPUT_PATH)) {
+            documentPath = env.OUTPUT_PATH
+            def caption = buildCaption()
+
+            if (caption) {
+                captionFile = 'telegram-caption.txt'
+                writeFile(
+                    file: captionFile,
+                    encoding: 'UTF-8',
+                    text: caption
                 )
-            )
+            }
+        }
+
+        def sendTelegram = {
             withEnv([
                 'TELEGRAM_MESSAGE_FILE=telegram-message.txt',
-                "TELEGRAM_SILENT=${telegramSilent}"
+                "TELEGRAM_SILENT=${telegramSilent}",
+                "TELEGRAM_DOCUMENT_PATH=${documentPath}",
+                "TELEGRAM_CAPTION_FILE=${captionFile}",
+                "PEARZ_SEND_TELEGRAM=${pearzScript.resource('send-telegram.sh')}"
             ]) {
-                sh 'sh ./send-telegram.sh'
+                sh 'sh "$PEARZ_SEND_TELEGRAM"'
             }
         }
 
@@ -463,8 +403,8 @@ def sendTelegramText(
             }
         }
     } catch (Exception exception) {
-        // Cùng cách xử lý với Android: lỗi thông báo không được ghi đè kết
-        // quả build thật, chỉ hạ SUCCESS xuống UNSTABLE.
+        // Không để lỗi thông báo ghi đè kết quả build thật. Chỉ hạ xuống
+        // UNSTABLE khi build vốn đang thành công, để sự cố không bị chìm.
         echo("Telegram notification failed: ${exception.message}")
 
         if (currentBuild.currentResult == 'SUCCESS') {
@@ -526,36 +466,6 @@ def renderTelegramTemplate(Map values) {
     }
 
     return compactLines.join('\n')
-}
-
-def formatDurationMillis(Object value) {
-    if (!value?.toString()?.trim()) {
-        return ''
-    }
-
-    try {
-        long totalSeconds = Math.max(
-            0L,
-            Math.round(value.toString().toLong() / 1000.0d)
-        )
-        long hours = totalSeconds.intdiv(3600)
-        long minutes = totalSeconds.intdiv(60) % 60
-        long seconds = totalSeconds % 60
-        def parts = []
-
-        if (hours > 0) {
-            parts << "${hours}h"
-        }
-
-        if (minutes > 0 || hours > 0) {
-            parts << "${minutes}m"
-        }
-
-        parts << "${seconds}s"
-        return parts.join(' ')
-    } catch (Exception ignored) {
-        return ''
-    }
 }
 
 def formatBytes(Object value) {

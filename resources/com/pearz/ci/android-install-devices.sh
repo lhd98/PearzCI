@@ -21,7 +21,7 @@ if [ -n "$server_pid" ]; then
     fi
 fi
 
-JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe             "$ADB_EXE" start-server || exit 1
+JENKINS_NODE_COOKIE=dontKillMe BUILD_ID=dontKillMe "$ADB_EXE" start-server || exit 1
 
 list_devices() {
     "$ADB_EXE" devices |
@@ -70,9 +70,9 @@ if [ -z "$(list_devices)" ]; then
     done
     # Giữ tối đa 20 địa chỉ còn kết nối được gần nhất.
     if [ -f "$known_file.new" ]; then
-    tail -n 20 "$known_file.new" > "$known_file"
-    rm -f "$known_file.new"
-fi
+        tail -n 20 "$known_file.new" > "$known_file"
+        rm -f "$known_file.new"
+    fi
 fi
 
 attempt=0
