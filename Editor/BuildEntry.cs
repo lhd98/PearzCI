@@ -188,7 +188,7 @@ public static class BuildEntry
                     "Không có scene nào được bật trong Build Profiles / Build Settings.");
 
             configuration = ReadIosConfiguration();
-            PrepareIosOutputDirectory(configuration.OutputPath);
+            PrepareOutputFolder(configuration.OutputPath);
             ApplyIosSettings(configuration);
 
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -249,7 +249,7 @@ public static class BuildEntry
                     "Không có scene nào được bật trong Build Profiles / Build Settings.");
 
             configuration = ReadWebGLConfiguration();
-            PrepareIosOutputDirectory(configuration.OutputPath);
+            PrepareOutputFolder(configuration.OutputPath);
             ApplyWebGLSettings(configuration);
 
             report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -462,7 +462,9 @@ public static class BuildEntry
         PlayerSettings.WebGL.dataCaching = true;
     }
 
-    private static void PrepareIosOutputDirectory(string outputPath)
+    // iOS (thư mục Xcode project) và WebGL (thư mục site): output là cả một
+    // thư mục, xoá sạch rồi tạo lại để không lẫn file của lần build trước.
+    private static void PrepareOutputFolder(string outputPath)
     {
         if (Directory.Exists(outputPath))
             FileUtil.DeleteFileOrDirectory(outputPath);

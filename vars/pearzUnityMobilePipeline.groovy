@@ -231,9 +231,6 @@ def call(Map config = [:]) {
             stage('Checkout') {
                 steps {
                     script {
-                        env.PIPELINE_START_MILLIS =
-                            System.currentTimeMillis().toString()
-
                         if (!repositoryUrl) {
                             error(
                                 'repositoryUrl is required. Configure it in the Jenkins job.'
@@ -537,11 +534,7 @@ def call(Map config = [:]) {
 
                 steps {
                     script {
-                        if (isSupersededWebhookBuild()) {
-                            env.PEARZ_SUPERSEDED = 'true'
-                            error('A newer webhook build is queued; stopping before the Unity build.')
-                        }
-                        def buildStartedAt = System.currentTimeMillis()
+                        stopIfSuperseded()
                         // APP_VERSION (bắt buộc) là base version; CI_BUILD_NUMBER
                         // luôn được nối vào để tester nhận biết chính xác bản
                         // build.
@@ -583,29 +576,22 @@ def call(Map config = [:]) {
                         echo "Android CI build number passed to Unity: ${env.ARTIFACT_BUILD_NUMBER}"
                         echo "Android version code passed to Unity: ${androidVersionCode}"
 
-                        try {
-                            // APK để version code cố định = 1. Tester nhận biết
-                            // bản đang cài qua version name (BUILD_VERSION), không
-                            // cần code tăng dần; code cố định còn cho cài đè qua lại
-                            // giữa các bản APK mà không bị Android chặn downgrade.
-                            // AAB dùng bộ đếm riêng, không bị các APK test xen kẽ
-                            // làm nhảy version code trên Google Play.
-                            withEnv([
-                                "OUTPUT_PATH=${env.OUTPUT_PATH}",
-                                "APP_VERSION=${ciAppVersion}",
-                                "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
-                                "ANDROID_VERSION_CODE=${androidVersionCode}",
-                                "DEVELOPMENT_BUILD=${params.DEVELOPMENT_BUILD ?: false}",
-                                // Bundle ID is always sourced from Unity Project Settings.
-                                'BUNDLE_IDENTIFIER='
-                            ]) {
-                                pearzWebGL.runUnity('Android', 'BuildAndroid')
-
-                            }
-                        } finally {
-                            env.BUILD_TIME_MILLIS = (
-                                System.currentTimeMillis() - buildStartedAt
-                            ).toString()
+                        // APK để version code cố định = 1. Tester nhận biết
+                        // bản đang cài qua version name (BUILD_VERSION), không
+                        // cần code tăng dần; code cố định còn cho cài đè qua lại
+                        // giữa các bản APK mà không bị Android chặn downgrade.
+                        // AAB dùng bộ đếm riêng, không bị các APK test xen kẽ
+                        // làm nhảy version code trên Google Play.
+                        withEnv([
+                            "OUTPUT_PATH=${env.OUTPUT_PATH}",
+                            "APP_VERSION=${ciAppVersion}",
+                            "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
+                            "ANDROID_VERSION_CODE=${androidVersionCode}",
+                            "DEVELOPMENT_BUILD=${params.DEVELOPMENT_BUILD ?: false}",
+                            // Bundle ID is always sourced from Unity Project Settings.
+                            'BUNDLE_IDENTIFIER='
+                        ]) {
+                            pearzUnity.run('Android', 'BuildAndroid')
                         }
                     }
                 }
@@ -619,10 +605,7 @@ def call(Map config = [:]) {
 
                 steps {
                     script {
-                        if (isSupersededWebhookBuild()) {
-                            env.PEARZ_SUPERSEDED = 'true'
-                            error('A newer webhook build is queued; stopping before the Unity build.')
-                        }
+                        stopIfSuperseded()
                         pearzWebGL.buildUnity(web)
                     }
                 }
@@ -633,11 +616,7 @@ def call(Map config = [:]) {
                 options { timeout(time: 60, unit: 'MINUTES') }
                 steps {
                     script {
-                        if (isSupersededWebhookBuild()) {
-                            env.PEARZ_SUPERSEDED = 'true'
-                            error('A newer webhook build is queued; stopping before the Unity build.')
-                        }
-                        def startedAt = System.currentTimeMillis()
+                        stopIfSuperseded()
                         // CFBundleVersion phải tăng sau mỗi lần nộp, nếu không
                         // App Store Connect từ chối vì trùng build. Param để
                         // trống thì Unity giữ nguyên số của project, nên lấy
@@ -648,48 +627,39 @@ def call(Map config = [:]) {
                         def iosBuildNumber =
                             params.IOS_BUILD_NUMBER?.toString()?.trim() ?:
                             env.ARTIFACT_BUILD_NUMBER
-                        try {
-                            withEnv([
-                                "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
-                                "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}",
-                                'BUNDLE_IDENTIFIER=',
-                                "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
-                                "APP_VERSION=${env.PEARZ_APP_VERSION}",
-                                "IOS_BUILD_NUMBER=${iosBuildNumber}",
-                                "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
-                                "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
-                                "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
-                                // Job không khai tham số này thì params trả null;
-                                // nội suy thẳng sẽ thành chuỗi "null" và BuildEntry
-                                // từ chối. Rỗng = giữ Project Settings.
-                                "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE == null ? '' : params.STRIP_ENGINE_CODE}"
-                            ]) {
-                                sh '''
-                                    set +e
-                                    # BuildEntry đọc marker này để gỡ capability
-                                    # In-App Purchase khi export cho device build.
-                                    device_build_marker="$WORKSPACE/.pearz-ci-ios-device-build"
-                                    if [ "$IOS_BUILD_TO_DEVICE" = 'true' ]; then
-                                        : > "$device_build_marker"
-                                    else
-                                        rm -f "$device_build_marker"
-                                    fi
-                                    trap 'rm -f "$device_build_marker"' EXIT
-                                    "$UNITY_EXE" -batchmode -quit \\
-                                        -projectPath "$UNITY_PROJECT_PATH" \\
-                                        -buildTarget iOS \\
-                                        -executeMethod Pearz.CI.BuildEntry.BuildIOS \\
-                                        -logFile "$BUILD_LOG_PATH"
-                                    result=$?
-                                    [ ! -f "$BUILD_LOG_PATH" ] || cat "$BUILD_LOG_PATH"
-                                    exit "$result"
-                                '''
+                        // BuildEntry đọc marker này để gỡ capability In-App
+                        // Purchase khi export cho device build. Marker phải nằm
+                        // trong thư mục project Unity (BuildEntry tìm ở đó), không
+                        // phải gốc workspace: hai chỗ khác nhau khi đặt
+                        // unityProjectPath.
+                        withEnv(["PEARZ_IOS_DEVICE_MARKER=${env.UNITY_PROJECT_PATH}/.pearz-ci-ios-device-build"]) {
+                            sh(iosBuildToDevice
+                                ? ': > "$PEARZ_IOS_DEVICE_MARKER"'
+                                : 'rm -f "$PEARZ_IOS_DEVICE_MARKER"')
+                            try {
+                                withEnv([
+                                    "OUTPUT_PATH=${env.IOS_PROJECT_PATH}",
+                                    "PRODUCT_NAME=${env.PEARZ_PRODUCT_NAME ?: ''}",
+                                    'BUNDLE_IDENTIFIER=',
+                                    "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
+                                    "APP_VERSION=${env.PEARZ_APP_VERSION}",
+                                    "IOS_BUILD_NUMBER=${iosBuildNumber}",
+                                    "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
+                                    "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
+                                    "MANAGED_STRIPPING_LEVEL=${params.MANAGED_STRIPPING_LEVEL ?: ''}",
+                                    // Job không khai tham số này thì params trả null;
+                                    // nội suy thẳng sẽ thành chuỗi "null" và BuildEntry
+                                    // từ chối. Rỗng = giữ Project Settings.
+                                    "STRIP_ENGINE_CODE=${params.STRIP_ENGINE_CODE == null ? '' : params.STRIP_ENGINE_CODE}"
+                                ]) {
+                                    pearzUnity.run('iOS', 'BuildIOS')
+                                }
+                            } finally {
+                                sh 'rm -f "$PEARZ_IOS_DEVICE_MARKER"'
                             }
-
-                            pearzIos.readIosVersionFromXcodeProject()
-                        } finally {
-                            env.BUILD_TIME_MILLIS = (System.currentTimeMillis() - startedAt).toString()
                         }
+
+                        pearzIos.readIosVersionFromXcodeProject()
 
                         // 'Remove duplicate AppLovin SPM dependency' đã gộp vào
                         // đây để bớt cột Stage View: chạy ngay sau khi Unity sinh
@@ -697,36 +667,33 @@ def call(Map config = [:]) {
                         // resources thay vì nhúng base64 vào Groovy — bản nhúng
                         // từng tồn tại hai bản lệch nhau một ký tự mà không ai
                         // đọc ra được, vì base64 thì mắt thường không diff nổi.
-                        writeFile(
-                            file: 'remove-applovin-spm.rb',
-                            encoding: 'UTF-8',
-                            text: libraryResource(
-                                'com/pearz/ci/remove-applovin-spm.rb'
-                            )
-                        )
-                        sh '''
-                            set -eu
-                            xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
-                            pbxproj_path="$xcodeproj_path/project.pbxproj"
-                            pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
+                        withEnv([
+                            "PEARZ_APPLOVIN_SCRIPT=${pearzScript.resource('remove-applovin-spm.rb')}"
+                        ]) {
+                            sh '''
+                                set -eu
+                                xcodeproj_path="$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
+                                pbxproj_path="$xcodeproj_path/project.pbxproj"
+                                pods_applovin_path="$IOS_PROJECT_PATH/Pods/AppLovinSDK"
 
-                            if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
-                                echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
-                                exit 0
-                            fi
-                            if ! grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
-                                echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
-                                exit 0
-                            fi
+                                if [ ! -f "$pbxproj_path" ] || [ ! -d "$pods_applovin_path" ]; then
+                                    echo 'AppLovin SPM cleanup skipped: CocoaPods AppLovinSDK was not found.'
+                                    exit 0
+                                fi
+                                if ! grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
+                                    echo 'AppLovin SPM cleanup skipped: no AppLovin Swift package reference found.'
+                                    exit 0
+                                fi
 
-                            ruby "$WORKSPACE/remove-applovin-spm.rb" "$xcodeproj_path"
+                                ruby "$PEARZ_APPLOVIN_SCRIPT" "$xcodeproj_path"
 
-                            if grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
-                                echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
-                                exit 1
-                            fi
-                            echo 'Removed duplicate AppLovin Swift Package Manager dependency; using CocoaPods AppLovinSDK.'
-                        '''
+                                if grep -Fiq 'applovin-max-swift-package' "$pbxproj_path"; then
+                                    echo 'ERROR: AppLovin Swift package reference remains after cleanup.'
+                                    exit 1
+                                fi
+                                echo 'Removed duplicate AppLovin Swift Package Manager dependency; using CocoaPods AppLovinSDK.'
+                            '''
+                        }
                     }
                 }
             }
@@ -1043,13 +1010,19 @@ def call(Map config = [:]) {
                 }
 
                 script {
+                    // Script/template của PearzCI giờ được ghi vào @tmp
+                    // (pearzScript.resource). Dòng dưới xoá file tạm của lần
+                    // chạy này và các file mà bản PearzCI cũ ghi thẳng vào
+                    // workspace.
                     sh(
-                        'rm -f send-telegram.sh ' +
-                        'read-build-metadata.sh ' +
-                        'remove-applovin-spm.rb ' +
-                        'telegram-message.txt telegram-caption.txt ' +
+                        'rm -f telegram-message.txt telegram-caption.txt ' +
+                        'web-deploy-result.txt ' +
+                        'PearzCI-ExportOptions-Automatic.plist ' +
+                        'send-telegram.sh read-build-metadata.sh ' +
+                        'remove-applovin-spm.rb levels-pull.mjs ' +
                         'cloudflare-pages-deploy.mjs webgl-index.html ' +
-                        'web-deploy-result.txt'
+                        'webgl-tool-index.html webtool-worker.mjs ' +
+                        '.pearz-ci-ios-device-build'
                     )
 
                     if (isAndroid) {
@@ -1162,6 +1135,15 @@ def readPearzCiVersion() {
     }
 
     return 'unknown'
+}
+
+// Gọi ngay trước bước build Unity: build webhook đã có push mới hơn chờ trong
+// hàng đợi thì dừng, và khối post không gửi thông báo cho nó.
+def stopIfSuperseded() {
+    if (isSupersededWebhookBuild()) {
+        env.PEARZ_SUPERSEDED = 'true'
+        error('A newer webhook build is queued; stopping before the Unity build.')
+    }
 }
 
 // Build do Generic Webhook Trigger kích hoạt là lỗi thời khi hàng đợi của

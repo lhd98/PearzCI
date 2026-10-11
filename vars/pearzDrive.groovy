@@ -22,81 +22,27 @@ def upload(boolean isIos) {
         fi
     '''
 
-    def uploadStartedAt = System.currentTimeMillis()
+    copyToDrive('OUTPUT_PATH', 'DRIVE_FILE_PATH')
 
-    try {
-        retry(2) {
-            sh '''
-                set -eu
+    if (env.BUILD_INFO_FOUND == 'true') {
+        copyToDrive('BUILD_INFO_PATH', 'DRIVE_BUILD_INFO_PATH')
+    }
 
-                "$RCLONE_EXE" copyto \
-                    "$OUTPUT_PATH" \
-                    "$DRIVE_FILE_PATH" \
-                    --progress \
-                    --stats 10s \
-                    --retries 3 \
-                    --low-level-retries 10 \
-                    --log-file "$UPLOAD_LOG_PATH" \
-                    --log-level INFO
-
-            '''
-
-        }
-
-        if (env.BUILD_INFO_FOUND == 'true') {
-            retry(2) {
-                sh '''
-                    set -eu
-                    "$RCLONE_EXE" copyto \
-                        "$BUILD_INFO_PATH" \
-                        "$DRIVE_BUILD_INFO_PATH" \
-                        --progress \
-                        --stats 10s \
-                        --retries 3 \
-                        --low-level-retries 10 \
-                        --log-file "$UPLOAD_LOG_PATH" \
-                        --log-level INFO
-                '''
-
-            }
-        }
-
-        if (isAndroid && fileExists(env.MAPPING_PATH)) {
-            def mappingUploadStatus
-
-            mappingUploadStatus = sh(
-                script: '''
-                    "$RCLONE_EXE" copyto \
-                        "$MAPPING_PATH" \
-                        "$DRIVE_MAPPING_PATH" \
-                        --retries 3 \
-                        --low-level-retries 10 \
-                        --log-file "$UPLOAD_LOG_PATH" \
-                        --log-level INFO
-                ''',
-                returnStatus: true
+    if (isAndroid && fileExists(env.MAPPING_PATH)) {
+        if (!copyToDrive('MAPPING_PATH', 'DRIVE_MAPPING_PATH', true)) {
+            echo(
+                'Optional mapping.txt upload failed; ' +
+                'the main artifact remains valid.'
             )
-
-            if (mappingUploadStatus != 0) {
-                echo(
-                    'Optional mapping.txt upload failed; ' +
-                    'the main artifact remains valid.'
-                )
-            }
-        } else if (isAndroid) {
-            // Build lại cùng version mà lần này không có
-            // mapping (tắt minify): xoá mapping cũ trên Drive
-            // để nó không bị nhầm là của artifact mới.
-            sh(
-                script: '"$RCLONE_EXE" deletefile "$DRIVE_MAPPING_PATH" >/dev/null 2>&1',
-                returnStatus: true
-            )
-
         }
-    } finally {
-        env.UPLOAD_TIME_MILLIS = (
-            System.currentTimeMillis() - uploadStartedAt
-        ).toString()
+    } else if (isAndroid) {
+        // Build lại cùng version mà lần này không có
+        // mapping (tắt minify): xoá mapping cũ trên Drive
+        // để nó không bị nhầm là của artifact mới.
+        sh(
+            script: '"$RCLONE_EXE" deletefile "$DRIVE_MAPPING_PATH" >/dev/null 2>&1',
+            returnStatus: true
+        )
     }
 
     sh '''
@@ -208,6 +154,32 @@ def upload(boolean isIos) {
         allowEmptyArchive: true,
         fingerprint: true
     )
+}
+
+// Chép file có đường dẫn trong biến môi trường sourceVariable lên Drive tại
+// targetVariable. File bắt buộc được thử thêm một lần khi hỏng; optional chỉ
+// thử một lần và trả về false thay vì làm hỏng build.
+def copyToDrive(String sourceVariable, String targetVariable, boolean optional = false) {
+    def script = """
+        "\$RCLONE_EXE" copyto \\
+            "\$${sourceVariable}" \\
+            "\$${targetVariable}" \\
+            --progress \\
+            --stats 10s \\
+            --retries 3 \\
+            --low-level-retries 10 \\
+            --log-file "\$UPLOAD_LOG_PATH" \\
+            --log-level INFO
+    """
+
+    if (optional) {
+        return sh(script: script, returnStatus: true) == 0
+    }
+
+    retry(2) {
+        sh script
+    }
+    return true
 }
 
 def createRcloneLink(String remotePath) {

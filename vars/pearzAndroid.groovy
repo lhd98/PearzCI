@@ -48,19 +48,14 @@ def readBuildMetadata() {
         try {
             def metadataOutput
 
-            writeFile(
-                file: 'read-build-metadata.sh',
-                encoding: 'UTF-8',
-                text: libraryResource(
-                    'com/pearz/ci/read-build-metadata.sh'
+            withEnv([
+                "PEARZ_READ_METADATA=${pearzScript.resource('read-build-metadata.sh')}"
+            ]) {
+                metadataOutput = sh(
+                    script: 'sh "$PEARZ_READ_METADATA" "$METADATA_PATH"',
+                    returnStdout: true
                 )
-            )
-            metadataOutput = sh(
-                script:
-                    'sh ./read-build-metadata.sh ' +
-                    '"$METADATA_PATH"',
-                returnStdout: true
-            )
+            }
 
             metadataOutput.readLines().each { line ->
                 def separatorIndex = line.indexOf('=')
@@ -260,8 +255,7 @@ def installOnConnectedDevices(String configuredAdbExe, String androidDeviceSeria
     // Exit code: 0 = đã cài, 3 = không có máy, khác = lỗi.
     // Cookie dontKillMe giữ adb server sống qua các build
     // để máy không dây không phải dò lại mDNS mỗi lần.
-    def installStatus
-    installStatus = pearzScript.run('android-install-devices.sh', true)
+    def installStatus = pearzScript.run('android-install-devices.sh', true)
 
     def installedOn = fileExists(env.PEARZ_ADB_RESULT_PATH)
         ? readFile(env.PEARZ_ADB_RESULT_PATH).trim()

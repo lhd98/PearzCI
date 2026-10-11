@@ -6,19 +6,12 @@ def call(Map config = [:]) {
 
     switch (platform.toLowerCase(Locale.ROOT)) {
         case 'android':
-            pearzUnityMobilePipeline(config + [mobilePlatform: platform])
-            break
         case 'ios':
-            // Android and iOS intentionally share one Declarative Pipeline.
-            // The shared graph also covers connected-device builds, so the
-            // Stage View layout stays identical across BUILD_PLATFORM and
-            // IOS_BUILD_TO_DEVICE; irrelevant stages are shown as skipped.
-            pearzUnityMobilePipeline(config + [mobilePlatform: platform])
-            break
         case 'webgl':
-            // WebGL dùng chung graph để Stage View giữ nguyên bố cục; các
-            // stage Android/iOS hiện là skipped.
-            pearzUnityMobilePipeline(config + [mobilePlatform: 'WebGL'])
+            // Android, iOS (kể cả build cài lên máy) và WebGL dùng chung một
+            // Declarative Pipeline để Stage View giữ nguyên bố cục giữa các
+            // BUILD_PLATFORM; stage không liên quan hiện là skipped.
+            pearzUnityMobilePipeline(config + [mobilePlatform: platform])
             break
         default:
             throw new IllegalArgumentException(

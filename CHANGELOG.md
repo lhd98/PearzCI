@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.13.2] - 2026-10-11
+
+### Fixed
+
+- iOS connected-device builds of a Unity project in a subfolder
+  (`unityProjectPath`) remove the In-App Purchase capability again. The
+  pipeline wrote its device-build marker to the workspace root while
+  `BuildEntry` looks for it in the Unity project folder.
+
+### Changed
+
+- PearzCI's scripts and templates (`send-telegram.sh`, `levels-pull.mjs`,
+  `cloudflare-pages-deploy.mjs`, ...) are written to the workspace's `@tmp`
+  folder instead of the workspace itself, so they no longer show up next to
+  the project; leftovers from earlier versions are removed after the build.
+- Internal cleanup with no change in behavior: Android, iOS and WebGL start
+  Unity through one helper (`pearzUnity.run`), the Telegram senders share one
+  code path, Google Drive uploads share one copy helper, and unused
+  build/upload timing code is gone.
+
 ## [0.13.1] - 2026-10-11
 
 ### Fixed
