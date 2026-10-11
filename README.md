@@ -6,13 +6,18 @@ Pearz CI pipelines.
 ## Requirements
 
 - Unity 6000.3 or newer on a macOS Jenkins agent (Mac Mini)
-- Android Build Support when building Android players
+- Android Build Support when building Android players; iOS Build Support and
+  Xcode for iOS; WebGL Build Support and Node.js 18+ for WebGL. The package
+  itself compiles without any of these modules.
 - Jenkins with Pipeline, Git, Credentials, Shared Library, and Generic Webhook Trigger support
 - rclone with a configured Google Drive remote
 - git-lfs on the Jenkins agent, only for projects that track files with Git
   LFS (`brew install git-lfs`; found on `PATH` or in the Homebrew bin
   directories); requires an SSH key repository credential
 - `curl` on macOS for Telegram notifications
+- `python3` on the agent, used to read `build-metadata.json` (it comes with
+  the Xcode Command Line Tools); without it the build still runs but the
+  Telegram message falls back to Jenkins values and loses the Unity error
 
 ## Installation
 
@@ -285,10 +290,13 @@ Testers still see the exact Jenkins build through three channels:
   `artifactBuildsToKeep` builds), even though Drive keeps only the latest file
   per version.
 - **`build-metadata.json`**: written next to the APK/AAB, contains the full
-  `versionName` (e.g. `1.0.0-67`) and other build identifiers.
+  `versionName` (e.g. `1.0.0-67`) and other build identifiers. iOS and WebGL
+  builds write one too (next to the Xcode project / site folder), so a failed
+  Unity build reports Unity's error in Telegram on every platform.
 - **`StreamingAssets/pearz-build-info.txt`**: PearzCI injects a plain-text
-  file into the APK's StreamingAssets containing the full CI version string
-  (e.g. `1.0.0-67`). Use the built-in `Pearz.CI.PearzBuildInfo` helper — it
+  file into the build's StreamingAssets containing the full CI version string
+  (e.g. `1.0.0-67`). Android, iOS (`Data/Raw` of the exported Xcode project)
+  and WebGL (`StreamingAssets/` of the site) all get it. Use the built-in `Pearz.CI.PearzBuildInfo` helper — it
   auto-loads the file at `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)` and
   exposes it synchronously:
 
@@ -302,13 +310,14 @@ Testers still see the exact Jenkins build through three channels:
 
   `VersionOrFallback` returns the CI version if loaded, otherwise falls back
   to `Application.version` (useful in Editor and for the very first frames
-  after startup while the async load on Android is in flight). Use
+  after startup while the async load on Android and WebGL is in flight). Use
   `PearzBuildInfo.Version` directly if you want the empty-string state to be
   visible (e.g. for logging).
 
-  The file is written by an `IPostGenerateGradleAndroidProject` callback
-  after Unity's Bee generates the Gradle project, so it does not invalidate
-  the Gradle configuration cache.
+  On Android the file is written by an `IPostGenerateGradleAndroidProject`
+  callback after Unity's Bee generates the Gradle project, so it does not
+  invalidate the Gradle configuration cache. On iOS and WebGL it is written
+  into the exported output after Unity's build.
 
 The FGSDK integration in the Unity project writes `<PRODUCT_NAME>_BUILD_INFO.txt`
 after a successful export. PearzCI verifies and archives that file, uploads it

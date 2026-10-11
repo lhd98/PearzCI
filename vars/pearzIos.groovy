@@ -1,7 +1,7 @@
 // Helper cho build iOS: đọc Info.plist, BUILD_INFO và upload TestFlight.
 
-// iOS không có build-metadata.json để đọc ngược như Android, nên version thật
-// của bản build nằm trong Info.plist mà Unity vừa sinh ra. Đọc từ đó thay vì
+// Version thật của bản build nằm trong Info.plist mà Unity vừa sinh ra (Xcode
+// có thể còn đổi nó, build-metadata.json thì không). Đọc từ đó thay vì
 // suy từ tham số job: tham số để trống thì Unity giữ nguyên giá trị của
 // project, và message sẽ nói sai nếu đoán theo tham số.
 def readIosVersionFromXcodeProject() {

@@ -108,9 +108,9 @@ def renderAndroidTelegramMessage(String changeDescription) {
     return renderTelegramTemplate(values)
 }
 
-// iOS không có build-metadata.json: BuildEntry chỉ ghi file đó trong
-// BuildAndroid(), và mọi field bên trong đều là Android. Nên message iOS
-// dựng từ tham số job cộng biến môi trường của pipeline. Vẫn đi qua đúng
+// build-metadata.json của iOS chỉ dùng để lấy lý do khi Unity export hỏng;
+// version thật đọc từ Info.plist (pearzIos), nên message iOS dựng từ đó cộng
+// tham số job và biến môi trường của pipeline. Vẫn đi qua đúng
 // template của Android để hai nền tảng không trôi khỏi nhau như trước;
 // những dòng không có dữ liệu sẽ tự bị renderTelegramTemplate bỏ đi.
 def buildIosTelegramMessage(boolean deviceBuild) {
@@ -139,9 +139,13 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         // Tiêu đề đã nói kết quả rồi, ở đây chỉ cần lý do. IPA hỏng và
         // TestFlight hỏng là hai chuyện khác nhau: bản build vẫn tải được
         // từ Drive khi chỉ mỗi bước upload lên App Store Connect thất bại.
+        // Unity export hỏng thì BuildEntry ghi lý do vào build-metadata.json.
+        pearzBuildMetadata.read()
         def reason = 'The IPA was not produced.'
 
-        if (deviceBuild) {
+        if (env.META_ERROR_MESSAGE?.trim()) {
+            reason = env.META_ERROR_MESSAGE.trim()
+        } else if (deviceBuild) {
             reason = 'The app was not installed on the connected device.'
         } else if (env.TESTFLIGHT_STATUS == 'Upload failed.') {
             reason = 'The IPA was built but the TestFlight upload failed.'
@@ -269,7 +273,7 @@ def sendTelegramNotification(
         {
             // Build hỏng thì stage 'Verify & Archive Artifact' chưa đọc
             // metadata; lần gọi thứ hai không làm gì.
-            pearzAndroid.readBuildMetadata()
+            pearzBuildMetadata.read()
             buildTelegramMessage()
         },
         { buildTelegramCaption() }
@@ -305,6 +309,8 @@ def buildWebTelegramMessage() {
     def errorSection = ''
 
     if (!succeeded) {
+        // Unity build hỏng thì lý do nằm trong build-metadata.json.
+        pearzBuildMetadata.read()
         def reason = env.WEB_DEPLOY_ERROR?.trim() ?:
             env.META_ERROR_MESSAGE?.trim() ?:
             'The WebGL build was not deployed.'

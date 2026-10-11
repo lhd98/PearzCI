@@ -5,10 +5,10 @@ using UnityEngine.Networking;
 namespace Pearz.CI
 {
     /// <summary>
-    /// Đọc chuỗi build number CI (ví dụ "1.0.0-244") mà pipeline Android nhét
-    /// vào StreamingAssets/pearz-build-info.txt lúc build. Auto-load lúc game
-    /// khởi động; đọc đồng bộ qua <see cref="Version"/>. Nếu chưa kịp load
-    /// hoặc file không tồn tại thì trả chuỗi rỗng — hàm
+    /// Đọc chuỗi build number CI (ví dụ "1.0.0-244") mà pipeline (Android, iOS
+    /// và WebGL) nhét vào StreamingAssets/pearz-build-info.txt lúc build.
+    /// Auto-load lúc game khởi động; đọc đồng bộ qua <see cref="Version"/>.
+    /// Nếu chưa kịp load hoặc file không tồn tại thì trả chuỗi rỗng — hàm
     /// <see cref="VersionOrFallback"/> tự fall back về
     /// <see cref="Application.version"/>.
     /// </summary>
@@ -39,10 +39,11 @@ namespace Pearz.CI
             string url = Path.Combine(
                 Application.streamingAssetsPath, AssetFileName);
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-            // Trên Android StreamingAssets nằm trong APK, phải qua
-            // UnityWebRequest. SendWebRequest().completed cho callback async
-            // mà không cần MonoBehaviour/coroutine.
+#if (UNITY_ANDROID || UNITY_WEBGL) && !UNITY_EDITOR
+            // Trên Android StreamingAssets nằm trong APK, trên WebGL là một
+            // URL của site, nên phải qua UnityWebRequest.
+            // SendWebRequest().completed cho callback async mà không cần
+            // MonoBehaviour/coroutine.
             UnityWebRequest request = UnityWebRequest.Get(url);
             var operation = request.SendWebRequest();
             operation.completed += _ =>
@@ -55,7 +56,7 @@ namespace Pearz.CI
                 request.Dispose();
             };
 #else
-            // Editor / iOS / Standalone / WebGL: đọc trực tiếp.
+            // Editor / iOS / Standalone: đọc trực tiếp.
             try
             {
                 if (File.Exists(url))

@@ -50,5 +50,18 @@ jobs:
           done
           shellcheck --severity=error resources/com/pearz/ci/*.sh .github/scripts/*.sh tools/*.sh
 
+      - name: Check JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --version
+          for script in resources/com/pearz/ci/*.mjs tools/*.mjs; do
+            # PearzCI điền {{STORE_CONFIG_JSON}} lúc deploy; thay bằng một
+            # object để kiểm tra được cú pháp phần còn lại.
+            checked="$RUNNER_TEMP/$(basename "$script")"
+            sed 's/{{STORE_CONFIG_JSON}}/{}/' "$script" > "$checked"
+            node --check "$checked"
+            echo "OK    $script"
+          done
+
       - name: Test Android device install script
         run: .github/scripts/test-android-install-devices.sh
