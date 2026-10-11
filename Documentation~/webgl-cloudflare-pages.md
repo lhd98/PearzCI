@@ -92,6 +92,13 @@ Các giá trị này cũng truyền được qua `pearzUnityPipeline(...)`:
   `index.html` của Unity bị thay bằng `resources/com/pearz/ci/webgl-index.html`.
 - `build-metadata.json` và `unity-build.log` nằm ở `Builds/WebGL/`, cạnh
   thư mục `site/`, nên không bị deploy công khai.
+- `StreamingAssets/pearz-build-info.txt` của site chứa CI version (ví dụ
+  `1.0.0-42`); game đọc qua `Pearz.CI.PearzBuildInfo.Version`.
+- `companyName` trong cấu hình loader cố ý luôn là `DefaultCompany`, không
+  lấy Company Name của Player Settings: mọi game đã deploy đều chạy với giá
+  trị này, và đổi nó có thể làm người chơi mất dữ liệu đã lưu trong trình
+  duyệt một lần. Game mới cần giá trị khác thì đặt biến môi trường
+  `PEARZ_COMPANY_NAME` cho bước deploy.
 
 ## SDK không hỗ trợ WebGL
 

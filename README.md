@@ -171,10 +171,15 @@ Common optional parameters:
 - Optional String `PRODUCT_NAME`, for example `MyGame`. When left empty,
   artifact names use Unity's `productName` from `ProjectSettings.asset`.
 - Multi-line String `SCRIPTING_DEFINE_SYMBOLS`. When set it replaces the
-  project's define symbols for the build. Android App Bundle builds
-  (`BUILD_APP_BUNDLE`) always get `RELEASE` added on top, for that build only,
-  so store builds can compile out test-only code with `#if !RELEASE`; APK,
-  iOS and WebGL builds get it only if you list it here.
+  project's define symbols for the build. Store builds always get `RELEASE`
+  added on top, for that build only, so they can compile out test-only code
+  with `#if !RELEASE`: Android App Bundles (`BUILD_APP_BUNDLE`) and iOS IPAs
+  exported with the `app-store` method (the default; a custom
+  `IOS_EXPORT_OPTIONS_PLIST_PATH` with `app-store` or `app-store-connect`
+  counts too). The IPA sent to TestFlight is the same binary that is later
+  submitted for review, so it is built as a store build. APK, iOS
+  connected-device, ad-hoc/development/enterprise IPA and WebGL builds get it
+  only if you list it here.
 - Choice `IL2CPP_CODE_GENERATION`: `OptimizeSize` or `OptimizeSpeed`
 - Choice `MANAGED_STRIPPING_LEVEL`: `Low`, `Medium`, or `High`
 - Boolean `STRIP_ENGINE_CODE`, `MINIFY_RELEASE`, `BUILD_APP_BUNDLE`,

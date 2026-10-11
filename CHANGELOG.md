@@ -13,6 +13,13 @@ All notable changes to this package are documented in this file.
   `1.0.0-42`) is now written for iOS and WebGL builds too, so
   `PearzBuildInfo.Version` works on every platform. On WebGL it is loaded
   with `UnityWebRequest`, like on Android.
+- iOS IPAs exported with the `app-store` method (the default, or a custom
+  export options plist with `app-store`/`app-store-connect`) are compiled
+  with the `RELEASE` define, like Android App Bundles. The IPA sent to
+  TestFlight is the binary that is later submitted to the App Store, so
+  test-only code under `#if !RELEASE` no longer reaches the store.
+  Connected-device builds and ad-hoc, development or enterprise exports are
+  unchanged. Projects still on an older package version are unaffected.
 - The repository checks run `node --check` on the bundled JavaScript.
 
 ### Fixed
@@ -29,6 +36,9 @@ All notable changes to this package are documented in this file.
 ### Changed
 
 - The README lists the per-platform agent requirements and `python3`.
+- The WebGL guide explains why the loader's `companyName` stays
+  `DefaultCompany` (changing it could reset saved browser data) and how to
+  override it with `PEARZ_COMPANY_NAME`.
 
 ## [0.13.2] - 2026-10-11
 

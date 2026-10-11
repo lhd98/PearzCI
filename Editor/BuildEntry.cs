@@ -192,13 +192,19 @@ public static class BuildEntry
             PrepareOutputFolder(configuration.OutputPath);
             ApplyIosSettings(configuration);
 
+            string[] extraDefines = GetIosExtraScriptingDefines(configuration);
+            Log(
+                "Extra scripting defines for this build: " +
+                (extraDefines.Length > 0 ? string.Join(";", extraDefines) : "<none>"));
+
             report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes,
                 locationPathName = configuration.OutputPath,
                 target = BuildTarget.iOS,
                 targetGroup = BuildTargetGroup.iOS,
-                options = BuildOptions.None
+                options = BuildOptions.None,
+                extraScriptingDefines = extraDefines
             });
 
             PrintBuildSummary(report.summary);
@@ -419,6 +425,8 @@ public static class BuildEntry
             CiVersion = BuildCiVersion(
                 GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
                 GetEnvironmentVariable("CI_BUILD_NUMBER")),
+            // Jenkins đặt true cho IPA xuất theo method app-store.
+            StoreBuild = GetBooleanEnvironmentVariable("PEARZ_STORE_BUILD", false),
             Il2CppCodeGeneration = GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
             ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
             StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
@@ -1018,7 +1026,9 @@ public static class BuildEntry
                 ciVersion = configuration != null ? configuration.CiVersion : string.Empty,
                 unityVersion = Application.unityVersion,
                 managedStrippingLevel = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.iOS).ToString(),
-                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetIosScriptingDefineSymbols()),
+                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetIosScriptingDefineSymbols())
+                    .Concat(GetIosExtraScriptingDefines(configuration))
+                    .ToArray(),
                 buildDurationSeconds = summary.HasValue ? summary.Value.totalTime.TotalSeconds : 0d,
                 warningCount = summary.HasValue ? (int)summary.Value.totalWarnings : 0,
                 errorCount = summary.HasValue ? (int)summary.Value.totalErrors : 0,
@@ -1164,24 +1174,41 @@ public static class BuildEntry
         return options;
     }
 
-    // AAB là bản đưa lên store, nên luôn được biên dịch với RELEASE để game tắt
-    // được các đường chỉ dành cho bản test (#if !RELEASE) mà không phụ thuộc vào
-    // việc ai đó nhớ điền SCRIPTING_DEFINE_SYMBOLS. Truyền qua
+    // Bản đưa lên store (AAB, IPA app-store) luôn được biên dịch với RELEASE
+    // để game tắt được các đường chỉ dành cho bản test (#if !RELEASE) mà không
+    // phụ thuộc vào việc ai đó nhớ điền SCRIPTING_DEFINE_SYMBOLS. Truyền qua
     // extraScriptingDefines: cộng thêm vào define của project/tham số, chỉ có
-    // hiệu lực trong lần build này và không ghi vào ProjectSettings, nên APK
-    // build sau đó trong cùng workspace không bị dính.
-    private static string[] GetAndroidExtraScriptingDefines(
-        BuildConfiguration configuration)
+    // hiệu lực trong lần build này và không ghi vào ProjectSettings, nên build
+    // thử (APK, device build) sau đó trong cùng workspace không bị dính.
+    private static string[] GetReleaseExtraScriptingDefines(
+        bool storeBuild,
+        string projectDefines)
     {
-        if (configuration == null || !configuration.BuildAppBundle)
+        if (!storeBuild)
         {
             return Array.Empty<string>();
         }
 
-        return SplitScriptingDefineSymbols(GetAndroidScriptingDefineSymbols())
+        return SplitScriptingDefineSymbols(projectDefines)
                 .Contains(ReleaseDefineSymbol)
             ? Array.Empty<string>()
             : new[] { ReleaseDefineSymbol };
+    }
+
+    private static string[] GetAndroidExtraScriptingDefines(
+        BuildConfiguration configuration)
+    {
+        return GetReleaseExtraScriptingDefines(
+            configuration != null && configuration.BuildAppBundle,
+            GetAndroidScriptingDefineSymbols());
+    }
+
+    private static string[] GetIosExtraScriptingDefines(
+        IosBuildConfiguration configuration)
+    {
+        return GetReleaseExtraScriptingDefines(
+            configuration != null && configuration.StoreBuild,
+            GetIosScriptingDefineSymbols());
     }
 
     private static string[] SplitScriptingDefineSymbols(string value)
@@ -1506,6 +1533,7 @@ public static class BuildEntry
         public string AppVersion { get; set; }
         public string BuildNumber { get; set; }
         public string CiVersion { get; set; }
+        public bool StoreBuild { get; set; }
         public string Il2CppCodeGeneration { get; set; }
         public string ManagedStrippingLevel { get; set; }
         public bool? StripEngineCode { get; set; }
