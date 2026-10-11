@@ -177,6 +177,7 @@ public static class BuildEntry
     public static void BuildIOS()
     {
         IosBuildConfiguration configuration = null;
+        BuildReport report = null;
 
         try
         {
@@ -191,7 +192,7 @@ public static class BuildEntry
             PrepareOutputFolder(configuration.OutputPath);
             ApplyIosSettings(configuration);
 
-            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = scenes,
                 locationPathName = configuration.OutputPath,
@@ -211,6 +212,12 @@ public static class BuildEntry
             }
 
             RemoveIapCapabilityForPersonalTeamDeviceBuild(configuration.OutputPath);
+            // StreamingAssets của iOS nằm ở Data/Raw; thư mục Data được Xcode
+            // project tham chiếu cả thư mục nên file thêm vào được đóng gói.
+            WriteBuildInfoFile(
+                Path.Combine(configuration.OutputPath, "Data", "Raw"),
+                configuration.CiVersion);
+            TryWriteIosBuildMetadata(report, configuration, string.Empty);
             Log("IOS XCODE EXPORT SUCCEEDED");
             Log($"Output: {configuration.OutputPath}");
             ExitBatchMode(0);
@@ -220,6 +227,8 @@ public static class BuildEntry
             Debug.LogException(exception);
             Error("IOS XCODE EXPORT FAILED");
             Error(exception.Message);
+            // Ghi trước EditorApplication.Exit để Jenkins báo được lý do.
+            TryWriteIosBuildMetadata(report, configuration, exception.Message);
             if (Application.isBatchMode)
             {
                 EditorApplication.Exit(1);
@@ -272,6 +281,9 @@ public static class BuildEntry
                     $"Errors: {report.summary.totalErrors}");
             }
 
+            WriteBuildInfoFile(
+                Path.Combine(configuration.OutputPath, "StreamingAssets"),
+                configuration.CiVersion);
             TryWriteWebGLBuildMetadata(report, configuration, string.Empty);
             Log("WEBGL BUILD SUCCEEDED");
             Log($"Output: {configuration.OutputPath}");
@@ -374,7 +386,7 @@ public static class BuildEntry
             ProjectBundleVersion = GetEnvironmentVariable(
                 "APP_VERSION",
                 PlayerSettings.bundleVersion),
-            AppVersion = BuildAndroidAppVersion(
+            AppVersion = BuildCiVersion(
                 GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
                 GetEnvironmentVariable("CI_BUILD_NUMBER")),
 
@@ -404,6 +416,9 @@ public static class BuildEntry
             AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
             BuildNumber = GetEnvironmentVariable(
                 "IOS_BUILD_NUMBER", PlayerSettings.iOS.buildNumber),
+            CiVersion = BuildCiVersion(
+                GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+                GetEnvironmentVariable("CI_BUILD_NUMBER")),
             Il2CppCodeGeneration = GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
             ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
             StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
@@ -423,6 +438,9 @@ public static class BuildEntry
             ProductName = GetEnvironmentVariable("PRODUCT_NAME"),
             ScriptingDefineSymbols = GetEnvironmentVariable("SCRIPTING_DEFINE_SYMBOLS"),
             AppVersion = GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+            CiVersion = BuildCiVersion(
+                GetEnvironmentVariable("APP_VERSION", PlayerSettings.bundleVersion),
+                GetEnvironmentVariable("CI_BUILD_NUMBER")),
             Il2CppCodeGeneration = GetEnvironmentVariable("IL2CPP_CODE_GENERATION"),
             ManagedStrippingLevel = GetEnvironmentVariable("MANAGED_STRIPPING_LEVEL"),
             StripEngineCode = GetNullableBooleanEnvironmentVariable("STRIP_ENGINE_CODE")
@@ -952,6 +970,69 @@ public static class BuildEntry
         }
     }
 
+    /// <summary>
+    /// Ghi chuỗi CI version (ví dụ "1.0.0-244") vào StreamingAssets của bản
+    /// build để Pearz.CI.PearzBuildInfo đọc lúc chạy. Android làm việc này
+    /// trong AndroidBuildInfoPostProcessor; iOS và WebGL ghi thẳng vào output.
+    /// </summary>
+    private static void WriteBuildInfoFile(string streamingAssetsPath, string ciVersion)
+    {
+        if (string.IsNullOrWhiteSpace(ciVersion))
+            return;
+
+        Directory.CreateDirectory(streamingAssetsPath);
+        string path = Path.Combine(
+            streamingAssetsPath, AndroidBuildInfoPostProcessor.BuildInfoAssetName);
+        File.WriteAllText(path, ciVersion.Trim());
+        Log($"Build info ({AndroidBuildInfoPostProcessor.BuildInfoAssetName}): {ciVersion.Trim()}");
+    }
+
+    /// <summary>
+    /// build-metadata.json của iOS, cạnh thư mục Xcode project (Builds/iOS).
+    /// Ghi cả khi export hỏng để Jenkins báo được lý do; report và
+    /// configuration có thể null khi lỗi xảy ra trước lúc Unity build.
+    /// </summary>
+    private static void TryWriteIosBuildMetadata(
+        BuildReport report,
+        IosBuildConfiguration configuration,
+        string errorMessage)
+    {
+        try
+        {
+            string outputPath = configuration != null
+                ? configuration.OutputPath
+                : Path.Combine(GetProjectPath(), "Builds", "iOS", "Unity-iPhone");
+            string outputDirectory = Path.GetDirectoryName(outputPath);
+            Directory.CreateDirectory(outputDirectory);
+            BuildSummary? summary = report != null ? report.summary : null;
+
+            IosBuildMetadata metadata = new IosBuildMetadata
+            {
+                schemaVersion = 1,
+                result = summary.HasValue ? summary.Value.result.ToString() : BuildResult.Failed.ToString(),
+                errorMessage = errorMessage ?? string.Empty,
+                productName = PlayerSettings.productName,
+                bundleIdentifier = GetIosApplicationIdentifier(),
+                versionName = PlayerSettings.bundleVersion,
+                buildNumber = PlayerSettings.iOS.buildNumber,
+                ciVersion = configuration != null ? configuration.CiVersion : string.Empty,
+                unityVersion = Application.unityVersion,
+                managedStrippingLevel = PlayerSettings.GetManagedStrippingLevel(NamedBuildTarget.iOS).ToString(),
+                scriptingDefineSymbols = SplitScriptingDefineSymbols(GetIosScriptingDefineSymbols()),
+                buildDurationSeconds = summary.HasValue ? summary.Value.totalTime.TotalSeconds : 0d,
+                warningCount = summary.HasValue ? (int)summary.Value.totalWarnings : 0,
+                errorCount = summary.HasValue ? (int)summary.Value.totalErrors : 0,
+                generatedAtUtc = DateTime.UtcNow.ToString("o")
+            };
+            File.WriteAllText(Path.Combine(outputDirectory, "build-metadata.json"),
+                JsonUtility.ToJson(metadata, true));
+        }
+        catch (Exception exception)
+        {
+            Warning("Could not write optional iOS build metadata: " + exception.Message);
+        }
+    }
+
     private static void TryWriteWebGLBuildMetadata(
         BuildReport report,
         WebGLBuildConfiguration configuration,
@@ -1135,7 +1216,7 @@ public static class BuildEntry
             : value.Trim();
     }
 
-    private static string BuildAndroidAppVersion(
+    private static string BuildCiVersion(
         string baseVersion,
         string ciBuildNumber)
     {
@@ -1319,6 +1400,24 @@ public static class BuildEntry
 #endif
     }
 
+    private static string GetIosApplicationIdentifier()
+    {
+#if UNITY_2021_2_OR_NEWER
+        return PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.iOS);
+#else
+        return PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.iOS);
+#endif
+    }
+
+    private static string GetIosScriptingDefineSymbols()
+    {
+#if UNITY_2021_2_OR_NEWER
+        return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.iOS);
+#else
+        return PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.iOS);
+#endif
+    }
+
     private static void SetWebGLScriptingDefineSymbols(string value)
     {
 #if UNITY_2021_2_OR_NEWER
@@ -1406,6 +1505,7 @@ public static class BuildEntry
         public string ScriptingDefineSymbols { get; set; }
         public string AppVersion { get; set; }
         public string BuildNumber { get; set; }
+        public string CiVersion { get; set; }
         public string Il2CppCodeGeneration { get; set; }
         public string ManagedStrippingLevel { get; set; }
         public bool? StripEngineCode { get; set; }
@@ -1418,9 +1518,30 @@ public static class BuildEntry
         public string ProductName { get; set; }
         public string ScriptingDefineSymbols { get; set; }
         public string AppVersion { get; set; }
+        public string CiVersion { get; set; }
         public string Il2CppCodeGeneration { get; set; }
         public string ManagedStrippingLevel { get; set; }
         public bool? StripEngineCode { get; set; }
+    }
+
+    [Serializable]
+    private sealed class IosBuildMetadata
+    {
+        public int schemaVersion;
+        public string result;
+        public string errorMessage;
+        public string productName;
+        public string bundleIdentifier;
+        public string versionName;
+        public string buildNumber;
+        public string ciVersion;
+        public string unityVersion;
+        public string managedStrippingLevel;
+        public string[] scriptingDefineSymbols;
+        public double buildDurationSeconds;
+        public int warningCount;
+        public int errorCount;
+        public string generatedAtUtc;
     }
 
     [Serializable]

@@ -2,6 +2,34 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.0] - 2026-10-11
+
+### Added
+
+- iOS exports write `Builds/iOS/build-metadata.json`, also when the export
+  fails, so a failed iOS build shows Unity's error in Telegram instead of
+  "The IPA was not produced.".
+- `StreamingAssets/pearz-build-info.txt` (the CI version, for example
+  `1.0.0-42`) is now written for iOS and WebGL builds too, so
+  `PearzBuildInfo.Version` works on every platform. On WebGL it is loaded
+  with `UnityWebRequest`, like on Android.
+- The repository checks run `node --check` on the bundled JavaScript.
+
+### Fixed
+
+- A failed WebGL Unity build shows Unity's error in Telegram. The message
+  used the metadata field but the metadata was never read for WebGL.
+- Android builds no longer reuse the previous build's `build-metadata.json`,
+  `mapping.txt` or `<PRODUCT_NAME>_BUILD_INFO.txt`. `Builds/Android` is kept
+  between builds, so a project without the SDK report re-sent the old
+  fallback build info (with the old version), a build without minify
+  uploaded the old mapping, and a Unity crash reported the previous build's
+  values. These files are now removed before Unity starts.
+
+### Changed
+
+- The README lists the per-platform agent requirements and `python3`.
+
 ## [0.13.2] - 2026-10-11
 
 ### Fixed

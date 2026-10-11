@@ -643,6 +643,8 @@ def call(Map config = [:]) {
                                     'BUNDLE_IDENTIFIER=',
                                     "SCRIPTING_DEFINE_SYMBOLS=${params.SCRIPTING_DEFINE_SYMBOLS ?: ''}",
                                     "APP_VERSION=${env.PEARZ_APP_VERSION}",
+                                    // Cho pearz-build-info.txt ("1.0.0-42"), như Android.
+                                    "CI_BUILD_NUMBER=${env.ARTIFACT_BUILD_NUMBER}",
                                     "IOS_BUILD_NUMBER=${iosBuildNumber}",
                                     "IOS_BUILD_TO_DEVICE=${iosBuildToDevice}",
                                     "IL2CPP_CODE_GENERATION=${params.IL2CPP_CODE_GENERATION ?: ''}",
@@ -842,7 +844,7 @@ def call(Map config = [:]) {
                             // phải project nào cũng cài SDK đó. Giữ file thật
                             // nếu có; nếu không thì tạo bản tối giản từ
                             // build-metadata.json để Verify/Drive vẫn hoạt động.
-                            pearzAndroid.readBuildMetadata()
+                            pearzBuildMetadata.read()
                             env.BUILD_INFO_FOUND =
                                 pearzAndroid.ensureAndroidBuildInfo() ? 'true' : 'false'
                         } else if (isIos) {
