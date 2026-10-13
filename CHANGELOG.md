@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Android AAB `versionName` is now exactly `APP_VERSION` (e.g. `1.0.2`) instead
+  of `<APP_VERSION>.<versionCode>`, so Google Play shows the same version as
+  Jenkins.
+
 ## [0.14.0] - 2026-10-11
 
 ### Added

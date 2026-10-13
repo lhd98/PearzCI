@@ -58,11 +58,8 @@ public static class BuildEntry
 
             // APK giữ versionName cố định = PlayerSettings.bundleVersion để
             // Gradle configuration cache không bị đổi theo từng Jenkins build.
-            // Riêng AAB dùng để đưa lên Google Play cần versionName phân biệt
-            // được từng package: patch Gradle sau khi Bee sinh thành
-            // "<base version>.<AAB versionCode>" (ví dụ "1.0.0.13"). Không
-            // sửa ProjectSettings theo versionCode, nên cache APK không bị ảnh
-            // hưởng bởi một AAB phát hành trước đó.
+            // AAB cũng dùng đúng APP_VERSION làm versionName (ví dụ "1.0.2");
+            // Google Play chỉ yêu cầu versionCode khác nhau.
             //
             // Ngoài ra, chèn "1.0.0-<build>" vào APK dưới dạng asset
             // pearz-build-info.txt (nằm trong StreamingAssets). Chỉ đụng vào
@@ -73,11 +70,7 @@ public static class BuildEntry
             AndroidBuildInfoPostProcessor.SetBuildInfo(configuration.AppVersion);
             AndroidBuildInfoPostProcessor.SetAndroidVersionNames(
                 configuration.ProjectBundleVersion,
-                configuration.BuildAppBundle
-                    ? BuildAndroidAabVersionName(
-                        configuration.ProjectBundleVersion,
-                        configuration.AndroidVersionCode)
-                    : null);
+                null);
 
             BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
             {
@@ -1253,19 +1246,6 @@ public static class BuildEntry
         return string.IsNullOrWhiteSpace(baseVersion)
             ? ciBuildNumber
             : $"{baseVersion}-{ciBuildNumber}";
-    }
-
-    private static string BuildAndroidAabVersionName(
-        string baseVersion,
-        int versionCode)
-    {
-        if (string.IsNullOrWhiteSpace(baseVersion))
-        {
-            throw new InvalidOperationException(
-                "Không thể tạo Android AAB versionName khi base version trống.");
-        }
-
-        return $"{baseVersion.Trim()}.{versionCode}";
     }
 
     private static int GetIntegerEnvironmentVariable(

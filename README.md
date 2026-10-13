@@ -276,18 +276,9 @@ APK `versionName` (what Android exposes as `Application.version` and in system
 settings) stays at Unity's `PlayerSettings.bundleVersion` (e.g. `1.0.0`) so
 ordinary tester builds retain a warm Gradle configuration cache.
 
-For an AAB, PearzCI uses the AAB version code already reserved by its persistent
-Jenkins counter to patch only the generated `launcher/build.gradle` immediately
-before Gradle packages it. Google Play therefore receives a readable
-`versionName` of `<base version>.<AAB versionCode>` — for example `1.0.0.13`
-with version code `13`. It does not write that generated value to
-`ProjectSettings`, so a Store AAB does not make the following APK build slow.
-Each AAB does have its own Gradle configuration-cache miss because its package
-version changes, which is necessary for Google Play to show a different
-version. As soon as the AAB has been built and signed, PearzCI restores the
-generated Gradle project to the base version; APK builds also verify that base
-value before Gradle starts. The base version is always `APP_VERSION` from
-Jenkins.
+For an AAB, `versionName` is also exactly `APP_VERSION` (for example `1.0.2`),
+so Google Play shows the same version as Jenkins. Only the version code differs
+between uploads.
 
 Testers still see the exact Jenkins build through three channels:
 
