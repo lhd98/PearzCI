@@ -210,10 +210,13 @@ auto_provision_profile() {
     else
         container_args="-project $IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
     fi
+    # Đích phải là đúng máy (không phải generic/platform=iOS):
+    # team chưa có thiết bị nào thì Xcode chỉ đăng ký được máy
+    # nằm trong -destination, generic thì báo "no devices".
     # shellcheck disable=SC2086
     xcodebuild $container_args -scheme Unity-iPhone \
         -configuration "$XCODE_CONFIGURATION" \
-        -destination generic/platform=iOS \
+        -destination "id=$IOS_DEVICE_UDID" -destination-timeout 120 \
         -derivedDataPath "$DERIVED_DATA_PATH/Provisioning" \
         -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
         CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$team" \

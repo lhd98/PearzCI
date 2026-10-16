@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.2] - 2026-10-16
+
+### Fixed
+
+- Installing on an iOS device with a team that has no registered devices yet
+  (a new Personal Team) failed with "Your team has no devices". The step that
+  lets Xcode create a missing development profile now targets the connected
+  iPhone's UDID instead of `generic/platform=iOS`, so Xcode registers it first.
+
 ## [0.14.1] - 2026-10-13
 
 ### Changed
