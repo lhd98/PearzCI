@@ -750,6 +750,9 @@ def call(Map config = [:]) {
                             )
                             echo "No IOS_EXPORT_OPTIONS_PLIST_PATH set; using generated automatic-signing options: ${exportOptionsPath}"
                         }
+                        // Upload TestFlight bằng tài khoản Xcode export lại từ
+                        // archive với đúng options này (thêm destination=upload).
+                        env.IOS_EXPORT_OPTIONS_USED = exportOptionsPath
                         withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}", "IOS_DEVELOPMENT_TEAM=${developmentTeam}", "IOS_PROFILE_SPECIFIER=${profileSpecifier}", "XCODE_CONFIGURATION=${xcodeConfiguration}"]) {
                             sh '''
                                 set -eu
@@ -964,11 +967,20 @@ def call(Map config = [:]) {
                 options { timeout(time: 60, unit: 'MINUTES') }
                 steps {
                     script {
-                        pearzIos.uploadIpaToTestFlight(
-                            appStoreConnectApiKeyCredentialsId,
-                            appStoreConnectKeyId,
-                            appStoreConnectIssuerId
-                        )
+                        // Có API key thì altool; không có thì để Xcode upload
+                        // bằng Apple ID trong Xcode > Settings > Accounts, như
+                        // nút Distribute App của Organizer.
+                        if (appStoreConnectKeyId || appStoreConnectIssuerId) {
+                            pearzIos.uploadIpaToTestFlight(
+                                appStoreConnectApiKeyCredentialsId,
+                                appStoreConnectKeyId,
+                                appStoreConnectIssuerId
+                            )
+                        } else {
+                            pearzIos.uploadArchiveToTestFlightWithXcodeAccount(
+                                env.IOS_EXPORT_OPTIONS_USED ?: ''
+                            )
+                        }
                     }
                 }
             }

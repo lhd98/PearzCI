@@ -107,6 +107,60 @@ def uploadIpaToTestFlight(
     }
 }
 
+// Không có API key: export lại archive với destination=upload để Xcode tự đẩy
+// lên App Store Connect bằng Apple ID trong Xcode > Settings > Accounts của
+// user chạy Jenkins (giống Distribute App > TestFlight & App Store). Archive
+// còn nguyên vì thư mục Builds chỉ bị xoá ở post. manageAppVersionAndBuildNumber
+// tắt để Xcode không tự đổi build number, giữ bản trên TestFlight trùng IPA
+// đã đưa lên Drive.
+def uploadArchiveToTestFlightWithXcodeAccount(String exportOptionsPath) {
+    if (!exportOptionsPath || !fileExists(exportOptionsPath)) {
+        error(
+            'Cannot upload to TestFlight: the export options used for the IPA ' +
+            "were not found (${exportOptionsPath ?: 'none'})."
+        )
+    }
+    if (!isStoreExport(exportOptionsPath)) {
+        error(
+            'UPLOAD_TO_TESTFLIGHT needs an App Store export (method ' +
+            'app-store or app-store-connect); the configured export options ' +
+            'use another method.'
+        )
+    }
+
+    try {
+        withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}"]) {
+            sh '''
+                set -eu
+                [ -d "$ARCHIVE_PATH" ]
+                upload_options="$WORKSPACE/PearzCI-ExportOptions-Upload.plist"
+                upload_dir="$EXPORT_PATH-upload"
+                upload_log="$WORKSPACE/Builds/iOS/testflight-upload.log"
+                cp "$IOS_EXPORT_OPTIONS" "$upload_options"
+                for key in destination manageAppVersionAndBuildNumber; do
+                    /usr/libexec/PlistBuddy -c "Delete :$key" "$upload_options" 2>/dev/null || true
+                done
+                /usr/libexec/PlistBuddy -c 'Add :destination string upload' "$upload_options"
+                /usr/libexec/PlistBuddy -c 'Add :manageAppVersionAndBuildNumber bool false' "$upload_options"
+                rm -rf "$upload_dir"
+                trap 'rm -f "$upload_options"; [ ! -f "$upload_log" ] || cat "$upload_log"' EXIT
+                echo 'Uploading to App Store Connect with the Apple ID signed in to Xcode...'
+                xcodebuild -exportArchive -allowProvisioningUpdates \
+                    -archivePath "$ARCHIVE_PATH" \
+                    -exportOptionsPlist "$upload_options" \
+                    -exportPath "$upload_dir" > "$upload_log" 2>&1
+            '''
+        }
+
+        env.TESTFLIGHT_STATUS =
+            'Uploaded; App Store Connect is still processing the build.'
+        echo 'Archive uploaded to App Store Connect for TestFlight.'
+    } catch (Exception exception) {
+        env.TESTFLIGHT_STATUS = 'Upload failed.'
+        throw exception
+    }
+}
+
 // Tên file đi qua biến môi trường chứ không nội suy thẳng vào script, để
 // productName có dấu cách hay ký tự lạ không làm vỡ lệnh find.
 def findIosBuildInfo(String namePattern) {

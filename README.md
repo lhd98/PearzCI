@@ -792,7 +792,16 @@ build and a working link in the Telegram message. A failed upload fails the
 build, and the Telegram `Error` block says the IPA was built but the upload
 failed, so it is not confused with a broken build.
 
-Authentication uses an App Store Connect API key. In App Store Connect, open
+Without an API key (no `appStoreConnectKeyId` / `appStoreConnectIssuerId`),
+the pipeline uploads the way Xcode Organizer's **Distribute App > TestFlight &
+App Store** does: it exports the archive again with `destination` set to
+`upload`, and Xcode sends it with the Apple ID signed in under **Xcode >
+Settings > Accounts** for the Jenkins macOS user. That account needs a role
+allowed to upload builds for the app's team. Build numbers are left as built
+(`manageAppVersionAndBuildNumber` is off), so the TestFlight build matches the
+IPA on Google Drive.
+
+To authenticate with an App Store Connect API key instead, open, in App Store Connect,
 **Users and Access > Integrations > App Store Connect API**, create a key with
 the **App Manager** role, and download the `.p8` file — Apple allows that
 download only once. Then, in Jenkins, create a **Secret file** credential

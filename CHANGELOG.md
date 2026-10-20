@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.15.0] - 2026-10-20
+
+### Added
+
+- TestFlight upload no longer requires an App Store Connect API key. When
+  `appStoreConnectKeyId` / `appStoreConnectIssuerId` are not set, the
+  "Upload to TestFlight" stage re-exports the archive with
+  `destination = upload`, so Xcode uploads it with the Apple ID signed in under
+  **Xcode > Settings > Accounts** for the Jenkins macOS user (the same as
+  Organizer's **Distribute App > TestFlight & App Store**). Xcode does not
+  change the build number, so the TestFlight build matches the IPA on Google
+  Drive. Jobs with an API key keep uploading with `altool`.
+
 ## [0.14.7] - 2026-10-20
 
 ### Fixed
