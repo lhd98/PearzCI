@@ -826,6 +826,14 @@ pearzUnityPipeline(
 `$WORKSPACE/private_keys` for the duration of the upload and removes it
 immediately afterwards, including when the upload fails.
 
+Before archiving, the pipeline adds `ITSAppUsesNonExemptEncryption = NO` to the
+exported `Info.plist` (unless the game already sets the key), so TestFlight
+builds do not stop at **Missing Compliance**. That declares the app uses no
+encryption beyond the exempt kinds (HTTPS/TLS and the encryption built into
+iOS). A game that implements its own encryption must set
+`iosUsesNonExemptEncryption: true` in its job script and answer the export
+compliance question in App Store Connect instead.
+
 App Store Connect rejects a build whose `CFBundleVersion` matches one already
 uploaded, so `IOS_BUILD_NUMBER` defaults to the Jenkins `BUILD_NUMBER` when the
 parameter is empty. `APP_VERSION` is deliberately **not** filled in the same

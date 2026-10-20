@@ -753,10 +753,24 @@ def call(Map config = [:]) {
                         // Upload TestFlight bằng tài khoản Xcode export lại từ
                         // archive với đúng options này (thêm destination=upload).
                         env.IOS_EXPORT_OPTIONS_USED = exportOptionsPath
-                        withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}", "IOS_DEVELOPMENT_TEAM=${developmentTeam}", "IOS_PROFILE_SPECIFIER=${profileSpecifier}", "XCODE_CONFIGURATION=${xcodeConfiguration}"]) {
+                        // Mặc định khai không dùng mã hoá ngoài loại được miễn
+                        // (HTTPS, mã hoá của iOS) để TestFlight không kẹt ở
+                        // Missing Compliance. Game dùng mã hoá riêng thì đặt
+                        // iosUsesNonExemptEncryption: true để trả lời tay.
+                        def usesNonExemptEncryption = config.get(
+                            'iosUsesNonExemptEncryption', false
+                        ).toString().trim().toBoolean()
+                        withEnv(["IOS_EXPORT_OPTIONS=${exportOptionsPath}", "IOS_DEVELOPMENT_TEAM=${developmentTeam}", "IOS_PROFILE_SPECIFIER=${profileSpecifier}", "XCODE_CONFIGURATION=${xcodeConfiguration}", "IOS_USES_NON_EXEMPT_ENCRYPTION=${usesNonExemptEncryption}"]) {
                             sh '''
                                 set -eu
                                 [ -d "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj" ]
+                                # Khoá đã có trong Info.plist (game tự đặt) thì giữ.
+                                info_plist="$IOS_PROJECT_PATH/Info.plist"
+                                if [ "$IOS_USES_NON_EXEMPT_ENCRYPTION" != true ] && \
+                                    ! /usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$info_plist" >/dev/null 2>&1; then
+                                    /usr/libexec/PlistBuddy -c 'Add :ITSAppUsesNonExemptEncryption bool false' "$info_plist"
+                                    echo 'Info.plist: ITSAppUsesNonExemptEncryption = NO'
+                                fi
                                 rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH" "$XCODEBUILD_LOG_PATH"
                                 mkdir -p "$EXPORT_PATH"
                                 # In log cả khi xcodebuild hỏng: set -e dừng script

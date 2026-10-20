@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.16.0] - 2026-10-20
+
+### Added
+
+- iOS IPA builds set `ITSAppUsesNonExemptEncryption = NO` in `Info.plist`
+  before archiving, so TestFlight builds no longer wait at **Missing
+  Compliance** for someone to answer the export compliance question. A key the
+  game already sets is kept. Games that implement their own (non-exempt)
+  encryption opt out with `iosUsesNonExemptEncryption: true`.
+
 ## [0.15.0] - 2026-10-20
 
 ### Added
