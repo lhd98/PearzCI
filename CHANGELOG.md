@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.6] - 2026-10-20
+
+### Fixed
+
+- The iOS IPA archive still failed with `"Unity-iPhone" requires a
+  provisioning profile`: Unity exports the Xcode project with manual signing
+  unless **Automatically Sign** is ticked, and manual signing never fetches a
+  profile. When the job names no provisioning profile and the exported project
+  names none either, the archive now uses automatic signing with
+  `Apple Development` (as the device-install stage already does). A profile set
+  in the job or in Unity Player Settings is still used as before.
+
 ## [0.14.5] - 2026-10-20
 
 ### Fixed

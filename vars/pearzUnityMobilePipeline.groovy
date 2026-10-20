@@ -776,7 +776,19 @@ def call(Map config = [:]) {
                                 # withEnv với giá trị rỗng sẽ unset biến, nên
                                 # phải dùng ${VAR:-} kẻo set -u giết script.
                                 [ -z "${IOS_DEVELOPMENT_TEAM:-}" ] || set -- "$@" "DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
-                                [ -z "${IOS_PROFILE_SPECIFIER:-}" ] || set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                # Unity mặc định xuất project ký Manual (bỏ chọn
+                                # "Automatically Sign"); không có profile thì ép
+                                # Automatic như stage cài lên máy, nếu không Xcode
+                                # báo "requires a provisioning profile". Archive ký
+                                # Apple Development; export mới ký lại bản phát hành.
+                                # Profile đã đặt trong Unity Player Settings thì giữ.
+                                if [ -n "${IOS_PROFILE_SPECIFIER:-}" ]; then
+                                    set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                elif grep -qE 'PROVISIONING_PROFILE(_SPECIFIER)? = "?[^";]' "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"; then
+                                    echo 'Xcode project already names a provisioning profile; keeping its signing settings.'
+                                else
+                                    set -- "$@" CODE_SIGN_STYLE=Automatic "CODE_SIGN_IDENTITY=Apple Development" PROVISIONING_PROFILE_SPECIFIER=
+                                fi
                                 echo "xcodebuild $1 $2"
                                 xcodebuild "$@" > "$XCODEBUILD_LOG_PATH" 2>&1
                                 xcodebuild -exportArchive -allowProvisioningUpdates -archivePath "$ARCHIVE_PATH" -exportOptionsPlist "$IOS_EXPORT_OPTIONS" -exportPath "$EXPORT_PATH" >> "$XCODEBUILD_LOG_PATH" 2>&1
