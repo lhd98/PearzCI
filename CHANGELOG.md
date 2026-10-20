@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.5] - 2026-10-20
+
+### Fixed
+
+- The iOS IPA archive failed with `"Unity-iPhone" requires a provisioning
+  profile` on a Mac that had no profile for the app yet. `xcodebuild archive`
+  and `-exportArchive` now pass `-allowProvisioningUpdates`, so automatic
+  signing creates or downloads the profiles through the Apple ID signed in
+  under **Xcode > Settings > Accounts** for the Jenkins macOS user. Exporting
+  an App Store IPA still needs an Apple Distribution certificate, or access to
+  the cloud-managed one, for that team.
+
 ## [0.14.4] - 2026-10-20
 
 ### Fixed
