@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.7] - 2026-10-20
+
+### Fixed
+
+- 0.14.6 still archived with manual signing for projects that set no
+  provisioning profile: it looked for a profile in the exported
+  `project.pbxproj`, which has a non-empty `PROVISIONING_PROFILE` line even
+  when Unity sets none. The check now reads
+  `iOSManualSigningProvisioningProfileID` from Unity's
+  `ProjectSettings.asset` instead.
+
 ## [0.14.6] - 2026-10-20
 
 ### Fixed

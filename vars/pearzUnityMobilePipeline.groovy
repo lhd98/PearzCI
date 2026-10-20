@@ -782,10 +782,14 @@ def call(Map config = [:]) {
                                 # báo "requires a provisioning profile". Archive ký
                                 # Apple Development; export mới ký lại bản phát hành.
                                 # Profile đã đặt trong Unity Player Settings thì giữ.
+                                # Đọc ProjectSettings.asset chứ không đọc pbxproj:
+                                # pbxproj có dòng PROVISIONING_PROFILE khác rỗng ở
+                                # target khác dù Unity không đặt profile nào.
+                                unity_settings="$UNITY_PROJECT_PATH/ProjectSettings/ProjectSettings.asset"
                                 if [ -n "${IOS_PROFILE_SPECIFIER:-}" ]; then
                                     set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
-                                elif grep -qE 'PROVISIONING_PROFILE(_SPECIFIER)? = "?[^";]' "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj/project.pbxproj"; then
-                                    echo 'Xcode project already names a provisioning profile; keeping its signing settings.'
+                                elif grep -qE '^ *iOSManualSigningProvisioningProfileID: *[^[:space:]]' "$unity_settings" 2>/dev/null; then
+                                    echo 'Unity Player Settings name an iOS provisioning profile; keeping its signing settings.'
                                 else
                                     set -- "$@" CODE_SIGN_STYLE=Automatic "CODE_SIGN_IDENTITY=Apple Development" PROVISIONING_PROFILE_SPECIFIER=
                                 fi
