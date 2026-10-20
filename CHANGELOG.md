@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.16.1] - 2026-10-20
+
+### Fixed
+
+- Installing on an iOS device failed with `This provisioning profile cannot be
+  installed on this device` on a Mac whose keychain has Apple Development
+  certificates from more than one team: `codesign --sign 'Apple Development'`
+  was ambiguous, left the app unsigned, and the script carried on to the
+  install. The app is now signed with the certificate (by SHA-1) that the
+  provisioning profile names, and a signing failure stops the stage with an
+  error.
+- A development profile that does not include the connected iPhone (for
+  example one created while archiving the IPA) is no longer used: the stage
+  asks Xcode to register the device and regenerate the profile, and prefers
+  the installed profile that lists the device.
+
 ## [0.16.0] - 2026-10-20
 
 ### Added

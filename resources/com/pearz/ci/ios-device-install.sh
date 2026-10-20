@@ -166,6 +166,9 @@ if [ -z "$profile_specifier" ]; then
     echo "Tự suy provisioning profile theo bundle id: $profile_specifier"
 fi
 
+# Có thể có nhiều profile cùng tên (bản cũ thiếu máy, bản Xcode
+# vừa tạo lại): ưu tiên profile chứa UDID máy đang cắm, không có
+# thì lấy profile khớp tên đầu tiên.
 find_installed_profile() {
     profile_path=''
     for profiles_dir in \
@@ -174,15 +177,18 @@ find_installed_profile() {
         [ -d "$profiles_dir" ] || continue
         for candidate_profile in "$profiles_dir"/*.mobileprovision; do
             [ -f "$candidate_profile" ] || continue
-            candidate_name="$(security cms -D -i "$candidate_profile" 2>/dev/null | \
+            candidate_plist="$(security cms -D -i "$candidate_profile" 2>/dev/null || true)"
+            candidate_name="$(printf '%s' "$candidate_plist" | \
                 plutil -extract Name raw - 2>/dev/null || true)"
-            if [ "$candidate_name" = "$profile_specifier" ]; then
+            [ "$candidate_name" = "$profile_specifier" ] || continue
+            [ -n "$profile_path" ] || profile_path="$candidate_profile"
+            if printf '%s' "$candidate_plist" | grep -qi "<string>$IOS_DEVICE_UDID</string>"; then
                 profile_path="$candidate_profile"
                 return 0
             fi
         done
     done
-    return 1
+    [ -n "$profile_path" ]
 }
 
 # Chưa có profile (game mới / đổi bundle id / Personal Team
@@ -225,7 +231,19 @@ auto_provision_profile() {
     grep -E 'error:|Provisioning|profile' "$provision_log" | tail -n 20 || true
 }
 
-if ! find_installed_profile; then
+profile_plist="$DERIVED_DATA_PATH/provisioning-profile.plist"
+
+# Profile development chỉ cài được lên máy có UDID trong
+# ProvisionedDevices. Profile do archive IPA sinh ra (không có
+# đích là máy) có thể thiếu máy đang cắm.
+profile_has_device() {
+    security cms -D -i "$profile_path" > "$profile_plist" 2>/dev/null || return 1
+    /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$profile_plist" 2>/dev/null | \
+        grep -qi "$IOS_DEVICE_UDID"
+}
+
+if ! find_installed_profile || ! profile_has_device; then
+    [ -z "$profile_path" ] || echo "Profile hiện có không chứa máy $IOS_DEVICE_UDID — nhờ Xcode đăng ký máy và tạo lại profile."
     auto_provision_profile || true
     find_installed_profile || {
         echo "ERROR: Installed provisioning profile was not found: $profile_specifier"
@@ -233,25 +251,56 @@ if ! find_installed_profile; then
         echo "Log chi tiết: $DERIVED_DATA_PATH/provisioning.log"
         exit 3
     }
+    profile_has_device || {
+        echo "ERROR: Profile $profile_specifier không chứa máy $IOS_DEVICE_UDID."
+        echo 'Máy chưa được đăng ký trong team (vai trò Developer có thể không được đăng ký thiết bị). Nhờ Admin thêm UDID ở developer.apple.com > Devices rồi build lại.'
+        echo "Log chi tiết: $DERIVED_DATA_PATH/provisioning.log"
+        exit 3
+    }
 fi
 echo "Dùng provisioning profile: $profile_path"
 
-profile_plist="$DERIVED_DATA_PATH/provisioning-profile.plist"
 signing_entitlements="$DERIVED_DATA_PATH/signing-entitlements.plist"
-security cms -D -i "$profile_path" > "$profile_plist"
 plutil -extract Entitlements xml1 -o "$signing_entitlements" "$profile_plist"
 cp "$profile_path" "$app_path/embedded.mobileprovision"
 
-echo "Signing iOS device app with installed profile: $profile_specifier"
+# Ký bằng đúng chứng chỉ nằm trong profile (theo SHA-1): keychain có
+# nhiều "Apple Development" của các team khác nhau thì
+# --sign 'Apple Development' báo ambiguous và để app không được ký.
+signing_identity=''
+installed_identities="$(security find-identity -v -p codesigning 2>/dev/null)"
+cert_index=0
+while cert_xml="$(plutil -extract "DeveloperCertificates.$cert_index" xml1 -o - "$profile_plist" 2>/dev/null)"; do
+    cert_sha1="$(printf '%s\n' "$cert_xml" | \
+        sed -n '/<data>/,/<\/data>/p' | sed -e 's/<[^>]*>//g' | tr -d ' \t\n' | \
+        base64 -D 2>/dev/null | shasum -a 1 | awk '{print toupper($1)}')"
+    if [ -n "$cert_sha1" ] && printf '%s\n' "$installed_identities" | grep -q "$cert_sha1"; then
+        signing_identity="$cert_sha1"
+        break
+    fi
+    cert_index=$((cert_index + 1))
+done
+[ -n "$signing_identity" ] || {
+    echo 'ERROR: keychain không có chứng chỉ Apple Development nào nằm trong profile này.'
+    exit 4
+}
+
+echo "Signing iOS device app with installed profile: $profile_specifier (identity $signing_identity)"
+sign_failed=0
+# -exec ... + trả mã lỗi khác 0 nếu có lần codesign hỏng.
 find "$app_path" -depth -type d \
     \( -name '*.framework' -o -name '*.appex' \) \
-    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \;
+    -exec codesign --force --sign "$signing_identity" --timestamp=none {} + || sign_failed=1
 find "$app_path" -type f -name '*.dylib' \
-    -exec codesign --force --sign 'Apple Development' --timestamp=none {} \;
-codesign --force --sign 'Apple Development' \
+    -exec codesign --force --sign "$signing_identity" --timestamp=none {} + || sign_failed=1
+codesign --force --sign "$signing_identity" \
     --entitlements "$signing_entitlements" \
-    --timestamp=none "$app_path"
-codesign --verify --deep --strict "$app_path"
+    --timestamp=none "$app_path" || sign_failed=1
+codesign --verify --deep --strict "$app_path" || sign_failed=1
+[ "$sign_failed" -eq 0 ] || {
+    echo 'ERROR: ký app thất bại; không cài lên máy.'
+    exit 4
+}
 
 xcrun devicectl device install app \
     --device "$IOS_DEVICE_UDID" "$app_path" \
