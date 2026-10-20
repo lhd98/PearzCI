@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.3] - 2026-10-20
+
+### Changed
+
+- Jenkins jobs now use `/Users/pearzgamesfuntap.vn/JenkinsBuilds/<JOB_NAME>`
+  for their checkout and Unity cache, including builds on the built-in Mac
+  node. Override `workspaceRoot` in the pipeline configuration for another
+  machine. Existing workspaces are not moved or deleted; the first build in
+  the new location checks out the repository and imports Unity assets again.
+
 ## [0.14.2] - 2026-10-16
 
 ### Fixed

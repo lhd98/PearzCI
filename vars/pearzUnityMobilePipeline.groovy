@@ -47,6 +47,10 @@ def call(Map config = [:]) {
         )
     }
     def agentLabelExpression = isIos ? macAgentLabel : ''
+    // Keep each job's checkout and Unity cache in its own persistent folder.
+    def workspaceRoot = config.get(
+        'workspaceRoot', '/Users/pearzgamesfuntap.vn/JenkinsBuilds'
+    ).toString().trim()
     def pearzCiVersion = readPearzCiVersion()
     def repositoryUrl = config.get(
         'repositoryUrl',
@@ -160,7 +164,12 @@ def call(Map config = [:]) {
     }
 
     pipeline {
-        agent { label "${agentLabelExpression}" }
+        agent {
+            node {
+                label "${agentLabelExpression}"
+                customWorkspace "${workspaceRoot}/${env.JOB_NAME}"
+            }
+        }
 
         options {
             timestamps()

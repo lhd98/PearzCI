@@ -19,6 +19,19 @@ Pearz CI pipelines.
   the Xcode Command Line Tools); without it the build still runs but the
   Telegram message falls back to Jenkins values and loses the Unity error
 
+## Jenkins workspace
+
+Each job uses `/Users/pearzgamesfuntap.vn/JenkinsBuilds/<JOB_NAME>` as its
+workspace on the Mac, including the built-in Jenkins node. For example,
+`CubeTapSort` uses `/Users/pearzgamesfuntap.vn/JenkinsBuilds/CubeTapSort`.
+Jenkins creates the directory automatically; its macOS user must have write
+access. Jobs in Jenkins folders retain their folder hierarchy under this root.
+
+To use a different root, pass `workspaceRoot: '/absolute/path'` to
+`pearzUnityPipeline`. Existing job parameters do not need to change. Old
+workspaces remain untouched; the first build in the new location clones the
+repository and imports Unity assets again.
+
 ## Installation
 
 ### Unity Package Manager
