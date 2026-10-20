@@ -769,8 +769,10 @@ def call(Map config = [:]) {
                                     set -- -project "$IOS_PROJECT_PATH/Unity-iPhone.xcodeproj"
                                 fi
                                 set -- "$@" -scheme Unity-iPhone -configuration "$XCODE_CONFIGURATION" -archivePath "$ARCHIVE_PATH" archive
-                                [ -z "$IOS_DEVELOPMENT_TEAM" ] || set -- "$@" "DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
-                                [ -z "$IOS_PROFILE_SPECIFIER" ] || set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
+                                # withEnv với giá trị rỗng sẽ unset biến, nên
+                                # phải dùng ${VAR:-} kẻo set -u giết script.
+                                [ -z "${IOS_DEVELOPMENT_TEAM:-}" ] || set -- "$@" "DEVELOPMENT_TEAM=$IOS_DEVELOPMENT_TEAM"
+                                [ -z "${IOS_PROFILE_SPECIFIER:-}" ] || set -- "$@" CODE_SIGN_STYLE=Manual "PROVISIONING_PROFILE_SPECIFIER=$IOS_PROFILE_SPECIFIER"
                                 echo "xcodebuild $1 $2"
                                 xcodebuild "$@" > "$XCODEBUILD_LOG_PATH" 2>&1
                                 xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportOptionsPlist "$IOS_EXPORT_OPTIONS" -exportPath "$EXPORT_PATH" >> "$XCODEBUILD_LOG_PATH" 2>&1

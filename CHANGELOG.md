@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.14.4] - 2026-10-20
+
+### Fixed
+
+- The iOS "Archive and Export IPA" stage failed with `IOS_DEVELOPMENT_TEAM:
+  unbound variable` (or `IOS_PROFILE_SPECIFIER: unbound variable`) when the
+  team or provisioning profile was left empty. Jenkins `withEnv` unsets a
+  variable whose value is empty, and the stage script runs with `set -u`.
+
 ## [0.14.3] - 2026-10-20
 
 ### Changed
