@@ -132,7 +132,6 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         versionParts << "build ${iosBuildNumber}"
     }
 
-    def changeDescription = env.GIT_CHANGES?.trim()
     def errorSection = ''
 
     if (!succeeded) {
@@ -176,11 +175,8 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         ERROR_SECTION: errorSection
     ]
 
-    return renderWithinTelegramLimit(changeDescription) { changes ->
-        renderTelegramTemplate(
-            values + [CHANGES_SECTION: telegramChangesSection(changes)]
-        )
-    }
+    // Tin iOS không kèm phần Changes (danh sách commit message).
+    return renderTelegramTemplate(values + [CHANGES_SECTION: ''])
 }
 
 // Telegram sendMessage từ chối text dài hơn 4096 ký tự (đếm sau khi parse

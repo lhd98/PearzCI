@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.16.2] - 2026-10-22
+
+### Changed
+
+- iOS Telegram notifications (IPA and device builds) no longer include the
+  Changes section with commit messages.
+
 ## [0.16.1] - 2026-10-20
 
 ### Fixed
