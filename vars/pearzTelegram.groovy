@@ -9,17 +9,13 @@ def telegramBuildStatus() {
 }
 
 def buildTelegramMessage() {
-    return renderWithinTelegramLimit(env.GIT_CHANGES?.trim()) { changes ->
-        renderAndroidTelegramMessage(changes)
-    }
+    return renderAndroidTelegramMessage()
 }
 
-// Caption của sendDocument chỉ được 1024 ký tự (sendMessage là 4096), nên
-// bỏ hẳn phần Changes: đó là phần duy nhất dài không giới hạn. Trả về chuỗi
-// rỗng khi phần còn lại vẫn quá dài: lúc đó giữ cách gửi tin nhắn rồi file
-// riêng.
+// Caption của sendDocument chỉ được 1024 ký tự (sendMessage là 4096). Trả về
+// chuỗi rỗng khi tin quá dài: lúc đó giữ cách gửi tin nhắn rồi file riêng.
 def buildTelegramCaption() {
-    def caption = renderAndroidTelegramMessage('')
+    def caption = renderAndroidTelegramMessage()
 
     return telegramVisibleLength(caption) <= 1024 ? caption : ''
 }
@@ -35,7 +31,7 @@ def telegramVisibleLength(String message) {
         .length()
 }
 
-def renderAndroidTelegramMessage(String changeDescription) {
+def renderAndroidTelegramMessage() {
     // Kết quả của Jenkins mới là kết quả thật: Unity có thể build xong
     // nhưng upload lên Drive vẫn hỏng sau đó.
     def versionParts = []
@@ -101,8 +97,7 @@ def renderAndroidTelegramMessage(String changeDescription) {
         AAB: telegramHtmlEscape(aabDescription),
         MAPPING: telegramHtmlEscape(mappingDescription),
         INSTALL_STATUS: telegramHtmlEscape(env.ANDROID_INSTALL_STATUS),
-        ERROR_SECTION: telegramErrorSection(env.META_ERROR_MESSAGE),
-        CHANGES_SECTION: telegramChangesSection(changeDescription)
+        ERROR_SECTION: telegramErrorSection(env.META_ERROR_MESSAGE)
     ]
 
     return renderTelegramTemplate(values)
@@ -175,61 +170,11 @@ def buildIosTelegramMessage(boolean deviceBuild) {
         ERROR_SECTION: errorSection
     ]
 
-    // Tin iOS không kèm phần Changes (danh sách commit message).
-    return renderTelegramTemplate(values + [CHANGES_SECTION: ''])
-}
-
-// Telegram sendMessage từ chối text dài hơn 4096 ký tự (đếm sau khi parse
-// HTML). Không cắt chuỗi HTML đã render: điểm cắt có thể rơi vào giữa một thẻ
-// và Telegram từ chối cả tin. Thay vào đó bớt phần Changes - phần duy nhất dài
-// không giới hạn - theo từng dòng commit rồi render lại; vẫn quá dài thì bỏ
-// hẳn phần đó.
-def renderWithinTelegramLimit(String changeDescription, Closure render) {
-    int maximumLength = 4096
-    def message = render(changeDescription)
-    int overflow = telegramVisibleLength(message) - maximumLength
-
-    if (overflow <= 0 || !changeDescription) {
-        return message
-    }
-
-    // Phần Changes đếm đúng bằng độ dài chuỗi gốc (mỗi entity tính một ký
-    // tự), nên bớt đi overflow ký tự là vừa giới hạn.
-    def notice = '- ... (more changes omitted)'
-    int budget = changeDescription.length() - overflow - notice.length() - 1
-    def kept = []
-    int used = 0
-
-    for (def line : changeDescription.readLines()) {
-        int cost = line.length() + (kept ? 1 : 0)
-
-        if (used + cost > budget) {
-            // Commit mới nhất đã dài quá: giữ phần đầu của nó.
-            if (!kept && budget > 3) {
-                kept << line.take(budget - 3) + '...'
-            }
-            break
-        }
-
-        kept << line
-        used += cost
-    }
-
-    message = render(kept ? (kept + [notice]).join('\n') : '')
-
-    return telegramVisibleLength(message) <= maximumLength
-        ? message
-        : render('')
-}
-
-def telegramChangesSection(String changeDescription) {
-    return changeDescription
-        ? "<b>Changes</b>\n<blockquote>${telegramHtmlEscape(changeDescription)}</blockquote>"
-        : ''
+    return renderTelegramTemplate(values)
 }
 
 // Lỗi Unity/Cloudflare có thể rất dài (stack, danh sách file). Giới hạn để
-// phần còn lại của tin luôn vừa 4096 ký tự khi đã bỏ phần Changes.
+// tin luôn vừa giới hạn 4096 ký tự của Telegram.
 def telegramErrorSection(String reason) {
     def text = reason?.trim()
 
@@ -301,7 +246,6 @@ def sendWebTelegramNotification(
 
 def buildWebTelegramMessage() {
     boolean succeeded = (currentBuild.currentResult ?: 'SUCCESS') == 'SUCCESS'
-    def changeDescription = env.GIT_CHANGES?.trim()
     def errorSection = ''
 
     if (!succeeded) {
@@ -324,11 +268,7 @@ def buildWebTelegramMessage() {
         ERROR_SECTION: errorSection
     ]
 
-    return renderWithinTelegramLimit(changeDescription) { changes ->
-        renderTelegramTemplate(
-            values + [CHANGES_SECTION: telegramChangesSection(changes)]
-        )
-    }
+    return renderTelegramTemplate(values)
 }
 
 // buildCaption khác null: kèm file build (APK/AAB) khi job bật

@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.16.3] - 2026-10-24
+
+### Changed
+
+- Telegram notifications on every platform (Android, WebGL) no longer include
+  the Changes section with commit messages; iOS already dropped it in 0.16.2.
+
 ## [0.16.2] - 2026-10-22
 
 ### Changed

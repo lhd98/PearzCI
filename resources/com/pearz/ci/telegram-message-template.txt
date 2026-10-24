@@ -17,4 +17,3 @@
 <b>TestFlight:</b> {{TESTFLIGHT}}
 <b>mapping.txt:</b> {{MAPPING}}
 <b>Install:</b> {{INSTALL_STATUS}}
-{{CHANGES_SECTION}}
