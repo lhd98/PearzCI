@@ -408,12 +408,12 @@ def call(Map config = [:]) {
                         env.OUTPUT_FILE_NAME = !isIos
                             ? "${outputName}.${env.OUTPUT_EXTENSION}"
                             : "${outputName}-${artifactBuildNumber}.${env.OUTPUT_EXTENSION}"
-                        // Trên Drive tên file không kèm số build: build lại
-                        // cùng version sẽ ghi đè APK/AAB/IPA cũ thay vì đẻ
-                        // thêm file. Lịch sử từng build vẫn nằm trong Jenkins
-                        // archive.
+                        // Trên Drive tên file kèm version nhưng không kèm số
+                        // build (MyGame_1.0.0.apk): build lại cùng version sẽ
+                        // ghi đè APK/AAB/IPA cũ thay vì đẻ thêm file. Lịch sử
+                        // từng build vẫn nằm trong Jenkins archive.
                         env.DRIVE_OUTPUT_FILE_NAME =
-                            "${outputName}.${env.OUTPUT_EXTENSION}"
+                            "${outputName}_${appVersion}.${env.OUTPUT_EXTENSION}"
                         def buildFolder = isWebGL ? 'WebGL' : (isIos ? 'iOS' : 'Android')
                         // WebGL: OUTPUT_PATH là thư mục site deploy nguyên
                         // lên Cloudflare Pages; metadata/log nằm cạnh nó.
@@ -436,7 +436,7 @@ def call(Map config = [:]) {
                         }
                         env.BUILD_VERSION = "${appVersion}-${artifactBuildNumber}"
                         // Mỗi version một thư mục, APK/AAB/IPA dùng chung:
-                        // JenkinsBuild/<Job>/1.0.0/MyGame.apk. Đổi APP_VERSION
+                        // JenkinsBuild/<Job>/1.0.0/MyGame_1.0.0.apk. Đổi APP_VERSION
                         // thì tạo thư mục mới; build lại version cũ thì ghi đè.
                         // Build info và mapping có hậu tố loại artifact để APK
                         // và AAB cùng version không đè lên nhau.

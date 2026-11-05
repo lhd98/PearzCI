@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.17.0] - 2026-11-05
+
+### Changed
+
+- APK/AAB/IPA uploaded to Drive now carry the app version in the file name
+  (`MyGame_1.0.0.apk`) inside the per-version folder. Rebuilding the same
+  version still overwrites the file; the old unversioned file in that folder
+  is removed by the existing cleanup.
+
 ## [0.16.3] - 2026-10-24
 
 ### Changed
