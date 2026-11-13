@@ -64,34 +64,9 @@ def upload(boolean isIos) {
         echo 'Build info file verified on Google Drive.'
     }
 
-    // Đổi PRODUCT_NAME / productName trong cùng version
-    // sẽ để lại APK/AAB/IPA tên cũ trong thư mục version.
-    // Upload mới đã verify xong nên xoá chúng (và build
-    // info cùng loại) để mỗi version chỉ còn một file.
-    // Lỗi dọn dẹp không làm hỏng build.
-    def staleCleanupStatus = sh(
-        script: '''
-            set -u
-            ext_upper=$(printf '%s' "$OUTPUT_EXTENSION" | tr '[:lower:]' '[:upper:]')
-            "$RCLONE_EXE" lsf "$DRIVE_DIRECTORY" --files-only --max-depth 1 |
-            while IFS= read -r name; do
-                case "$name" in
-                    "$DRIVE_OUTPUT_FILE_NAME"|"$DRIVE_BUILD_INFO_FILE_NAME")
-                        continue
-                        ;;
-                    *."$OUTPUT_EXTENSION"|*_"$ext_upper"_BUILD_INFO.txt)
-                        echo "Deleting stale Drive file: $name"
-                        "$RCLONE_EXE" deletefile "$DRIVE_DIRECTORY/$name" || true
-                        ;;
-                esac
-            done
-        ''',
-        returnStatus: true
-    )
-
-    if (staleCleanupStatus != 0) {
-        echo 'Could not clean stale files in the Drive version folder; continuing.'
-    }
+    // Không dọn artifact tên cũ trên Drive. Khi PRODUCT_NAME/productName đổi,
+    // tên file Drive cũng đổi, nên bản APK/AAB/IPA mới được thêm cạnh bản cũ
+    // thay vì ghi đè hoặc xoá lịch sử của tên game trước đó.
 
     env.MAPPING_UPLOADED = 'false'
 

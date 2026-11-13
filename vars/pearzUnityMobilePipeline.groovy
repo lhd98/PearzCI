@@ -407,6 +407,10 @@ def call(Map config = [:]) {
                             )
                         }
                         env.PEARZ_APP_VERSION = appVersion
+                        // Chỉ được bật sau khi pearzDrive.upload xác minh file
+                        // trên Drive; tránh một biến môi trường có sẵn làm xoá
+                        // output khi upload của build hiện tại đã hỏng.
+                        env.PEARZ_ARTIFACT_UPLOADED = 'false'
 
                         def artifactBuildNumber = env.BUILD_NUMBER
                         env.ARTIFACT_BUILD_NUMBER = artifactBuildNumber
@@ -930,7 +934,9 @@ def call(Map config = [:]) {
                                 ? 'Builds/WebGL/build-metadata.json,Builds/WebGL/unity-build.log'
                                 : isIos
                                 ? "Builds/iOS/${env.OUTPUT_FILE_NAME},Builds/iOS/${env.BUILD_INFO_FILE_NAME},Builds/iOS/build-metadata.json,Builds/iOS/unity-build.log,Builds/iOS/xcodebuild.log"
-                                : "Builds/Android/${env.OUTPUT_FILE_NAME},Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
+                                // APK/AAB chỉ tồn tại tạm để upload Drive và
+                                // gửi Telegram; không archive lại trên Mac.
+                                : "Builds/Android/${env.BUILD_INFO_FILE_NAME},Builds/Android/build-metadata.json,Builds/Android/mapping.txt,Builds/Android/unity-build.log",
                             allowEmptyArchive: true,
                             fingerprint: true,
                             onlyIfSuccessful: true
@@ -980,6 +986,10 @@ def call(Map config = [:]) {
                 steps {
                     script {
                         pearzDrive.upload(isIos)
+                        // Chỉ dọn APK/AAB cục bộ sau khi Drive đã xác minh
+                        // artifact chính. Post action chạy sau Telegram, nên
+                        // file vẫn còn để đính kèm vào tin nhắn khi cần.
+                        env.PEARZ_ARTIFACT_UPLOADED = 'true'
                     }
                 }
             }
@@ -1106,20 +1116,21 @@ def call(Map config = [:]) {
                     )
 
                     if (isAndroid) {
-                        // Chỉ giữ APK/AAB của build này; file tên cũ (đổi
-                        // PRODUCT_NAME) bị xoá cho nhẹ workspace.
-                        sh(
-                            script: '''
-                                [ -d Builds/Android ] || exit 0
-                                find Builds/Android -maxdepth 1 -type f \\( -name '*.apk' -o -name '*.aab' \\) \\
-                                    ! -name "${OUTPUT_FILE_NAME:-}" -print -delete
-                            ''',
-                            returnStatus: true
-                        )
-                        echo(
-                            'Keeping Builds/Android in the workspace; the ' +
-                            'next Android build replaces the existing APK/AAB.'
-                        )
+                        if (env.PEARZ_ARTIFACT_UPLOADED == 'true') {
+                            // Artifact đã được archive, upload Drive xác minh
+                            // và Telegram đã gửi/được xử lý. Xoá toàn bộ output
+                            // Android để Mac agent không tích APK/AAB nặng.
+                            if (fileExists('Builds/Android')) {
+                                dir('Builds/Android') {
+                                    deleteDir()
+                                }
+                            }
+                            echo 'Removed local Android build output after verified Drive upload.'
+                        } else {
+                            // Upload hỏng thì giữ output để có thể chẩn đoán
+                            // hoặc upload lại; tuyệt đối không xoá bản duy nhất.
+                            echo 'Keeping local Android build output because Drive upload was not verified.'
+                        }
                     } else if (fileExists('Builds')) {
                         echo 'Cleaning build output...'
                         dir('Builds') {

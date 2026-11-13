@@ -285,6 +285,12 @@ counter past it. The
 counter is stored in the Jenkins job directory as `pearz-ci-aab-version-code.txt`,
 which is retained even when `CLEAN_WORKSPACE` is enabled.
 
+After Drive verifies an Android upload and Telegram has been handled, PearzCI
+removes `Builds/Android` from the Mac Jenkins workspace to avoid retaining
+large APK/AAB files. If the Drive upload fails, it keeps that output for
+troubleshooting or a retry. APK/AAB files are not archived by Jenkins; the
+verified Drive copy is the retained download source.
+
 APK `versionName` (what Android exposes as `Application.version` and in system
 settings) stays at Unity's `PlayerSettings.bundleVersion` (e.g. `1.0.0`) so
 ordinary tester builds retain a warm Gradle configuration cache.
@@ -293,11 +299,8 @@ For an AAB, `versionName` is also exactly `APP_VERSION` (for example `1.0.2`),
 so Google Play shows the same version as Jenkins. Only the version code differs
 between uploads.
 
-Testers still see the exact Jenkins build through three channels:
+Testers still see the exact Jenkins build through two channels:
 
-- **Jenkins archived artifacts**: every build keeps its own APK/AAB (the last
-  `artifactBuildsToKeep` builds), even though Drive keeps only the latest file
-  per version.
 - **`build-metadata.json`**: written next to the APK/AAB, contains the full
   `versionName` (e.g. `1.0.0-67`) and other build identifiers. iOS and WebGL
   builds write one too (next to the Xcode project / site folder), so a failed
@@ -349,23 +352,25 @@ Mỗi `APP_VERSION` có một thư mục; APK, AAB và IPA của version đó n�
 
 ```text
 <driveRoot>/<jobName>/<APP_VERSION>/
-  <product>.apk
+  <product>_<APP_VERSION>.apk
   <product>_APK_BUILD_INFO.txt
   mapping-apk.txt
-  <product>.aab
+  <product>_<APP_VERSION>.aab
   <product>_AAB_BUILD_INFO.txt
   mapping-aab.txt
-  <product>.ipa
+  <product>_<APP_VERSION>.ipa
   <product>_IPA_BUILD_INFO.txt
 ```
 
-Ví dụ `JenkinsBuild/FoodSort/1.0.0/FoodSort.apk`. Đổi `APP_VERSION` thì build
-tạo thư mục mới; build lại version cũ thì ghi đè file cùng loại (rclone cập
-nhật file tại chỗ nên link Drive cũ vẫn trỏ tới bản mới nhất). Build không có
-mapping (tắt minify) sẽ xoá `mapping-<loại>.txt` cũ để không bị nhầm. AAB đã
-gửi lên Google Play thì nâng `APP_VERSION` trước khi build bản tiếp theo, nếu
-không AAB trên Drive sẽ bị bản mới đè. Lịch sử từng build vẫn còn trong Jenkins
-archive và số build Jenkins vẫn hiện trên Telegram.
+Ví dụ `JenkinsBuild/FoodSort/1.0.0/FoodSort_1.0.0.apk`. Đổi `APP_VERSION` thì
+build tạo thư mục mới; build lại cùng tên game và version sẽ ghi đè file cùng
+loại (rclone cập nhật file tại chỗ nên link Drive cũ vẫn trỏ tới bản mới nhất).
+Khi đổi `PRODUCT_NAME` hoặc Unity `productName`, tên file cũng đổi nên APK/AAB
+mới được giữ cạnh file tên game cũ. Build không có mapping (tắt minify) sẽ xoá
+`mapping-<loại>.txt` cũ để không bị nhầm. AAB đã gửi lên Google Play thì nâng
+`APP_VERSION` trước khi build bản tiếp theo, nếu không AAB trên Drive sẽ bị bản
+mới đè. Lịch sử từng build vẫn còn trong Jenkins archive và số build Jenkins
+vẫn hiện trên Telegram.
 
 Thư mục theo layout cũ (`<job>/apk/1.0.0-157/`, `<job>/aab/…`, `<job>/ios/…`,
 `<job>/1.0.0-157/`) không còn được dùng. Chạy trên Mac Mini (user có remote

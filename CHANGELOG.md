@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.17.2] - 2026-11-13
+
+### Changed
+
+- After a verified Google Drive upload and Telegram notification handling, Android
+  build output is removed from the macOS Jenkins workspace and APK/AAB files are
+  no longer archived by Jenkins on the Mac. The Drive copy remains available;
+  output is retained when the Drive upload fails.
+- Renaming `PRODUCT_NAME` or Unity `productName` now keeps the prior APK/AAB/IPA
+  on Drive and uploads a separately named artifact instead of deleting the old
+  game-name artifact.
+
 ## [0.17.1] - 2026-11-13
 
 ### Fixed
