@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## [0.17.1] - 2026-11-13
+
+### Fixed
+
+- Checkout no longer fails with `upload-pack: not our ref` when an old
+  superproject commit points at a submodule commit that was never pushed:
+  the stage sets `fetch.recurseSubmodules=false` in an existing workspace
+  before `git fetch`. Submodules are still updated to the commits HEAD
+  points at.
+
 ## [0.17.0] - 2026-11-05
 
 ### Changed

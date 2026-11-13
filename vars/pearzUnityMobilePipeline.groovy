@@ -278,6 +278,20 @@ def call(Map config = [:]) {
                             )
                         }
 
+                        // Workspace đã init submodule thì `git fetch` của
+                        // superproject mặc định fetch.recurseSubmodules=
+                        // on-demand: nó đi fetch mọi commit submodule mà
+                        // lịch sử mới trỏ tới, và chết ở "not our ref" nếu
+                        // một commit cũ chưa từng được push. Tắt đi; bước
+                        // `submodule update` bên dưới vẫn đưa submodule về
+                        // đúng commit HEAD trỏ tới. Workspace mới clone chưa
+                        // có .git thì bỏ qua.
+                        sh '''
+                            if [ -d .git ] || [ -f .git ]; then
+                                git config fetch.recurseSubmodules false
+                            fi
+                        '''
+
                         checkout([
                             $class: 'GitSCM',
                             branches: [[name: branchSpec]],
